@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: #F9FAFB; padding: 20px; }
+.row { display: flex; gap: 10px; margin-bottom: 10px; }
+.swatch { flex: 1; height: 72px; border-radius: 12px; display: flex; flex-direction: column; justify-content: flex-end; padding: 8px 10px; }
+.label { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.9); }
+.hex { font-size: 10px; color: rgba(255,255,255,0.7); }
+.gradient { background: linear-gradient(135deg, #C1121F 0%, #E63946 50%, #F4721E 100%); }
+.red-dark { background: #9b0e18; }
+.red { background: #C1121F; }
+.red-light { background: #E63946; }
+.orange { background: #F4721E; }
+.orange-dark { background: #e05d0a; }
+.row2 .swatch { height: 48px; }
+.dark-label .label, .dark-label .hex { color: #374151; }
+.tint { background: #FEE2E2; }
+.tint2 { background: #FEF3C7; }
+.tint3 { background: #FFDDD2; }
+</style>
+</head><body>
+<div class="row">
+  <div class="swatch gradient"><span class="label">Brand Gradient</span><span class="hex">#C1121F → #F4721E</span></div>
+</div>
+<div class="row">
+  <div class="swatch red-dark"><span class="label">Red Dark</span><span class="hex">#9b0e18</span></div>
+  <div class="swatch red"><span class="label">Red</span><span class="hex">#C1121F</span></div>
+  <div class="swatch red-light"><span class="label">Red Light</span><span class="hex">#E63946</span></div>
+  <div class="swatch orange"><span class="label">Orange</span><span class="hex">#F4721E</span></div>
+  <div class="swatch orange-dark"><span class="label">Orange Dark</span><span class="hex">#e05d0a</span></div>
+</div>
+<div class="row row2">
+  <div class="swatch tint dark-label"><span class="label">Red Tint</span><span class="hex">#FEE2E2</span></div>
+  <div class="swatch tint2 dark-label"><span class="label">Amber Tint</span><span class="hex">#FEF3C7</span></div>
+  <div class="swatch tint3 dark-label"><span class="label">Orange Tint</span><span class="hex">#FFDDD2</span></div>
+</div>
+</body></html>

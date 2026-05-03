@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&family=Sora:wght@700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: #F9FAFB; }
+header { background: rgba(255,255,255,0.95); border-bottom: 1px solid #E5E7EB; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 64px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.logo { font-family: 'Sora', sans-serif; font-weight: 800; font-size: 18px; color: #C1121F; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
+.logo-dot { width: 8px; height: 8px; background: linear-gradient(135deg,#C1121F,#F4721E); border-radius: 50%; }
+nav { display: flex; align-items: center; gap: 4px; }
+.nav-link { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 12px; font-size: 13px; font-weight: 600; color: #374151; cursor: pointer; white-space: nowrap; }
+.nav-link:hover { background: #F3F4F6; }
+.nav-link.active { background: linear-gradient(to right, #C1121F, #F4721E); color: #fff; box-shadow: 0 4px 12px rgba(193,18,31,0.25); }
+.actions { display: flex; align-items: center; gap: 8px; }
+.btn-outline { height: 36px; padding: 0 16px; border-radius: 9999px; border: 2px solid #C1121F; color: #C1121F; font-size: 13px; font-weight: 600; background: transparent; cursor: pointer; }
+.avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg,#C1121F,#F4721E); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 14px; box-shadow: 0 2px 8px rgba(193,18,31,0.3); }
+</style>
+</head><body>
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    Maintenant !
+  </div>
+  <nav>
+    <div class="nav-link active">🏠 Accueil</div>
+    <div class="nav-link">📅 Mobilisations</div>
+    <div class="nav-link">💰 Cagnottes</div>
+    <div class="nav-link">❤️ Adhérer</div>
+    <div class="nav-link">⚙️ Services</div>
+  </nav>
+  <div class="actions">
+    <button class="btn-outline">Se connecter</button>
+    <div class="avatar">B</div>
+  </div>
+</header>
+</body></html>

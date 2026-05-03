@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: #F9FAFB; padding: 20px; }
+.row { display: flex; gap: 8px; margin-bottom: 8px; }
+.swatch { flex: 1; height: 56px; border-radius: 10px; display: flex; flex-direction: column; justify-content: flex-end; padding: 6px 8px; border: 1px solid rgba(0,0,0,0.06); }
+.label { font-size: 10px; font-weight: 600; }
+.hex { font-size: 9px; }
+.light .label, .light .hex { color: #374151; }
+.dark .label, .dark .hex { color: rgba(255,255,255,0.85); }
+</style>
+</head><body>
+<div class="row">
+  <div class="swatch light" style="background:#FFFFFF"><span class="label">White / BG</span><span class="hex">#FFFFFF</span></div>
+  <div class="swatch light" style="background:#F9FAFB"><span class="label">BG Subtle</span><span class="hex">#F9FAFB</span></div>
+  <div class="swatch light" style="background:#F3F4F6"><span class="label">BG Muted</span><span class="hex">#F3F4F6</span></div>
+  <div class="swatch light" style="background:#E5E7EB"><span class="label">Border</span><span class="hex">#E5E7EB</span></div>
+  <div class="swatch light" style="background:#D1D5DB"><span class="label">Border Dark</span><span class="hex">#D1D5DB</span></div>
+</div>
+<div class="row">
+  <div class="swatch light" style="background:#9CA3AF"><span class="label">FG4 / Placeholder</span><span class="hex">#9CA3AF</span></div>
+  <div class="swatch light" style="background:#6B7280"><span class="label">FG3 / Muted</span><span class="hex">#6B7280</span></div>
+  <div class="swatch dark" style="background:#374151"><span class="label">FG2 / Secondary</span><span class="hex">#374151</span></div>
+  <div class="swatch dark" style="background:#1F2937"><span class="label">Gray-800</span><span class="hex">#1F2937</span></div>
+  <div class="swatch dark" style="background:#111827"><span class="label">FG1 / Dark BG</span><span class="hex">#111827</span></div>
+</div>
+<div class="row">
+  <div class="swatch light" style="background:#DCFCE7"><span class="label">Success Tint</span><span class="hex">#DCFCE7</span></div>
+  <div class="swatch light" style="background:#FEF9C3"><span class="label">Warning Tint</span><span class="hex">#FEF9C3</span></div>
+  <div class="swatch light" style="background:#DBEAFE"><span class="label">Info Tint</span><span class="hex">#DBEAFE</span></div>
+  <div class="swatch light" style="background:#FEE2E2"><span class="label">Danger Tint</span><span class="hex">#FEE2E2</span></div>
+</div>
+</body></html>

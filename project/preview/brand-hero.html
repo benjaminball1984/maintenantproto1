@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Sora:wght@700;800&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: #F9FAFB; }
+.hero { position: relative; overflow: hidden; background: linear-gradient(135deg, #C1121F 0%, #E63946 50%, #F4721E 100%); color: #fff; padding: 32px 28px 48px; }
+.blob1 { position: absolute; top: -40px; right: -40px; width: 180px; height: 180px; border-radius: 50%; background: rgba(255,255,255,0.05); filter: blur(30px); pointer-events: none; }
+.blob2 { position: absolute; bottom: -20px; left: -30px; width: 140px; height: 140px; border-radius: 50%; background: rgba(255,165,0,0.15); filter: blur(24px); pointer-events: none; }
+.pill { display: inline-flex; align-items: center; gap: 5px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); border-radius: 9999px; padding: 4px 12px; font-size: 11px; font-weight: 600; margin-bottom: 12px; }
+h1 { font-family: 'Sora', sans-serif; font-size: 28px; font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; margin-bottom: 8px; }
+.sub { font-size: 12px; color: rgba(255,255,255,0.80); line-height: 1.5; margin-bottom: 16px; max-width: 320px; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+.btn-w { background: #fff; color: #C1121F; font-weight: 700; font-size: 12px; padding: 0 16px; height: 36px; border-radius: 9999px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.btn-g { background: rgba(255,255,255,0.15); color: #fff; font-weight: 600; font-size: 12px; padding: 0 14px; height: 36px; border-radius: 9999px; border: 2px solid rgba(255,255,255,0.35); cursor: pointer; }
+.stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
+.stat { background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 8px; text-align: center; }
+.stat-n { font-family: 'Sora', sans-serif; font-size: 16px; font-weight: 800; }
+.stat-l { font-size: 9px; color: rgba(255,255,255,0.65); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
+.wave { position: absolute; bottom: 0; left: 0; right: 0; color: #F9FAFB; line-height: 0; }
+</style>
+</head><body>
+<div class="hero">
+  <div class="blob1"></div>
+  <div class="blob2"></div>
+  <div class="pill">✨ Plateforme citoyenne de mobilisation</div>
+  <h1>Maintenant !<br><span style="font-size:18px;color:rgba(255,255,255,0.80)">La voix des 99%</span></h1>
+  <p class="sub">Pour une vie heureuse et digne dans un monde vivable.</p>
+  <div class="btns">
+    <button class="btn-w">+ Créer une pétition</button>
+    <button class="btn-g">Découvrir les causes →</button>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-n">12</div><div class="stat-l">Pétitions</div></div>
+    <div class="stat"><div class="stat-n">8.4k</div><div class="stat-l">Signatures</div></div>
+    <div class="stat"><div class="stat-n">10.5k</div><div class="stat-l">Abonnés</div></div>
+    <div class="stat"><div class="stat-n">946</div><div class="stat-l">Membres</div></div>
+  </div>
+  <div class="wave">
+    <svg viewBox="0 0 700 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M0 40L30 36C60 32 120 24 180 22.5C240 21 300 26 360 28C420 30 480 29 540 26C600 23 660 19 690 17L720 15V40H0Z" fill="currentColor"/>
+    </svg>
+  </div>
+</div>
+</body></html>

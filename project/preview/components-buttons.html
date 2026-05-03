@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: #F9FAFB; padding: 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 0 20px; height: 40px; border-radius: 9999px; font-size: 14px; font-weight: 700; border: none; cursor: pointer; white-space: nowrap; }
+.primary { background: #C1121F; color: #fff; box-shadow: 0 8px 24px rgba(193,18,31,0.30); }
+.gradient { background: linear-gradient(to right, #C1121F, #F4721E); color: #fff; box-shadow: 0 8px 24px rgba(193,18,31,0.25); }
+.outline { background: transparent; color: #C1121F; border: 2px solid #C1121F; }
+.ghost { background: #F3F4F6; color: #374151; }
+.white-outline { background: rgba(255,255,255,0.15); color: #fff; border: 2px solid rgba(255,255,255,0.4); }
+.hero-bg { background: linear-gradient(135deg, #C1121F, #F4721E); padding: 16px; border-radius: 12px; display: flex; gap: 10px; align-items: center; }
+.sm { height: 32px; font-size: 12px; padding: 0 14px; }
+.icon-btn { width: 40px; height: 40px; padding: 0; border-radius: 9999px; justify-content: center; background: linear-gradient(135deg, #C1121F, #F4721E); color: #fff; font-size: 20px; box-shadow: 0 8px 24px rgba(193,18,31,0.35); }
+</style>
+</head><body>
+<button class="btn primary">Créer une pétition</button>
+<button class="btn gradient">+ Créer une campagne</button>
+<button class="btn outline">Se connecter</button>
+<button class="btn ghost">Découvrir les causes</button>
+<button class="btn primary sm">Signer</button>
+<button class="btn outline sm">Annuler</button>
+<div class="hero-bg">
+  <button class="btn" style="background:#fff;color:#C1121F;font-weight:700;border-radius:9999px;height:40px;padding:0 20px;border:none">+ Créer</button>
+  <button class="btn white-outline">Découvrir →</button>
+</div>
+<button class="btn icon-btn">+</button>
+</body></html>

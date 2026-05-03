@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: #F9FAFB; padding: 20px; display: flex; flex-direction: column; gap: 12px; max-width: 380px; }
+.field { position: relative; }
+label { font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 4px; }
+input, textarea, select {
+  width: 100%; height: 44px; border: 2px solid #E5E7EB; border-radius: 12px;
+  padding: 0 14px; font-size: 14px; font-family: 'Inter', sans-serif; color: #111827;
+  background: #F9FAFB; transition: border-color 0.2s, background 0.2s; outline: none;
+}
+input:focus { border-color: #C1121F; background: #fff; }
+input.search { padding-left: 38px; }
+.icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #9CA3AF; font-size: 16px; }
+textarea { height: 80px; padding: 10px 14px; resize: none; }
+.search-wrap { background: #fff; border-radius: 16px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #E5E7EB; }
+.helper { font-size: 11px; color: #9CA3AF; margin-top: 3px; }
+.error { border-color: #EF4444 !important; }
+.error-msg { font-size: 11px; color: #EF4444; margin-top: 3px; }
+</style>
+</head><body>
+<div class="search-wrap">
+  <div class="field">
+    <div class="icon">🔍</div>
+    <input class="search" placeholder="Rechercher une pétition...">
+  </div>
+</div>
+<div class="field">
+  <label>Titre de la pétition</label>
+  <input placeholder="Ex : Pour une transition écologique...">
+  <div class="helper">Soyez précis et accrocheur</div>
+</div>
+<div class="field">
+  <label>Description</label>
+  <textarea placeholder="Expliquez votre cause..."></textarea>
+</div>
+<div class="field">
+  <label>Catégorie</label>
+  <select><option>Environnement</option><option>Social</option><option>Logement</option></select>
+</div>
+<div class="field">
+  <label>Email <span style="color:#EF4444">*</span></label>
+  <input class="error" value="adresse invalide" type="email">
+  <div class="error-msg">Adresse email invalide</div>
+</div>
+</body></html>

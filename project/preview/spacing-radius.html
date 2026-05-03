@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: #F9FAFB; padding: 20px; display: flex; gap: 12px; align-items: flex-end; }
+.item { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.box { background: #C1121F; opacity: 0.85; }
+.label { font-size: 10px; font-weight: 600; color: #6B7280; text-align: center; }
+.var { font-size: 9px; color: #9CA3AF; text-align: center; }
+</style>
+</head><body>
+<div class="item">
+  <div class="box" style="width:48px;height:48px;border-radius:4px"></div>
+  <div class="label">sm</div><div class="var">0.5rem</div>
+</div>
+<div class="item">
+  <div class="box" style="width:56px;height:56px;border-radius:8px"></div>
+  <div class="label">md</div><div class="var">0.75rem</div>
+</div>
+<div class="item">
+  <div class="box" style="width:64px;height:64px;border-radius:12px"></div>
+  <div class="label">lg</div><div class="var">0.875rem</div>
+</div>
+<div class="item">
+  <div class="box" style="width:72px;height:72px;border-radius:16px"></div>
+  <div class="label">2xl / card</div><div class="var">1rem</div>
+</div>
+<div class="item">
+  <div class="box" style="width:80px;height:40px;border-radius:9999px"></div>
+  <div class="label">full / pill</div><div class="var">9999px</div>
+</div>
+</body></html>

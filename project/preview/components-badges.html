@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: #F9FAFB; padding: 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+.pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600; }
+.brand { background: linear-gradient(to right, #C1121F, #F4721E); color: #fff; }
+.primary { background: #FEE2E2; color: #9b0e18; border: 1px solid #FECACA; }
+.secondary { background: #F3F4F6; color: #374151; border: 1px solid #E5E7EB; }
+.success { background: #DCFCE7; color: #15803D; border: 1px solid #BBF7D0; }
+.warning { background: #FEF9C3; color: #A16207; border: 1px solid #FDE047; }
+.outline { background: transparent; color: #374151; border: 1px solid #D1D5DB; }
+.glow { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.25); backdrop-filter: blur(4px); }
+.hero { background: linear-gradient(135deg, #C1121F, #F4721E); padding: 14px; border-radius: 10px; display: flex; gap: 8px; }
+</style>
+</head><body>
+<span class="badge brand">Nouveau</span>
+<span class="badge primary">Pétition active</span>
+<span class="badge secondary">Mobilisation</span>
+<span class="badge success">Objectif atteint</span>
+<span class="badge warning">En cours</span>
+<span class="badge outline">Catégorie</span>
+<br style="width:100%;flex-basis:100%">
+<span class="pill secondary">🏷 Environnement</span>
+<span class="pill secondary">✊ Social</span>
+<span class="pill primary">Tendance</span>
+<span class="pill" style="background:#C1121F;color:#fff">946 membres</span>
+<div class="hero"><span class="pill glow">✨ Plateforme citoyenne de mobilisation</span></div>
+</body></html>
