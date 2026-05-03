@@ -285,7 +285,7 @@ function App() {
       case 'creer':         return <div className="page-enter"><CreerPage setPage={setPage} user={user} onAuth={() => setAuthOpen(true)} /></div>;
       case 'campaigns':     return <div className="page-enter"><CampaignsPage {...common} /></div>;
       case 'reseau':        return <div className="page-enter"><ReseauPage user={user} onOpenAuth={() => setAuthOpen(true)} setActivePage={setPage} adminMode={adminMode} /></div>;
-      case 'polls':         return <div className="page-enter"><PollsPage user={user} onAuth={() => setAuthOpen(true)} setPage={setPage} /></div>;
+      case 'polls':         return <div className="page-enter"><PollsPage user={user} setUser={setUser} onAuth={() => setAuthOpen(true)} setPage={setPage} /></div>;
       case 'messaging':     return <div className="page-enter"><MessagingPage user={user} onOpenAuth={() => setAuthOpen(true)} /></div>;
       case 'notifications': return <div className="page-enter"><NotificationsPage user={user} onOpenAuth={() => setAuthOpen(true)} /></div>;
       case 'admin':         return <div className="page-enter"><AdminDashboard user={user} setActivePage={setPage} /></div>;

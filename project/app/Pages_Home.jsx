@@ -243,11 +243,15 @@ function HomePage({ setPage, user, onAuth }) {
   return (
     <div style={{ background: T.bg }}>
       {/* ── Hero ─────────────────────────────────────────── */}
-      <section style={{ position: 'relative', overflow: 'hidden', background: T.text1, color: '#fff', minHeight: '92vh', display: 'flex', alignItems: 'center' }}>
+      <section style={{ position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, #1a0535 0%, #3b0a28 40%, #4a1408 100%)', color: '#fff', minHeight: '92vh', display: 'flex', alignItems: 'center' }}>
         {/* Background photo */}
         <div style={{ position: 'absolute', inset: 0 }}>
-          <img src="https://images.unsplash.com/photo-1591848478625-de43268e6fb8?w=1600&q=80" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.18 }} />
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(26,26,24,0.97) 0%, rgba(225,29,116,0.85) 60%, rgba(244,114,30,0.8) 100%)' }}></div>
+          <img src="https://images.unsplash.com/photo-1591848478625-de43268e6fb8?w=1600&q=80" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.22 }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(91,33,182,0.82) 0%, rgba(225,29,116,0.78) 52%, rgba(234,78,27,0.84) 100%)' }}></div>
+          {/* Warm orange glow bottom-right */}
+          <div style={{ position: 'absolute', bottom: -80, right: -80, width: 480, height: 480, borderRadius: '50%', background: 'radial-gradient(circle, rgba(244,114,30,0.22) 0%, transparent 70%)', pointerEvents: 'none' }}></div>
+          {/* Violet glow top-left */}
+          <div style={{ position: 'absolute', top: -60, left: -60, width: 360, height: 360, borderRadius: '50%', background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 70%)', pointerEvents: 'none' }}></div>
         </div>
 
         <div style={{ position: 'relative', maxWidth: 1200, margin: '0 auto', padding: 'clamp(60px,10vw,120px) 24px', width: '100%' }}>
@@ -340,8 +344,9 @@ function HomePage({ setPage, user, onAuth }) {
 
       {/* ── T99CP Section ──────────────────────────────────── */}
       <section style={{ maxWidth: 1200, margin: '60px auto 0', padding: '0 24px' }}>
-        <div style={{ background: T.text1, borderRadius: 24, padding: 'clamp(32px,5vw,56px)', display: 'grid', gridTemplateColumns: '1fr auto', gap: 32, alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: -60, right: -60, width: 280, height: 280, borderRadius: '50%', background: 'rgba(244,114,30,0.08)', pointerEvents: 'none' }}></div>
+        <div style={{ background: 'linear-gradient(135deg, #1a0535 0%, #3b0a28 45%, #4a1408 100%)', borderRadius: 24, padding: 'clamp(32px,5vw,56px)', display: 'grid', gridTemplateColumns: '1fr auto', gap: 32, alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: -60, right: -60, width: 280, height: 280, borderRadius: '50%', background: 'rgba(234,78,27,0.15)', pointerEvents: 'none', filter: 'blur(40px)' }}></div>
+          <div style={{ position: 'absolute', bottom: -40, left: -40, width: 200, height: 200, borderRadius: '50%', background: 'rgba(124,58,237,0.12)', pointerEvents: 'none', filter: 'blur(30px)' }}></div>
           <div>
             <Tag variant="gradient" style={{ marginBottom: 16 }}>₮ Écosystème T99CP · Réseau Polygon</Tag>
             <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(22px,4vw,38px)', fontWeight: 800, color: '#fff', margin: '0 0 14px', letterSpacing: '-0.03em', lineHeight: 1.15 }}>
