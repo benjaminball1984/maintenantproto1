@@ -621,12 +621,15 @@ function CreateModal({ open, onClose, title, subtitle, fields = [], submitLabel 
     const data = {};
     fields.forEach(f => { data[f.id] = form[f.id] !== undefined ? form[f.id] : (f.default || ''); });
     if (!data.image && defaultPhoto) data.image = defaultPhoto;
+    let result;
     if (domain) {
       const stored = window.addUserCreation(domain, data);
-      if (typeof onSubmit === 'function') onSubmit(stored);
+      if (typeof onSubmit === 'function') result = onSubmit(stored);
     } else if (typeof onSubmit === 'function') {
-      onSubmit(data);
+      result = onSubmit(data);
     }
+    // Si onSubmit retourne explicitement false → on garde la modal ouverte (validation custom échouée)
+    if (result === false) return;
     if (window.showToast) window.showToast(`${title} : publié·e !`, { type: 'success', icon: '🎉' });
     onClose();
   };
