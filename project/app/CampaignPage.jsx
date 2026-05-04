@@ -196,33 +196,191 @@ function persistInlineCreation(domain, item) {
 const SAMPLE_CAMPAIGNS = [
   {
     id: 1, slug: 'urgences-ouvertes', title: 'Urgences Ouvertes 24h/24', subtitle: 'Une campagne pour le droit à la santé pour tous',
-    cover: 'https://picsum.photos/seed/hospital/1200/400',
+    cover: 'https://images.unsplash.com/photo-1538108149393-fbbd81895907?w=1200&q=70',
     organizer: 'Collectif Santé Pour Tous', date: '2026-04-01', supporters: 3240,
-    modules: ['petition','crowdfunding','mobilizations','media'],
+    modules: [
+      { id:'petition',     items:[1] },
+      { id:'crowdfunding', items:[1] },
+      { id:'mobilizations',items:[] },
+      { id:'media',        items:[] },
+    ],
     color: '#E11D74',
-    petition_id: 1, crowdfunding_id: 1,
     cta_text: 'Ensemble, nous pouvons rouvrir les urgences de nuit. Chaque signature compte !',
     cta_btn: 'Signer maintenant',
   },
   {
     id: 2, slug: 'transition-ecologique', title: 'Transition Écologique Maintenant', subtitle: 'Pour une loi climatique ambitieuse avant 2027',
-    cover: 'https://picsum.photos/seed/ecology/1200/400',
+    cover: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=1200&q=70',
     organizer: 'Alliance Verte + THE99COINPROJECT', date: '2026-03-15', supporters: 8420,
-    modules: ['petition','mobilizations','media','crowdfunding','garden','sel'],
+    modules: [
+      { id:'petition',     items:[2] },
+      { id:'mobilizations',items:[] },
+      { id:'media',        items:[] },
+      { id:'crowdfunding', items:[2] },
+      { id:'garden',       items:[] },
+      { id:'sel',          items:[] },
+    ],
     color: '#16A34A',
-    petition_id: 2, crowdfunding_id: 2,
     cta_text: 'La planète ne peut pas attendre. Mobilisons-nous massivement !',
     cta_btn: 'Rejoindre la campagne',
   },
   {
     id: 3, slug: 'logement-pour-tous', title: 'Logement Pour Tous', subtitle: 'Contre les expulsions, pour le droit à un toit',
-    cover: 'https://picsum.photos/seed/housing/1200/400',
+    cover: 'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=1200&q=70',
     organizer: 'DAL + Réseau Solidarités', date: '2026-02-20', supporters: 1890,
-    modules: ['petition','housing','crowdfunding','mobilizations','cta'],
-    color:'#BE185D',
-    petition_id: 5, crowdfunding_id: 4,
+    modules: [
+      { id:'petition',     items:[5] },
+      { id:'housing',      items:[] },
+      { id:'crowdfunding', items:[4] },
+      { id:'mobilizations',items:[] },
+      { id:'cta' },
+    ],
+    color: '#BE185D',
     cta_text: 'Se loger est un droit fondamental. Rejoignez la campagne !',
     cta_btn: 'Agir maintenant',
+  },
+  {
+    id: 4, slug: 'ecoles-libres', title: 'Écoles Libres & Autogérées', subtitle: 'Pour une éducation émancipatrice et coopérative',
+    cover: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=1200&q=70',
+    organizer: 'Collectif École Buissonnière', date: '2026-04-10', supporters: 740,
+    modules: [
+      { id:'petition',     items:[] },
+      { id:'crowdfunding', items:[5] },
+      { id:'media',        items:[] },
+      { id:'mobilizations',items:[] },
+      { id:'sel',          items:[] },
+      { id:'cta' },
+    ],
+    color: '#7C3AED',
+    cta_text: 'Soutiens la première école Freinet autogérée de Nantes — ouverture rentrée 2026.',
+    cta_btn: 'Soutenir l\'école',
+  },
+  {
+    id: 5, slug: 'salaires-cheminots', title: 'Solidarité avec les cheminot·es en grève', subtitle: 'Caisse de grève, presse et coordination des piquets',
+    cover: 'https://images.unsplash.com/photo-1545987796-200677ee1011?w=1200&q=70',
+    organizer: 'CGT Cheminots IDF', date: '2026-03-28', supporters: 2150,
+    modules: [
+      { id:'crowdfunding', items:[1] },
+      { id:'mobilizations',items:[] },
+      { id:'carpooling',   items:[] },
+      { id:'media',        items:[] },
+      { id:'marketplace',  items:[] },
+      { id:'cta' },
+    ],
+    color: '#DC2654',
+    cta_text: 'La grève dure. Sans solidarité financière, beaucoup ne pourront pas tenir.',
+    cta_btn: 'Contribuer à la caisse',
+  },
+  {
+    id: 6, slug: 'larzac-2026', title: 'Camp climat du Larzac 2026', subtitle: '8 000 militant·es, 5 jours, des centaines d\'ateliers',
+    cover: 'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=1200&q=70',
+    organizer: 'Coordination Camp Larzac', date: '2026-03-05', supporters: 4380,
+    modules: [
+      { id:'crowdfunding', items:[2] },
+      { id:'mobilizations',items:[] },
+      { id:'housing',      items:[] },
+      { id:'carpooling',   items:[] },
+      { id:'sel',          items:[] },
+      { id:'marketplace',  items:[] },
+      { id:'media',        items:[] },
+    ],
+    color: '#16A34A',
+    cta_text: 'Été 2026 — rejoins le rassemblement écologique le plus inspirant de la décennie.',
+    cta_btn: 'Je participe au camp',
+  },
+];
+
+// ════════════════════════════════════════════════════════════
+//  TEMPLATES — campagnes pré-remplies pour démarrer rapidement
+//  Chaque template définit : couleur, modules pré-configurés (sans
+//  items — l'auteur·ice les choisit), CTA suggéré, infos de base
+// ════════════════════════════════════════════════════════════
+const CAMPAIGN_TEMPLATES = [
+  {
+    id: 'blank',
+    icon: '✨', label: 'Vierge', tagline: 'Pars d\'une page blanche et choisis tout',
+    color: '#1A1A18', cover: 'https://images.unsplash.com/photo-1517842645767-c639042777db?w=1200&q=70',
+    title: 'Ma nouvelle campagne', subtitle: 'Pourquoi cette campagne ? Que veux-tu obtenir ?',
+    modules: [{ id:'petition', items:[] }, { id:'cta' }],
+    cta_text: 'Rejoins le mouvement !', cta_btn: 'Agir maintenant',
+  },
+  {
+    id: 'sante',
+    icon: '🏥', label: 'Santé publique', tagline: 'Hôpitaux, sécu, accès aux soins, soignant·es',
+    color: '#E11D74', cover: 'https://images.unsplash.com/photo-1538108149393-fbbd81895907?w=1200&q=70',
+    title: 'Sauvons notre service public de santé', subtitle: 'Pour un hôpital qui soigne tout le monde, partout, gratuitement',
+    modules: [
+      { id:'petition',     items:[] },
+      { id:'crowdfunding', items:[] },
+      { id:'mobilizations',items:[] },
+      { id:'media',        items:[] },
+      { id:'cta' },
+    ],
+    cta_text: 'La santé est un droit. Signons, manifestons, soutenons les soignant·es.',
+    cta_btn: 'Signer la pétition',
+  },
+  {
+    id: 'climat',
+    icon: '🌍', label: 'Climat & écologie', tagline: 'Bassines, ZAD, transition, biodiversité',
+    color: '#16A34A', cover: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=1200&q=70',
+    title: 'Climat : passons à l\'action', subtitle: 'Mobilisations, signatures, financements de luttes locales',
+    modules: [
+      { id:'petition',     items:[] },
+      { id:'mobilizations',items:[] },
+      { id:'crowdfunding', items:[] },
+      { id:'garden',       items:[] },
+      { id:'media',        items:[] },
+      { id:'carpooling',   items:[] },
+    ],
+    cta_text: 'On ne peut plus attendre. La transition s\'organise depuis la base.',
+    cta_btn: 'Rejoindre la mobilisation',
+  },
+  {
+    id: 'logement',
+    icon: '🏠', label: 'Logement & DAL', tagline: 'Expulsions, squats, droit au toit',
+    color: '#BE185D', cover: 'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=1200&q=70',
+    title: 'Un toit pour toutes et tous', subtitle: 'Contre les expulsions, pour le logement social, soutien aux squats',
+    modules: [
+      { id:'petition',     items:[] },
+      { id:'housing',      items:[] },
+      { id:'crowdfunding', items:[] },
+      { id:'mobilizations',items:[] },
+      { id:'cta' },
+    ],
+    cta_text: 'Se loger est un droit fondamental. Pas une marchandise.',
+    cta_btn: 'Soutenir la campagne',
+  },
+  {
+    id: 'travail',
+    icon: '✊', label: 'Travail & syndicats', tagline: 'Grèves, salaires, droits, caisses de soutien',
+    color: '#DC2654', cover: 'https://images.unsplash.com/photo-1545987796-200677ee1011?w=1200&q=70',
+    title: 'Solidarité avec les travailleur·euses en lutte', subtitle: 'Caisses de grève, coordination des piquets, soutien matériel',
+    modules: [
+      { id:'crowdfunding', items:[] },
+      { id:'mobilizations',items:[] },
+      { id:'carpooling',   items:[] },
+      { id:'marketplace',  items:[] },
+      { id:'media',        items:[] },
+      { id:'cta' },
+    ],
+    cta_text: 'La grève dure quand la solidarité tient. Contribue à la caisse.',
+    cta_btn: 'Soutenir les grévistes',
+  },
+  {
+    id: 'culturel',
+    icon: '🎭', label: 'Culture & événement', tagline: 'Festivals, lieux culturels, transmission de savoirs',
+    color: '#7C3AED', cover: 'https://images.unsplash.com/photo-1485395037613-e83d5c1f5290?w=1200&q=70',
+    title: 'Faire vivre la culture militante', subtitle: 'Événements, lieux, intervenant·es, transmission',
+    modules: [
+      { id:'mobilizations',items:[] },
+      { id:'crowdfunding', items:[] },
+      { id:'sel',          items:[] },
+      { id:'media',        items:[] },
+      { id:'marketplace',  items:[] },
+      { id:'housing',      items:[] },
+    ],
+    cta_text: 'La culture militante est un commun. Soutenons-la.',
+    cta_btn: 'Soutenir l\'événement',
   },
 ];
 
@@ -795,18 +953,98 @@ function CampaignBuilder({ campaign, onSave, onClose, setActivePage }) {
 
 // ── Campaign View ─────────────────────────────────────────
 function CampaignView({ campaign, setActivePage, preview=false }) {
+  // Calcul de stats globales en agrégeant les items sélectionnés
+  const aggregateStats = () => {
+    let totalSignatures = 0, totalRaised = 0, totalGoal = 0, totalItems = 0;
+    (campaign.modules || []).forEach(m => {
+      const mid = moduleId(m);
+      const mItems = moduleItems(m);
+      if (mItems.length === 0) return;
+      const all = getAllItemsForModule(mid);
+      const selected = mItems.map(id => all.find(it => it.id === id)).filter(Boolean);
+      totalItems += selected.length;
+      if (mid === 'petition') {
+        selected.forEach(p => { totalSignatures += p.signatures || 0; });
+      }
+      if (mid === 'crowdfunding') {
+        selected.forEach(c => { totalRaised += c.raised_t99cp || 0; totalGoal += c.goal_t99cp || 0; });
+      }
+    });
+    return { totalSignatures, totalRaised, totalGoal, totalItems };
+  };
+  const stats = aggregateStats();
+
+  const handleShare = (e) => {
+    e?.stopPropagation();
+    const url = typeof window !== 'undefined' ? window.location.href : '';
+    if (navigator.share) {
+      navigator.share({ title: campaign.title, text: campaign.subtitle, url }).catch(() => {});
+    } else {
+      try {
+        navigator.clipboard?.writeText(`${campaign.title} — ${url}`);
+        window.showToast?.('Lien de la campagne copié dans le presse-papier', { type:'success', icon:'🔗' });
+      } catch {
+        window.showToast?.('Partage indisponible sur ce navigateur', { type:'info' });
+      }
+    }
+  };
+
   return (
     <div>
-      {/* Cover */}
-      <div style={{ position:'relative', borderRadius:preview?16:0, overflow:'hidden', marginBottom:20 }}>
-        <img src={campaign.cover||`https://picsum.photos/seed/${campaign.slug}/1200/300`} style={{ width:'100%', height:200, objectFit:'cover' }} alt="" />
-        <div style={{ position:'absolute', inset:0, background:`linear-gradient(to top, ${campaign.color||'#E11D74'}ee 0%, transparent 60%)`, display:'flex', flexDirection:'column', justifyContent:'flex-end', padding:'20px 24px' }}>
-          <h1 style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(18px,3vw,28px)', fontWeight:800, color:'#fff', margin:'0 0 6px', textShadow:'0 2px 8px rgba(0,0,0,0.3)' }}>{campaign.title}</h1>
-          <p style={{ fontSize:14, color:'rgba(255,255,255,0.85)', margin:'0 0 8px' }}>{campaign.subtitle}</p>
-          <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-            <Badge color="gray" style={{ background:'rgba(255,255,255,0.2)', color:'#fff', backdropFilter:'blur(4px)' }}>🏢 {campaign.organizer}</Badge>
-            <Badge color="gray" style={{ background:'rgba(255,255,255,0.2)', color:'#fff', backdropFilter:'blur(4px)' }}>👥 {campaign.supporters?.toLocaleString('fr-FR')} supporters</Badge>
+      {/* HERO ENRICHI */}
+      <div style={{ position:'relative', borderRadius:preview?16:0, overflow:'hidden', marginBottom:20, background:'#1A1A18' }}>
+        <img src={campaign.cover||`https://picsum.photos/seed/${campaign.slug}/1200/400`} style={{ width:'100%', height: preview ? 240 : 320, objectFit:'cover', opacity:0.85 }} alt="" />
+        <div style={{ position:'absolute', inset:0, background:`linear-gradient(to top, ${campaign.color||'#E11D74'}f0 0%, ${campaign.color||'#E11D74'}66 35%, transparent 75%)` }}></div>
+
+        {/* Coin haut-droit : badges & bouton partage */}
+        <div style={{ position:'absolute', top:14, right:14, display:'flex', gap:6 }}>
+          {campaign._template && <span style={{ padding:'5px 11px', borderRadius:9999, background:'rgba(255,255,255,0.18)', backdropFilter:'blur(8px)', color:'#fff', fontSize:10, fontWeight:800, letterSpacing:'0.06em', textTransform:'uppercase' }}>★ NOUVELLE</span>}
+          <button onClick={handleShare} title="Partager la campagne" style={{ width:36, height:36, borderRadius:'50%', background:'rgba(255,255,255,0.18)', backdropFilter:'blur(8px)', border:'none', color:'#fff', cursor:'pointer', fontSize:14, fontWeight:700, transition:'all 0.18s' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.35)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.18)'; }}>↗</button>
+        </div>
+
+        {/* Bas du hero : titre + meta + stats */}
+        <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', justifyContent:'flex-end', padding:'24px 28px' }}>
+          <h1 style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(20px,3.5vw,34px)', fontWeight:800, color:'#fff', margin:'0 0 8px', textShadow:'0 2px 12px rgba(0,0,0,0.4)', lineHeight:1.15, letterSpacing:'-0.02em' }}>{campaign.title}</h1>
+          <p style={{ fontSize:'clamp(13px,1.6vw,16px)', color:'rgba(255,255,255,0.92)', margin:'0 0 16px', lineHeight:1.5, maxWidth:680, textShadow:'0 1px 6px rgba(0,0,0,0.3)' }}>{campaign.subtitle}</p>
+
+          {/* Bandeau organizer + supporters */}
+          <div style={{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap', marginBottom: stats.totalItems > 0 ? 14 : 0 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 12px 5px 5px', borderRadius:9999, background:'rgba(255,255,255,0.18)', backdropFilter:'blur(8px)' }}>
+              <div style={{ width:26, height:26, borderRadius:'50%', background:'#fff', color:campaign.color, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800, fontSize:12, fontFamily:"'Sora',sans-serif" }}>
+                {(campaign.organizer || 'O')[0].toUpperCase()}
+              </div>
+              <span style={{ fontSize:12, fontWeight:700, color:'#fff' }}>{campaign.organizer}</span>
+            </div>
+            <div style={{ padding:'7px 14px', borderRadius:9999, background:'rgba(255,255,255,0.18)', backdropFilter:'blur(8px)', fontSize:12, fontWeight:700, color:'#fff' }}>
+              👥 {(campaign.supporters || 0).toLocaleString('fr-FR')} supporters
+            </div>
+            {campaign.date && (
+              <div style={{ padding:'7px 14px', borderRadius:9999, background:'rgba(255,255,255,0.12)', backdropFilter:'blur(8px)', fontSize:11, color:'rgba(255,255,255,0.85)' }}>
+                lancée le {new Date(campaign.date).toLocaleDateString('fr-FR', { day:'numeric', month:'long', year:'numeric' })}
+              </div>
+            )}
           </div>
+
+          {/* Stats globales agrégées (si items concrets choisis) */}
+          {stats.totalItems > 0 && (
+            <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+              {stats.totalSignatures > 0 && (
+                <div style={{ padding:'8px 14px', borderRadius:10, background:'rgba(255,255,255,0.95)', color:campaign.color, fontWeight:800, fontSize:12, fontFamily:"'Sora',sans-serif" }}>
+                  📜 {stats.totalSignatures.toLocaleString('fr-FR')} signatures
+                </div>
+              )}
+              {stats.totalRaised > 0 && (
+                <div style={{ padding:'8px 14px', borderRadius:10, background:'rgba(255,255,255,0.95)', color:campaign.color, fontWeight:800, fontSize:12, fontFamily:"'Sora',sans-serif" }}>
+                  💰 {stats.totalRaised.toLocaleString('fr-FR')} / {stats.totalGoal.toLocaleString('fr-FR')} T99CP
+                </div>
+              )}
+              <div style={{ padding:'8px 14px', borderRadius:10, background:'rgba(255,255,255,0.95)', color:campaign.color, fontWeight:800, fontSize:12, fontFamily:"'Sora',sans-serif" }}>
+                🎯 {stats.totalItems} action{stats.totalItems > 1 ? 's' : ''} concrète{stats.totalItems > 1 ? 's' : ''}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -871,18 +1109,32 @@ function CampaignsPage({ user, adminMode, onOpenAuth, setActivePage }) {
   const [detail, setDetail] = useState(null);
   const [building, setBuilding] = useState(null); // campaign being edited
   const [search, setSearch] = useState('');
+  const [templatePicker, setTemplatePicker] = useState(false);
 
   const filtered = campaigns.filter(c => !search || c.title.toLowerCase().includes(search.toLowerCase()));
 
   const handleCreateNew = () => {
     if (!user) { onOpenAuth(); return; }
+    setTemplatePicker(true); // ouvre d'abord la sélection de template
+  };
+
+  const startFromTemplate = (template) => {
     const newCampaign = {
-      id: Date.now(), slug: `campagne-${Date.now()}`, title: 'Ma nouvelle campagne', subtitle: 'Description de la campagne',
-      cover: `https://picsum.photos/seed/new${Date.now()}/1200/400`,
-      organizer: user.name, date: new Date().toISOString().split('T')[0],
-      supporters: 0, modules: ['petition','cta'], color: '#E11D74',
-      cta_text: 'Rejoignez le mouvement !', cta_btn: 'Agir maintenant',
+      id: Date.now(),
+      slug: `campagne-${Date.now()}`,
+      title: template.title,
+      subtitle: template.subtitle,
+      cover: template.cover,
+      organizer: user.name,
+      date: new Date().toISOString().split('T')[0],
+      supporters: 0,
+      modules: template.modules,
+      color: template.color,
+      cta_text: template.cta_text,
+      cta_btn: template.cta_btn,
+      _template: template.id,
     };
+    setTemplatePicker(false);
     setBuilding(newCampaign);
   };
 
@@ -916,6 +1168,47 @@ function CampaignsPage({ user, adminMode, onOpenAuth, setActivePage }) {
         ))}
       </div>
       {filtered.length===0 && <EmptyState icon="🚀" title="Aucune campagne" desc="Créez la première campagne !" />}
+
+      {/* MODALE de sélection de template */}
+      {templatePicker && (
+        <div onClick={() => setTemplatePicker(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', backdropFilter:'blur(4px)', zIndex:1500, display:'flex', alignItems:'center', justifyContent:'center', padding:'20px', overflowY:'auto' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background:'#fff', borderRadius:20, maxWidth:880, width:'100%', maxHeight:'92vh', overflowY:'auto', boxShadow:'0 30px 80px rgba(0,0,0,0.3)' }}>
+            <div style={{ padding:'24px 30px 20px', borderBottom:`1px solid ${COLORS.gray200}`, position:'relative' }}>
+              <button onClick={() => setTemplatePicker(false)} style={{ position:'absolute', top:18, right:18, width:32, height:32, borderRadius:'50%', background:COLORS.gray100, border:'none', cursor:'pointer', fontSize:18, color:COLORS.gray500 }}>×</button>
+              <div style={{ fontSize:11, fontWeight:800, letterSpacing:'0.1em', color:'#7C3AED', textTransform:'uppercase', marginBottom:6 }}>🚀 Nouvelle campagne</div>
+              <h2 style={{ fontFamily:"'Sora',sans-serif", fontSize:24, fontWeight:800, color:COLORS.gray900, margin:'0 0 6px' }}>Pars d'un modèle ou commence de zéro</h2>
+              <p style={{ fontSize:13, color:COLORS.gray500, margin:0, lineHeight:1.55 }}>Les modèles incluent une sélection de modules adaptés à ta cause. Tu choisis ensuite les pétitions, cagnottes, articles concrets à intégrer.</p>
+            </div>
+
+            <div style={{ padding:'20px 24px 24px', display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))', gap:14 }}>
+              {CAMPAIGN_TEMPLATES.map(tpl => (
+                <button key={tpl.id} onClick={() => startFromTemplate(tpl)}
+                  style={{ position:'relative', textAlign:'left', border:`2px solid ${COLORS.gray200}`, borderRadius:14, background:'#fff', padding:0, overflow:'hidden', cursor:'pointer', transition:'all 0.18s', fontFamily:'Inter,sans-serif', display:'flex', flexDirection:'column' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = tpl.color; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 14px 36px ${tpl.color}25`; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = COLORS.gray200; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}>
+                  {/* Cover */}
+                  <div style={{ height:90, position:'relative', overflow:'hidden', background:`${tpl.color}15` }}>
+                    <img src={tpl.cover} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', opacity:0.7 }} onError={e => e.target.style.display='none'} />
+                    <div style={{ position:'absolute', inset:0, background:`linear-gradient(135deg, ${tpl.color}cc, ${tpl.color}88)`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:38 }}>{tpl.icon}</div>
+                  </div>
+                  {/* Body */}
+                  <div style={{ padding:'14px 16px', flex:1, display:'flex', flexDirection:'column' }}>
+                    <div style={{ fontFamily:"'Sora',sans-serif", fontSize:14, fontWeight:800, color:COLORS.gray900, marginBottom:4 }}>{tpl.label}</div>
+                    <div style={{ fontSize:11, color:COLORS.gray500, lineHeight:1.5, marginBottom:10, flex:1 }}>{tpl.tagline}</div>
+                    <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                      {tpl.modules.slice(0, 5).map((m, i) => {
+                        const mod = ALL_MODULES.find(am => am.id === m.id);
+                        return mod ? <span key={i} title={mod.label} style={{ fontSize:14 }}>{mod.icon}</span> : null;
+                      })}
+                      {tpl.modules.length > 5 && <span style={{ fontSize:10, color:COLORS.gray400, alignSelf:'center' }}>+{tpl.modules.length - 5}</span>}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {building && (
         <CampaignBuilder
