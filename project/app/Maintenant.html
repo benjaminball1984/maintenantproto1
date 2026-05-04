@@ -303,7 +303,7 @@ function App() {
   const handleLogin  = u => { setUser(u); setAuthOpen(false); };
   const handleLogout = () => { setUser(null); try { localStorage.removeItem('mn_v2_user'); } catch {} setPage('home'); };
 
-  const common = { user, adminMode, onAuth: () => setAuthOpen(true), setPage };
+  const common = { user, setUser, adminMode, onAuth: () => setAuthOpen(true), setPage };
   const noNav  = ['creer'].includes(page);
 
   const renderPage = () => {

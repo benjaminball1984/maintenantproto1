@@ -2,13 +2,33 @@
 const { useState, useEffect } = React;
 
 // ── PÉTITIONS v2 ───────────────────────────────────────────
-function PetitionDetail({ p, onBack, user, onAuth, adminMode, onSave }) {
-  const [signed, setSigned] = useState(false);
+function PetitionDetail({ p, onBack, user, setUser, onAuth, adminMode, onSave }) {
+  const [signed, setSigned] = useState(() => window.isUserJoined?.('petitions_signed', p.id) || false);
   const [data, setData] = useState(p);
   const [editOpen, setEditOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
+  const [adhesionPayOpen, setAdhesionPayOpen] = useState(false);
   const [tab, setTab] = useState('about');
   const pct = Math.min(Math.round((data.signatures / data.goal) * 100), 100);
+
+  const handleSign = () => {
+    if (!user) { onAuth(); return; }
+    window.toggleUserJoin?.('petitions_signed', p.id);
+    setSigned(true);
+    setData(d => ({ ...d, signatures: d.signatures + 1 }));
+    window.showToast?.('Pétition signée — merci !', { type: 'success', icon: '✊' });
+  };
+
+  const handleJoinFree = () => {
+    if (typeof setUser === 'function') {
+      setUser(u => ({ ...(u || {}), is_member: true, member_tier: 'gratuit', member_since: new Date().toISOString() }));
+    }
+    window.showToast?.('Bienvenue ! Tu es maintenant adhérent·e du mouvement.', { type: 'success', icon: '★', duration: 5000 });
+  };
+
+  const handleJoinPaid = () => {
+    setAdhesionPayOpen(true);
+  };
 
   const updates = [
     { date: '2026-04-20', text: 'La pétition atteint 10 000 signatures ! Merci à toutes et tous.', author: data.author },
@@ -117,18 +137,50 @@ function PetitionDetail({ p, onBack, user, onAuth, adminMode, onSave }) {
               <ProgressBar value={data.signatures} max={data.goal} height={6} />
               <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {signed ? (
-                  <div style={{ background: T.successLight, borderRadius: 14, padding: '16px', textAlign: 'center', border: `1px solid #BBF7D0` }}>
-                    <div style={{ color: T.success, display: 'flex', justifyContent: 'center', marginBottom: 6 }}>{ICONS.check}</div>
-                    <div style={{ fontWeight: 700, color: T.success, fontSize: 15 }}>Vous avez signé !</div>
-                    <div style={{ fontSize: 12, color: T.success, marginTop: 3, opacity: 0.8 }}>Merci pour votre engagement.</div>
-                  </div>
+                  <>
+                    {/* Bloc remerciement */}
+                    <div style={{ background: 'linear-gradient(135deg, #DCFCE7 0%, #BBF7D0 100%)', borderRadius: 14, padding: '18px', textAlign: 'center', border: `1px solid #86EFAC` }}>
+                      <div style={{ fontSize: 40, marginBottom: 8 }}>✊</div>
+                      <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, color: T.success, fontSize: 17, letterSpacing:'-0.01em' }}>Merci d'avoir signé !</div>
+                      <div style={{ fontSize: 13, color: T.text2, marginTop: 6, lineHeight: 1.5 }}>
+                        Ta voix s'ajoute aux <strong>{data.signatures.toLocaleString('fr-FR')}</strong> autres. On avance.
+                      </div>
+                    </div>
+
+                    {/* Bloc adhésion (uniquement si pas déjà adhérent·e) */}
+                    {!user?.is_member && (
+                      <div style={{ background: 'linear-gradient(135deg, #FDE9F2 0%, #F3EBFE 100%)', borderRadius: 14, padding: '18px', border: `1.5px solid ${T.brandLight}` }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom: 8 }}>
+                          <span style={{ fontSize:18 }}>★</span>
+                          <span style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, color:T.brand, fontSize:15 }}>Rejoins le mouvement</span>
+                        </div>
+                        <p style={{ fontSize:12.5, color:T.text2, margin:'0 0 12px', lineHeight:1.55 }}>
+                          Adhère à <strong>Maintenant !</strong> pour accéder aux Communes Libres, à l'Assemblée Confédérale et peser sur les décisions du mouvement.
+                        </p>
+                        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                          <Btn full variant="white" size="md" onClick={handleJoinFree} style={{ border:`1.5px solid ${T.brand}`, color:T.brand }}>
+                            Adhérer gratuitement
+                          </Btn>
+                          <Btn full variant="gradient" size="md" onClick={handleJoinPaid} icon={ICONS.wallet}>
+                            Adhérer · 12 T99CP / an
+                          </Btn>
+                        </div>
+                      </div>
+                    )}
+                    {user?.is_member && (
+                      <div style={{ background:'#FEF3C7', border:`1px solid #FDE68A`, borderRadius:12, padding:'10px 14px', display:'flex', alignItems:'center', gap:8 }}>
+                        <span style={{ fontSize:16 }}>★</span>
+                        <span style={{ fontSize:12, fontWeight:800, color:'#B45309', letterSpacing:'0.04em' }}>ADHÉRENT·E DU MOUVEMENT</span>
+                      </div>
+                    )}
+                  </>
                 ) : (
-                  <Btn full variant="gradient" size="lg" onClick={() => { if (!user) { onAuth(); } else { setSigned(true); setData(d => ({ ...d, signatures: d.signatures + 1 })); } }}>
-                    Signer cette pétition
+                  <Btn full variant="gradient" size="lg" onClick={handleSign}>
+                    {user ? 'Signer cette pétition' : '🔒 Se connecter pour signer'}
                   </Btn>
                 )}
                 <Btn full variant="outline" size="md" onClick={() => setPayOpen(true)} icon={ICONS.wallet}>Soutenir en T99CP</Btn>
-                <Btn full variant="ghost" size="md" onClick={() => navigator.share?.({ title: data.title, url: window.location.href }).catch(() => {})} icon={ICONS.share}>Partager</Btn>
+                <Btn full variant="ghost" size="md" onClick={() => { const url = window.location.href; if (navigator.clipboard) navigator.clipboard.writeText(url).then(()=>window.showToast?.('Lien de la pétition copié', {type:'success', icon:'🔗'})); else navigator.share?.({ title: data.title, url }).catch(()=>{}); }} icon={ICONS.share}>Partager</Btn>
               </div>
             </div>
 
@@ -147,8 +199,9 @@ function PetitionDetail({ p, onBack, user, onAuth, adminMode, onSave }) {
       </div>
 
       <PayModal open={payOpen} onClose={() => setPayOpen(false)} amount={5} item={data.title} description="Soutenez cette pétition avec un don en T99CP pour financer la campagne." />
+      <PayModal open={adhesionPayOpen} onClose={() => { setAdhesionPayOpen(false); if (typeof setUser === 'function') setUser(u => ({ ...(u||{}), is_member: true, member_tier: 't99cp', member_since: new Date().toISOString() })); }} amount={12} item="Adhésion annuelle Maintenant !" description="Cotisation annuelle au mouvement. Donne accès aux Communes Libres et à l'Assemblée Confédérale." seller="Maintenant ! (mouvement)" />
       <EditModal open={editOpen} onClose={() => setEditOpen(false)} title="Pétition" data={data} onSave={f => { setData(d => ({ ...d, ...f })); onSave?.({ ...data, ...f }); }}
-        fields={[{ key: 'title', label: 'Titre' }, { key: 'category', label: 'Catégorie', type: 'select', options: ['Santé', 'Environnement', 'Social', 'Justice', 'Transport', 'Logement', 'Droits', 'Éducation'] }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'goal', label: 'Objectif', type: 'number' }, { key: 'location', label: 'Lieu' }]} />
+        fields={[{ key: 'title', label: 'Titre' }, { key: 'category', label: 'Catégorie', type: 'select', options: ['Santé', 'Écologie', 'Démocratie', 'Économie', 'Solidarité', 'Social', 'Justice', 'Transport', 'Logement', 'Droits', 'Éducation'] }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'goal', label: 'Objectif', type: 'number' }, { key: 'location', label: 'Lieu' }]} />
     </div>
   );
 }
@@ -160,6 +213,7 @@ function PetitionCard({ p, onClick, adminMode, onEdit }) {
       onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 16px 48px rgba(0,0,0,0.09)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
       {adminMode && <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 3 }} onClick={e => { e.stopPropagation(); onEdit(); }}><AdminBtn onEdit={onEdit} /></div>}
+      {p._userCreated && <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 3 }}><window.UserBadge /></div>}
       <div style={{ height: 160, position: 'relative', overflow: 'hidden', background: T.text1 }}>
         <img src={`https://picsum.photos/seed/pet${p.id}/600/300`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.65),transparent 60%)' }}></div>
@@ -183,14 +237,13 @@ function PetitionCard({ p, onClick, adminMode, onEdit }) {
   );
 }
 
-function PetitionsPage({ user, adminMode, onAuth, setPage }) {
-  const [data, setData] = useState(AppData.petitions);
+function PetitionsPage({ user, setUser, adminMode, onAuth, setPage }) {
+  const [data, setData] = useState([...window.getUserCreations('petitions'), ...AppData.petitions]);
   const [detail, setDetail] = useState(null);
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState('Toutes');
   const [editItem, setEditItem] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [newP, setNewP] = useState({ title: '', category: 'Social', description: '', goal: 5000, location: 'France', author: user?.name || '' });
 
   const cats = ['Toutes', ...new Set(data.map(p => p.category))];
   const filtered = data.filter(p => {
@@ -201,7 +254,7 @@ function PetitionsPage({ user, adminMode, onAuth, setPage }) {
   const featured = filtered.filter(p => p.featured);
   const rest = filtered.filter(p => !p.featured);
 
-  if (detail) return <PetitionDetail p={detail} onBack={() => setDetail(null)} user={user} onAuth={onAuth} adminMode={adminMode} onSave={u => setData(d => d.map(p => p.id === u.id ? u : p))} />;
+  if (detail) return <PetitionDetail p={detail} onBack={() => setDetail(null)} user={user} setUser={setUser} onAuth={onAuth} adminMode={adminMode} onSave={u => setData(d => d.map(p => p.id === u.id ? u : p))} />;
 
   return (
     <PageContainer>
@@ -228,25 +281,20 @@ function PetitionsPage({ user, adminMode, onAuth, setPage }) {
       {rest.length === 0 ? <EmptyState title="Aucune pétition trouvée" desc="Essayez d'autres filtres ou créez la vôtre." action={<Btn variant="gradient" onClick={() => user ? setCreateOpen(true) : onAuth()} icon={ICONS.plus}>Créer une pétition</Btn>} />
         : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 20 }}>{rest.map(p => <PetitionCard key={p.id} p={p} onClick={() => setDetail(p)} adminMode={adminMode} onEdit={() => setEditItem(p)} />)}</div>}
 
-      {editItem && <EditModal open onClose={() => setEditItem(null)} title="Pétition" data={editItem} onSave={f => { setData(d => d.map(p => p.id === editItem.id ? { ...p, ...f } : p)); setEditItem(null); }} fields={[{ key: 'title', label: 'Titre' }, { key: 'category', label: 'Catégorie', type: 'select', options: ['Santé', 'Environnement', 'Social', 'Justice', 'Transport', 'Logement', 'Droits'] }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'goal', label: 'Objectif', type: 'number' }, { key: 'location', label: 'Lieu' }]} />}
+      {editItem && <EditModal open onClose={() => setEditItem(null)} title="Pétition" data={editItem} onSave={f => { setData(d => d.map(p => p.id === editItem.id ? { ...p, ...f } : p)); setEditItem(null); }} fields={[{ key: 'title', label: 'Titre' }, { key: 'category', label: 'Catégorie', type: 'select', options: ['Santé', 'Écologie', 'Démocratie', 'Économie', 'Solidarité', 'Social', 'Justice', 'Transport', 'Logement', 'Droits', 'Éducation'] }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'goal', label: 'Objectif', type: 'number' }, { key: 'location', label: 'Lieu' }]} />}
 
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Créer une pétition" width={520}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {[['title', 'Titre de la pétition'], ['location', 'Lieu concerné'], ['author', 'Votre nom ou organisation']].map(([k, l]) => (
-            <div key={k}><label style={{ fontSize: 12, fontWeight: 600, color: T.text3, display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{l}</label>
-              <input value={newP[k]} onChange={e => setNewP(p => ({ ...p, [k]: e.target.value }))} style={{ width: '100%', height: 46, border: `1.5px solid ${T.border}`, borderRadius: 12, padding: '0 16px', fontSize: 15, fontFamily: 'Inter,sans-serif', color: T.text1, background: T.bg, outline: 'none', boxSizing: 'border-box' }} /></div>
-          ))}
-          <div><label style={{ fontSize: 12, fontWeight: 600, color: T.text3, display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Catégorie</label>
-            <select value={newP.category} onChange={e => setNewP(p => ({ ...p, category: e.target.value }))} style={{ width: '100%', height: 46, border: `1.5px solid ${T.border}`, borderRadius: 12, padding: '0 16px', fontSize: 15, fontFamily: 'Inter,sans-serif', color: T.text1, background: T.bg, outline: 'none', boxSizing: 'border-box' }}>
-              {['Santé', 'Environnement', 'Social', 'Justice', 'Transport', 'Logement', 'Droits', 'Éducation'].map(c => <option key={c}>{c}</option>)}
-            </select></div>
-          <div><label style={{ fontSize: 12, fontWeight: 600, color: T.text3, display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Description</label>
-            <textarea value={newP.description} onChange={e => setNewP(p => ({ ...p, description: e.target.value }))} rows={4} style={{ width: '100%', border: `1.5px solid ${T.border}`, borderRadius: 12, padding: '12px 16px', fontSize: 15, fontFamily: 'Inter,sans-serif', color: T.text1, background: T.bg, outline: 'none', boxSizing: 'border-box', resize: 'vertical', lineHeight: 1.5 }} /></div>
-          <div><label style={{ fontSize: 12, fontWeight: 600, color: T.text3, display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Objectif de signatures</label>
-            <input type="number" value={newP.goal} onChange={e => setNewP(p => ({ ...p, goal: +e.target.value }))} style={{ width: '100%', height: 46, border: `1.5px solid ${T.border}`, borderRadius: 12, padding: '0 16px', fontSize: 15, fontFamily: 'Inter,sans-serif', color: T.text1, background: T.bg, outline: 'none', boxSizing: 'border-box' }} /></div>
-          <Btn full variant="gradient" size="lg" icon={ICONS.check} onClick={() => { const np = { ...newP, id: Date.now(), signatures: 0, status: 'active', date: new Date().toISOString().split('T')[0], featured: false, tags: [] }; setData(d => [np, ...d]); setCreateOpen(false); }}>Publier la pétition</Btn>
-        </div>
-      </Modal>
+      <CreateModal open={createOpen} onClose={() => setCreateOpen(false)} title="Créer une pétition"
+        subtitle="Mobilise autour d'une cause. Ta pétition apparaîtra avec un badge « Vous » dans la liste, persistante dans le navigateur."
+        domain="petitions" color={T.brand}
+        fields={[
+          { id:'title',       label:'Titre de la pétition', required:true, placeholder:"Stop à la fermeture de la maternité de Cherbourg" },
+          { id:'category',    label:'Catégorie', type:'select', required:true, options:['Santé','Écologie','Démocratie','Économie','Solidarité','Social','Justice','Transport','Logement','Droits','Éducation','Autre'] },
+          { id:'location',    label:'Lieu / portée géographique', required:true, placeholder:"Cherbourg · Manche · France" },
+          { id:'goal',        label:'Objectif de signatures', type:'number', required:true, placeholder:'10000' },
+          { id:'description', label:'Présentation de la cause', type:'textarea', rows:4, required:true, placeholder:"Pourquoi cette pétition ? Quels sont les enjeux ? Quelle action est demandée ?" },
+        ]}
+        onSubmit={item => { const enriched = { ...item, author: user?.name || 'Vous', signatures: 0, status:'active', date: new Date().toISOString().slice(0,10), featured: false, tags: [], goal: +item.goal }; setData(d => [enriched, ...d]); }}
+      />
     </PageContainer>
   );
 }

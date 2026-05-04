@@ -266,8 +266,11 @@ function HomePage({ setPage, user, onAuth }) {
               <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 'clamp(22px,3.5vw,48px)', fontWeight: 700 }}>La voix des 99%</span>
             </h1>
 
-            <p style={{ fontSize: 'clamp(15px,2vw,19px)', color: 'rgba(255,255,255,0.72)', lineHeight: 1.65, margin: '0 0 36px', maxWidth: 560 }}>
-              Pétitions · Mobilisations · Hébergement solidaire · Covoiturage · Marketplace · SEL · Jardin partagé. Ensemble, construisons une société plus juste.
+            <p style={{ fontSize: 'clamp(15px,2vw,19px)', color: 'rgba(255,255,255,0.78)', lineHeight: 1.6, margin: '0 0 18px', maxWidth: 620, fontWeight: 500 }}>
+              Pour une vie digne et heureuse pour toutes et tous, face aux oppressions systémiques nos luttes doivent devenir systémiques.
+            </p>
+            <p style={{ fontSize: 'clamp(14px,1.7vw,17px)', color: 'rgba(255,255,255,0.65)', lineHeight: 1.65, margin: '0 0 36px', maxWidth: 560 }}>
+              La plateforme citoyenne et solidaire pour mobiliser, s'informer, échanger, partager, s'organiser, agir.
             </p>
 
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -341,8 +344,34 @@ function HomePage({ setPage, user, onAuth }) {
         </div>
       </section>
 
-      {/* ── T99CP Section ──────────────────────────────────── */}
-      <section style={{ maxWidth: 1200, margin: '60px auto 0', padding: '0 24px' }}>
+      {/* ── Latest Media (déplacé AVANT le bloc T99CP) ────── */}
+      <section style={{ maxWidth: 1200, margin: '0 auto', padding: '60px 24px 0' }}>
+        <SectionTitle label="Média militant" title="Dernières actualités" action={<Btn variant="outline" size="sm" onClick={() => setPage('media')}>Lire tout {ICONS.arrow_r}</Btn>} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 16 }}>
+          {latestMedia.map(a => (
+            <div key={a.id} onClick={() => setPage('media')} style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden', cursor: 'pointer', transition: 'all 0.2s' }}
+              onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 12px 36px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
+              <div style={{ height: 160, overflow: 'hidden', position: 'relative' }}>
+                <img src={`https://picsum.photos/seed/media${a.id}/600/300`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.4),transparent)' }}></div>
+                <Tag variant="brand" size="xs" style={{ position: 'absolute', top: 12, left: 12 }}>{a.category}</Tag>
+              </div>
+              <div style={{ padding: '16px 18px 18px' }}>
+                <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 15, fontWeight: 700, color: T.text1, margin: '0 0 8px', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.title}</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: T.text4 }}>
+                  <span>{a.author}</span>
+                  <span>·</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{ICONS.clock} {a.reading_time} min</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── T99CP Section (déplacé APRÈS les actualités) ───── */}
+      <section style={{ maxWidth: 1200, margin: '60px auto 0', padding: '0 24px 80px' }}>
         <div className="mn-wallet-card" style={{ background: 'linear-gradient(135deg, #1a0535 0%, #3b0a28 40%, #4a1408 100%)', borderRadius: 24, padding: 'clamp(32px,5vw,56px)', display: 'grid', gridTemplateColumns: '1fr auto', gap: 32, alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', bottom: -120, right: -120, width: 480, height: 480, background: 'radial-gradient(circle, rgba(244,114,30,0.22) 0%, transparent 70%)', pointerEvents: 'none', filter: 'blur(8px)' }}></div>
           <div style={{ position: 'absolute', top: -100, left: -100, width: 360, height: 360, background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 70%)', pointerEvents: 'none', filter: 'blur(8px)' }}></div>
@@ -365,32 +394,6 @@ function HomePage({ setPage, user, onAuth }) {
               <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 8 }}>T99CP</div>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* ── Latest Media ───────────────────────────────────── */}
-      <section style={{ maxWidth: 1200, margin: '0 auto', padding: '60px 24px 80px' }}>
-        <SectionTitle label="Média militant" title="Dernières analyses" action={<Btn variant="outline" size="sm" onClick={() => setPage('media')}>Lire tout {ICONS.arrow_r}</Btn>} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 16 }}>
-          {latestMedia.map(a => (
-            <div key={a.id} onClick={() => setPage('media')} style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden', cursor: 'pointer', transition: 'all 0.2s' }}
-              onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 12px 36px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
-              onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-              <div style={{ height: 160, overflow: 'hidden', position: 'relative' }}>
-                <img src={`https://picsum.photos/seed/media${a.id}/600/300`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.4),transparent)' }}></div>
-                <Tag variant="brand" size="xs" style={{ position: 'absolute', top: 12, left: 12 }}>{a.category}</Tag>
-              </div>
-              <div style={{ padding: '16px 18px 18px' }}>
-                <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 15, fontWeight: 700, color: T.text1, margin: '0 0 8px', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.title}</h3>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: T.text4 }}>
-                  <span>{a.author}</span>
-                  <span>·</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{ICONS.clock} {a.reading_time} min</span>
-                </div>
-              </div>
-            </div>
-          ))}
         </div>
       </section>
     </div>
