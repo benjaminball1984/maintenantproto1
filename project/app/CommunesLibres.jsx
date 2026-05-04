@@ -120,6 +120,384 @@ function MembershipGate({ user, onAuth, setPage }) {
 // ═══════════════════════════════════════════════════════════
 // 2. CARTE D'UNE COMMUNE — style éditorial
 // ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// CARTE INTERACTIVE — France métropolitaine en SVG, markers par commune
+// Projection simple lat/lon → x/y. Cliquer sur un marker ouvre la commune.
+// ═══════════════════════════════════════════════════════════
+function CommunesMap({ communes, federations, onOpenCommune, onOpenFed }) {
+  const [hover, setHover] = useState(null);
+  const [selectedFed, setSelectedFed] = useState(null);
+  // Bounding box France métropolitaine : lat [41.3, 51.1], lon [-5.2, 9.6]
+  const W = 540, H = 540;
+  const project = (lat, lon) => {
+    const x = ((lon - (-5.2)) / (9.6 - (-5.2))) * W;
+    const y = H - ((lat - 41.3) / (51.1 - 41.3)) * H;
+    return [x, y];
+  };
+  // Outline France très simplifiée (suffisant pour l'effet visuel)
+  const FRANCE_PATH = "M 230 30 Q 280 25 320 35 L 380 50 Q 420 70 440 110 L 460 160 Q 470 220 460 280 L 480 340 Q 500 390 470 430 L 430 470 Q 390 490 340 495 L 280 510 Q 220 510 180 480 L 130 440 Q 90 400 80 340 L 70 280 Q 70 220 90 170 L 120 120 Q 150 80 200 50 Z";
+
+  return (
+    <div style={{ background:'#fff', border:`2px solid ${T.text1}`, padding:'24px', position:'relative' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'minmax(0,1fr) 280px', gap:24, alignItems:'flex-start' }} className="mn-detail-grid">
+        {/* SVG France */}
+        <div style={{ position:'relative', width:'100%', maxWidth:W, margin:'0 auto', aspectRatio:'1 / 1' }}>
+          <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', height:'100%', display:'block' }}>
+            <defs>
+              <pattern id="hatching" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+                <line x1="0" y1="0" x2="0" y2="6" stroke="#FFD93D" strokeWidth="1.5" opacity="0.18" />
+              </pattern>
+            </defs>
+            {/* Hexagone France */}
+            <path d={FRANCE_PATH} fill="url(#hatching)" stroke={T.text1} strokeWidth="2.5" strokeLinejoin="round" />
+
+            {/* Liens fédération : trait entre communes d'une même fédé */}
+            {federations.map(f => {
+              const comms = communes.filter(c => f.communes.includes(c.id) && c.coord);
+              if (comms.length < 2) return null;
+              return comms.slice(0, -1).map((c1, i) => {
+                const c2 = comms[i + 1];
+                const [x1, y1] = project(c1.coord[0], c1.coord[1]);
+                const [x2, y2] = project(c2.coord[0], c2.coord[1]);
+                return (
+                  <line key={`${f.id}-${i}`} x1={x1} y1={y1} x2={x2} y2={y2}
+                    stroke={selectedFed === f.id ? '#0369A1' : T.brand}
+                    strokeWidth={selectedFed === f.id ? 3 : 1.5}
+                    strokeDasharray={selectedFed === f.id ? '0' : '4,3'}
+                    opacity={selectedFed && selectedFed !== f.id ? 0.15 : 0.6} />
+                );
+              });
+            })}
+
+            {/* Markers communes */}
+            {communes.filter(c => c.coord).map(c => {
+              const [x, y] = project(c.coord[0], c.coord[1]);
+              const repr = c.members >= 5;
+              const isHover = hover === c.id;
+              const dim = selectedFed && c.federation_id !== selectedFed;
+              const r = isHover ? 14 : (repr ? 10 : 7);
+              return (
+                <g key={c.id} style={{ cursor:'pointer', opacity: dim ? 0.25 : 1, transition:'opacity 0.18s' }}
+                   onMouseEnter={() => setHover(c.id)} onMouseLeave={() => setHover(null)}
+                   onClick={() => onOpenCommune(c)}>
+                  {repr && <circle cx={x} cy={y} r={r + 6} fill="none" stroke={T.brand} strokeWidth="1.5" opacity="0.4" />}
+                  <circle cx={x} cy={y} r={r} fill={repr ? T.brand : '#fff'} stroke={T.text1} strokeWidth="2" />
+                  {repr && <text x={x} y={y + 4} textAnchor="middle" fontSize="10" fontWeight="800" fill="#fff" style={{ pointerEvents:'none' }}>★</text>}
+                  {isHover && (
+                    <g style={{ pointerEvents:'none' }}>
+                      <rect x={x + 14} y={y - 26} width={Math.max(c.name.length * 6.5 + 28, 100)} height="24" fill={T.text1} rx="2" />
+                      <text x={x + 22} y={y - 10} fontSize="11" fontWeight="700" fill="#FFD93D" fontFamily="Inter,sans-serif">{c.name}</text>
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+
+        {/* Panneau légende + filtre fédération */}
+        <div>
+          <div style={{ fontSize:10, fontWeight:800, letterSpacing:'0.16em', color:T.brand, marginBottom:10, textTransform:'uppercase' }}>━ Légende</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:24 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, fontSize:12, color:T.text2 }}>
+              <svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="6" fill="#fff" stroke={T.text1} strokeWidth="2" /></svg>
+              <span>Commune naissante (&lt; 5 membres)</span>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:10, fontSize:12, color:T.text2 }}>
+              <svg width="22" height="22" viewBox="0 0 22 22">
+                <circle cx="11" cy="11" r="9" fill="none" stroke={T.brand} strokeWidth="1.5" opacity="0.4" />
+                <circle cx="11" cy="11" r="6" fill={T.brand} stroke={T.text1} strokeWidth="2" />
+                <text x="11" y="14" textAnchor="middle" fontSize="8" fontWeight="800" fill="#fff">★</text>
+              </svg>
+              <span>Commune avec représentation (≥ 5 membres)</span>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:10, fontSize:12, color:T.text2 }}>
+              <svg width="22" height="22" viewBox="0 0 22 22"><line x1="3" y1="11" x2="19" y2="11" stroke={T.brand} strokeWidth="1.5" strokeDasharray="4,3" /></svg>
+              <span>Lien de fédération</span>
+            </div>
+          </div>
+
+          <div style={{ fontSize:10, fontWeight:800, letterSpacing:'0.16em', color:T.brand, marginBottom:10, textTransform:'uppercase' }}>━ Filtrer par fédération</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            <button onClick={() => setSelectedFed(null)} style={{ padding:'10px 12px', border:`1.5px solid ${T.text1}`, background: !selectedFed ? T.text1 : '#fff', color: !selectedFed ? '#FFD93D' : T.text1, fontSize:11, fontWeight:800, cursor:'pointer', textAlign:'left', fontFamily:"'Sora',sans-serif", letterSpacing:'0.04em' }}>TOUTES LES COMMUNES</button>
+            {federations.map(f => (
+              <button key={f.id} onClick={() => setSelectedFed(selectedFed === f.id ? null : f.id)} style={{ padding:'10px 12px', border:`1.5px solid ${T.text1}`, background: selectedFed === f.id ? '#0369A1' : '#fff', color: selectedFed === f.id ? '#fff' : T.text1, fontSize:11, fontWeight:700, cursor:'pointer', textAlign:'left', fontFamily:'Inter,sans-serif', display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+                <span>FÉD. {f.short}</span>
+                <span style={{ opacity:0.7 }}>{f.communes.length} communes</span>
+              </button>
+            ))}
+          </div>
+
+          <div style={{ marginTop:18, padding:'12px 14px', background:'#FFD93D', fontSize:11, color:T.text1, lineHeight:1.55, fontWeight:600 }}>
+            💡 Clique sur un marker pour ouvrir la commune.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// TRÉSORERIE COMMUNE — cotisations, recettes, dépenses, solde
+// ═══════════════════════════════════════════════════════════
+function CommuneTreasury({ commune: c }) {
+  // Données simulées calculées depuis la commune
+  const cotisationAnnuelle = 12; // T99CP / membre / an
+  const totalCotisations = c.members * cotisationAnnuelle;
+  const recettes = [
+    { date:'2026-04-01', label:'Cotisations annuelles', amount: totalCotisations, type:'cotisation' },
+    { date:'2026-03-15', label:'Don Marie D. (membre)', amount: 50, type:'don' },
+    { date:'2026-02-20', label:'Reversement cagnotte solidaire', amount: 120, type:'don' },
+    { date:'2026-02-10', label:'Cotisation tardive 2025', amount: 24, type:'cotisation' },
+  ];
+  const depenses = [
+    { date:'2026-04-12', label:'Location salle AG hebdo (avril)', amount: 30, cat:'Salle' },
+    { date:'2026-04-08', label:'Achat matériel ronéo (encre, papier)', amount: 18, cat:'Matériel' },
+    { date:'2026-04-05', label:'Repas solidaire 1ᵉʳ Mai (avance)', amount: 80, cat:'Événement' },
+    { date:'2026-03-22', label:'Cagnotte ZAD voisine', amount: 50, cat:'Solidarité' },
+    { date:'2026-03-10', label:'Frais d\'impression tracts', amount: 22, cat:'Matériel' },
+  ];
+  const totalRecettes = recettes.reduce((s,r) => s + r.amount, 0);
+  const totalDepenses = depenses.reduce((s,d) => s + d.amount, 0);
+  const solde = totalRecettes - totalDepenses;
+  // Stats par catégorie
+  const catTotals = {};
+  depenses.forEach(d => { catTotals[d.cat] = (catTotals[d.cat] || 0) + d.amount; });
+  const catColors = { 'Salle':'#0369A1', 'Matériel':'#7C3AED', 'Événement':T.brand, 'Solidarité':'#16A34A' };
+
+  return (
+    <div>
+      <div style={{ fontSize:11, fontWeight:800, letterSpacing:'0.18em', color:T.brand, marginBottom:14, textTransform:'uppercase' }}>━ Trésorerie de la commune · 100 % transparente</div>
+
+      {/* Bandeau solde */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:0, border:`2px solid ${T.text1}`, marginBottom:24 }}>
+        {[
+          ['Solde actuel',     `${solde} T99CP`,        solde >= 0 ? T.success : T.brand],
+          ['Recettes (an)',    `+${totalRecettes} T99CP`, T.text1],
+          ['Dépenses (an)',    `-${totalDepenses} T99CP`, T.text1],
+          ['Cotisant·es',      `${c.members}/${c.members}`, T.text1],
+        ].map(([l,v,col],i,arr) => (
+          <div key={l} style={{ padding:'24px 22px', background:'#fff', borderRight:i<arr.length-1?`2px solid ${T.text1}`:'none' }}>
+            <div style={{ fontFamily:"'Sora',sans-serif", fontSize:32, fontWeight:800, color:col, lineHeight:1, letterSpacing:'-0.03em' }}>{v}</div>
+            <div style={{ fontSize:11, fontWeight:700, color:T.text2, marginTop:8, textTransform:'uppercase', letterSpacing:'0.08em' }}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:0, border:`2px solid ${T.text1}`, marginBottom:24 }} className="mn-detail-grid">
+        {/* RECETTES */}
+        <div style={{ borderRight:`2px solid ${T.text1}` }}>
+          <div style={{ background:T.success, color:'#fff', padding:'14px 20px', borderBottom:`2px solid ${T.text1}` }}>
+            <div style={{ fontSize:10, fontWeight:800, letterSpacing:'0.16em', marginBottom:2 }}>━ RECETTES</div>
+            <div style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, letterSpacing:'-0.02em' }}>+{totalRecettes} T99CP</div>
+          </div>
+          <div style={{ background:'#fff' }}>
+            {recettes.map((r,i)=>(
+              <div key={i} style={{ padding:'14px 20px', borderBottom:i<recettes.length-1?`1px solid ${T.border}`:'none', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
+                <div style={{ minWidth:0, flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:13, color:T.text1 }}>{r.label}</div>
+                  <div style={{ fontSize:11, color:T.text4, marginTop:2 }}>{new Date(r.date).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' })} · {r.type}</div>
+                </div>
+                <div style={{ fontFamily:"'Sora',sans-serif", fontSize:14, fontWeight:800, color:T.success, letterSpacing:'-0.01em', whiteSpace:'nowrap' }}>+{r.amount}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* DÉPENSES */}
+        <div>
+          <div style={{ background:T.brand, color:'#fff', padding:'14px 20px', borderBottom:`2px solid ${T.text1}` }}>
+            <div style={{ fontSize:10, fontWeight:800, letterSpacing:'0.16em', marginBottom:2 }}>━ DÉPENSES</div>
+            <div style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, letterSpacing:'-0.02em' }}>-{totalDepenses} T99CP</div>
+          </div>
+          <div style={{ background:'#fff' }}>
+            {depenses.map((d,i)=>(
+              <div key={i} style={{ padding:'14px 20px', borderBottom:i<depenses.length-1?`1px solid ${T.border}`:'none', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
+                <div style={{ minWidth:0, flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:13, color:T.text1 }}>{d.label}</div>
+                  <div style={{ fontSize:11, color:T.text4, marginTop:2, display:'flex', alignItems:'center', gap:6 }}>
+                    <span style={{ width:8, height:8, background:catColors[d.cat] || T.text3, display:'inline-block' }}></span>
+                    {new Date(d.date).toLocaleDateString('fr-FR', { day:'2-digit', month:'short' })} · {d.cat}
+                  </div>
+                </div>
+                <div style={{ fontFamily:"'Sora',sans-serif", fontSize:14, fontWeight:800, color:T.brand, letterSpacing:'-0.01em', whiteSpace:'nowrap' }}>-{d.amount}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Répartition dépenses */}
+      <div style={{ background:'#fff', border:`2px solid ${T.text1}`, padding:'22px 24px', marginBottom:20 }}>
+        <div style={{ fontSize:11, fontWeight:800, letterSpacing:'0.18em', color:T.text1, marginBottom:14, textTransform:'uppercase' }}>━ Répartition des dépenses par poste</div>
+        <div style={{ display:'flex', height:18, border:`1.5px solid ${T.text1}`, marginBottom:14 }}>
+          {Object.entries(catTotals).map(([cat, amt]) => (
+            <div key={cat} title={`${cat} : ${amt} T99CP`} style={{ background: catColors[cat], width:`${(amt / totalDepenses) * 100}%` }}></div>
+          ))}
+        </div>
+        <div style={{ display:'flex', gap:18, flexWrap:'wrap' }}>
+          {Object.entries(catTotals).map(([cat, amt]) => (
+            <div key={cat} style={{ display:'flex', alignItems:'center', gap:8, fontSize:12, color:T.text2 }}>
+              <span style={{ width:14, height:14, background:catColors[cat] }}></span>
+              <span><strong style={{ color:T.text1 }}>{cat}</strong> · {amt} T99CP ({((amt / totalDepenses) * 100).toFixed(0)}%)</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Bandeau info cotisations */}
+      <div style={{ background:'#FFD93D', border:`2px solid ${T.text1}`, padding:'18px 22px', display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
+        <div style={{ flex:1, minWidth:240 }}>
+          <div style={{ fontFamily:"'Sora',sans-serif", fontSize:16, fontWeight:800, color:T.text1, letterSpacing:'-0.01em', marginBottom:4 }}>Cotisation : 12 T99CP / an / membre</div>
+          <div style={{ fontSize:13, color:T.text2, lineHeight:1.5 }}>Toute dépense de plus de 50 T99CP est soumise à vote de l'AG. Bilan annuel public et auditable.</div>
+        </div>
+        <button style={{ background:T.text1, color:'#fff', border:'none', padding:'12px 18px', fontFamily:"'Sora',sans-serif", fontSize:11, fontWeight:800, cursor:'pointer', textTransform:'uppercase', letterSpacing:'0.06em' }}>📥 Télécharger le bilan</button>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// AGORA — délibérations + dépôt de motion
+// ═══════════════════════════════════════════════════════════
+function CommuneAgora({ commune: c }) {
+  const [showMotionForm, setShowMotionForm] = useState(false);
+  const [motionForm, setMotionForm] = useState({ titre:'', description:'', deadline:'14', type:'decision' });
+  const [motions, setMotions] = useState([
+    { id:1, t:'Motion : Fédération avec la Commune Libre voisine ?', votes:18, total:c.members, status:'En cours', d:'5j restants', author:'Marie D.', desc:'Proposition de fédération avec la commune libre voisine pour mutualiser nos AG mensuelles et soutenir la cagnotte solidaire commune.', type:'decision' },
+    { id:2, t:'Compte-rendu de l\'AG du 24 avril', votes:c.members, total:c.members, status:'Adoptée', d:'il y a 1 sem.', author:'Thomas R.', desc:'Compte-rendu de la dernière AG : 78% des présents ont voté pour la motion sur les ZAD agricoles. Présence de 23 membres sur 23.', type:'compte-rendu' },
+    { id:3, t:'Budget participatif 2026 — propositions',  votes:11, total:c.members, status:'En cours',  d:'12j restants', author:'Aisha K.', desc:'Cinq propositions soumises au vote pour le budget participatif 2026 : jardin partagé, atelier d\'auto-réparation vélo, soutien à un média local, soirées culturelles, fonds d\'urgence solidaire.', type:'budget' },
+  ]);
+  const [voted, setVoted] = useState({}); // { motionId: 'pour'|'contre'|'abstention' }
+
+  const submitMotion = () => {
+    if (!motionForm.titre || !motionForm.description) return;
+    const m = {
+      id: Date.now(), t: motionForm.titre, desc: motionForm.description,
+      type: motionForm.type, votes: 0, total: c.members,
+      status:'En cours', d:`${motionForm.deadline}j restants`, author: 'Vous',
+    };
+    setMotions(ms => [m, ...ms]);
+    setMotionForm({ titre:'', description:'', deadline:'14', type:'decision' });
+    setShowMotionForm(false);
+    window.showToast?.('Motion déposée — soumise au vote de la commune.', { type:'success', icon:'★' });
+  };
+
+  const vote = (motionId, choice) => {
+    if (voted[motionId]) return;
+    setVoted(v => ({ ...v, [motionId]: choice }));
+    setMotions(ms => ms.map(m => m.id === motionId ? { ...m, votes: m.votes + 1 } : m));
+    window.showToast?.(`Vote « ${choice} » enregistré`, { type:'success' });
+  };
+
+  const TYPE_ICONS = { decision:'⚖', 'compte-rendu':'📋', budget:'💰' };
+  const TYPE_LABELS_M = { decision:'Décision', 'compte-rendu':'Compte-rendu', budget:'Budget' };
+
+  return (
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:16, marginBottom:18, flexWrap:'wrap' }}>
+        <div style={{ fontSize:11, fontWeight:800, letterSpacing:'0.18em', color:T.brand, textTransform:'uppercase' }}>━ Agora · Délibérations & motions</div>
+        <button onClick={() => setShowMotionForm(true)} style={{ background:T.brand, color:'#fff', border:'none', padding:'12px 20px', fontFamily:"'Sora',sans-serif", fontSize:12, fontWeight:800, cursor:'pointer', textTransform:'uppercase', letterSpacing:'0.06em', boxShadow:`3px 3px 0 ${T.text1}` }}>+ Déposer une motion</button>
+      </div>
+
+      {motions.map(m => {
+        const pctVotes = (m.votes / m.total) * 100;
+        const myVote = voted[m.id];
+        return (
+          <div key={m.id} style={{ background:'#fff', border:`2px solid ${T.text1}`, padding:'24px 26px', marginBottom:14 }}>
+            <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:16, marginBottom:14, flexWrap:'wrap' }}>
+              <div style={{ flex:1, minWidth:240 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8, flexWrap:'wrap' }}>
+                  <span style={{ fontSize:10, fontWeight:800, letterSpacing:'0.1em', padding:'3px 8px', background:m.status==='Adoptée'?T.success:'#FFD93D', color:m.status==='Adoptée'?'#fff':T.text1 }}>{m.status.toUpperCase()}</span>
+                  <span style={{ fontSize:10, fontWeight:800, letterSpacing:'0.1em', padding:'3px 8px', background:T.text1, color:'#FFD93D' }}>{TYPE_ICONS[m.type]} {TYPE_LABELS_M[m.type]?.toUpperCase()}</span>
+                  <span style={{ fontSize:11, color:T.text4, fontWeight:600 }}>par {m.author} · {m.d}</span>
+                </div>
+                <h3 style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, color:T.text1, letterSpacing:'-0.02em', margin:'0 0 8px' }}>{m.t}</h3>
+                <p style={{ fontSize:13, color:T.text2, margin:0, lineHeight:1.55 }}>{m.desc}</p>
+              </div>
+              <div style={{ textAlign:'right', flexShrink:0 }}>
+                <div style={{ fontFamily:"'Sora',sans-serif", fontSize:28, fontWeight:800, color:T.text1, lineHeight:1, letterSpacing:'-0.02em' }}>{m.votes}<span style={{ color:T.text4, fontSize:14 }}>/{m.total}</span></div>
+                <div style={{ fontSize:10, color:T.text4, fontWeight:600, marginTop:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>votes</div>
+              </div>
+            </div>
+
+            {/* Barre de progression */}
+            <div style={{ height:6, background:T.surface2, marginBottom:12, position:'relative' }}>
+              <div style={{ height:'100%', background:T.brand, width:`${pctVotes}%` }}></div>
+            </div>
+
+            {/* Vote buttons (sauf comptes-rendus déjà adoptés) */}
+            {m.status === 'En cours' && (
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                {[['pour','✓ POUR', T.success], ['contre','✗ CONTRE', T.brand], ['abstention','◯ ABSTENTION', T.text3]].map(([k, l, col]) => (
+                  <button key={k} disabled={!!myVote} onClick={() => vote(m.id, k)}
+                    style={{ flex:1, minWidth:100, padding:'10px 14px', border:`2px solid ${T.text1}`, background: myVote === k ? col : (myVote ? '#fff' : '#fff'), color: myVote === k ? '#fff' : T.text1, cursor: myVote ? 'not-allowed' : 'pointer', fontFamily:"'Sora',sans-serif", fontSize:11, fontWeight:800, letterSpacing:'0.06em', opacity: myVote && myVote !== k ? 0.4 : 1 }}>
+                    {l}
+                  </button>
+                ))}
+                {myVote && <div style={{ width:'100%', fontSize:11, color:T.text3, fontStyle:'italic', textAlign:'center', marginTop:4 }}>Tu as voté « {myVote} » · 1 vote = 1 voix</div>}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* MODAL dépôt motion */}
+      {showMotionForm && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(26,26,24,0.6)', zIndex:1500, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }} onClick={() => setShowMotionForm(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background:'#fff', border:`2px solid ${T.text1}`, maxWidth:560, width:'100%', maxHeight:'90vh', overflowY:'auto' }}>
+            <div style={{ background:T.text1, color:'#fff', padding:'20px 24px', borderBottom:`2px solid ${T.text1}` }}>
+              <div style={{ fontSize:10, fontWeight:800, letterSpacing:'0.16em', color:'#FFD93D', marginBottom:4 }}>━ NOUVELLE MOTION</div>
+              <div style={{ fontFamily:"'Sora',sans-serif", fontSize:20, fontWeight:800, letterSpacing:'-0.02em' }}>Déposer une motion à l'agora</div>
+            </div>
+            <div style={{ padding:'24px' }}>
+              <div style={{ background:'#FFD93D', padding:'12px 14px', marginBottom:18, borderLeft:`4px solid ${T.text1}`, fontSize:12, color:T.text1, fontWeight:600, lineHeight:1.5 }}>
+                Toute motion est soumise au vote des {c.members} membres de la commune. Résultat à la majorité simple.
+              </div>
+
+              <div style={{ marginBottom:16 }}>
+                <label style={{ fontSize:11, fontWeight:800, color:T.text1, display:'block', marginBottom:6, textTransform:'uppercase', letterSpacing:'0.08em' }}>Type de motion</label>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:0, border:`2px solid ${T.text1}` }}>
+                  {Object.entries(TYPE_LABELS_M).map(([k,v],i,arr) => (
+                    <button key={k} onClick={() => setMotionForm(f => ({...f, type:k}))} style={{ padding:'12px 8px', border:'none', borderRight:i<arr.length-1?`2px solid ${T.text1}`:'none', background:motionForm.type===k?'#FFD93D':'#fff', cursor:'pointer', fontFamily:"'Sora',sans-serif", fontSize:11, fontWeight:800, color:T.text1, letterSpacing:'0.04em' }}>
+                      <div style={{ fontSize:18, marginBottom:2 }}>{TYPE_ICONS[k]}</div>
+                      <div>{v}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginBottom:16 }}>
+                <label style={{ fontSize:11, fontWeight:800, color:T.text1, display:'block', marginBottom:6, textTransform:'uppercase', letterSpacing:'0.08em' }}>Titre de la motion *</label>
+                <input value={motionForm.titre} onChange={e => setMotionForm(f => ({...f, titre:e.target.value}))} placeholder="Motion : créer un jardin partagé sur le terrain communal" style={{ width:'100%', height:46, border:`2px solid ${T.text1}`, padding:'0 14px', fontSize:14, fontFamily:'Inter,sans-serif', color:T.text1, background:'#fff', outline:'none', boxSizing:'border-box' }} />
+              </div>
+
+              <div style={{ marginBottom:16 }}>
+                <label style={{ fontSize:11, fontWeight:800, color:T.text1, display:'block', marginBottom:6, textTransform:'uppercase', letterSpacing:'0.08em' }}>Argumentaire détaillé *</label>
+                <textarea value={motionForm.description} onChange={e => setMotionForm(f => ({...f, description:e.target.value}))} rows={5} placeholder="Présente le contexte, l'objectif, les modalités, le budget si concerné…" style={{ width:'100%', border:`2px solid ${T.text1}`, padding:'12px 14px', fontSize:13, fontFamily:'Inter,sans-serif', color:T.text1, background:'#fff', outline:'none', boxSizing:'border-box', resize:'vertical', lineHeight:1.5 }} />
+              </div>
+
+              <div style={{ marginBottom:20 }}>
+                <label style={{ fontSize:11, fontWeight:800, color:T.text1, display:'block', marginBottom:6, textTransform:'uppercase', letterSpacing:'0.08em' }}>Délai de vote (jours)</label>
+                <div style={{ display:'flex', gap:0, border:`2px solid ${T.text1}` }}>
+                  {['7','14','30'].map((d,i,arr) => (
+                    <button key={d} onClick={() => setMotionForm(f => ({...f, deadline:d}))} style={{ flex:1, padding:'12px', border:'none', borderRight:i<arr.length-1?`2px solid ${T.text1}`:'none', background:motionForm.deadline===d?'#FFD93D':'#fff', cursor:'pointer', fontFamily:"'Sora',sans-serif", fontSize:13, fontWeight:800, color:T.text1 }}>{d} jours</button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={() => setShowMotionForm(false)} style={{ flex:1, padding:'14px', background:'#fff', border:`2px solid ${T.text1}`, color:T.text1, cursor:'pointer', fontFamily:"'Sora',sans-serif", fontSize:12, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.06em' }}>Annuler</button>
+                <button disabled={!motionForm.titre || !motionForm.description} onClick={submitMotion} style={{ flex:2, padding:'14px', background: motionForm.titre && motionForm.description ? T.brand : T.text4, color:'#fff', border:'none', cursor:motionForm.titre && motionForm.description ? 'pointer' : 'not-allowed', fontFamily:"'Sora',sans-serif", fontSize:12, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.06em' }}>★ Déposer la motion ►</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CommuneCard({ c, onClick }) {
   const fed = SAMPLE_FEDERATIONS.find(f => f.id === c.federation_id);
   const repr = c.members >= 5;
@@ -208,6 +586,7 @@ function CommuneSpace({ c, onBack, user, isAdminCommune=true }) {
             ['actu',     'Actualité'],
             ['services', `Services (${services.length})`],
             ['membres',  `Membres (${c.members})`],
+            ['tresorerie','Trésorerie'],
             ['agora',    'Agora'],
             ['assemblee','Assemblée'],
           ].map(([id,label])=>(
@@ -358,31 +737,11 @@ function CommuneSpace({ c, onBack, user, isAdminCommune=true }) {
           </div>
         )}
 
+        {/* ─── TRÉSORERIE ─── */}
+        {tab==='tresorerie' && <CommuneTreasury commune={c} />}
+
         {/* ─── AGORA ─── */}
-        {tab==='agora' && (
-          <div>
-            <div style={{ fontSize:11, fontWeight:800, letterSpacing:'0.18em', color:T.brand, marginBottom:14, textTransform:'uppercase' }}>━ Agora · Délibérations & motions</div>
-            {[
-              { t:'Motion : Fédération avec la Commune Libre voisine ?', votes:18, total:23, status:'En cours', d:'5j restants' },
-              { t:'Compte-rendu de l\'AG du 24 avril',                   votes:23, total:23, status:'Adoptée',   d:'il y a 1 sem.' },
-              { t:'Budget participatif 2026 — propositions',            votes:11, total:23, status:'En cours',  d:'12j restants' },
-            ].map((m,i)=>(
-              <div key={i} style={{ background:'#fff', border:`2px solid ${T.text1}`, padding:'22px 26px', marginBottom:12, display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, flexWrap:'wrap' }}>
-                <div style={{ flex:1, minWidth:240 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
-                    <span style={{ fontSize:10, fontWeight:800, letterSpacing:'0.1em', padding:'3px 8px', background:m.status==='Adoptée'?T.success:'#FFD93D', color:m.status==='Adoptée'?'#fff':T.text1 }}>{m.status.toUpperCase()}</span>
-                    <span style={{ fontSize:11, color:T.text4, fontWeight:600 }}>{m.d}</span>
-                  </div>
-                  <div style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:700, color:T.text1, letterSpacing:'-0.01em' }}>{m.t}</div>
-                </div>
-                <div style={{ textAlign:'right' }}>
-                  <div style={{ fontFamily:"'Sora',sans-serif", fontSize:24, fontWeight:800, color:T.text1, lineHeight:1, letterSpacing:'-0.02em' }}>{m.votes}<span style={{ color:T.text4, fontSize:14 }}>/{m.total}</span></div>
-                  <div style={{ fontSize:10, color:T.text4, fontWeight:600, marginTop:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>votes</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        {tab==='agora' && <CommuneAgora commune={c} />}
 
         {/* ─── ASSEMBLÉE ─── */}
         {tab==='assemblee' && (
@@ -650,6 +1009,93 @@ function AssembleeView({ communes, federations }) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// CALENDRIER DES ASSEMBLÉES — vue chronologique des AG à venir
+// ═══════════════════════════════════════════════════════════
+function AGCalendar({ communes, federations, myCommune, myFed }) {
+  const [filter, setFilter] = useState('mes'); // 'mes' | 'toutes'
+  const today = new Date('2026-04-25'); // Date de référence cohérente avec le mock
+
+  // Génération d'événements simulés
+  const events = [
+    { id:1, date:'2026-05-07', time:'19:00', title:`AG hebdomadaire — Commune Libre de ${myCommune?.name || 'Belleville'}`,                        type:'commune',     scope:'mes', location:'Salle des fêtes du quartier · Présentiel + visio', attendees:18, total:myCommune?.members || 23 },
+    { id:2, date:'2026-05-14', time:'19:00', title:`AG hebdomadaire — Commune Libre de ${myCommune?.name || 'Belleville'}`,                        type:'commune',     scope:'mes', location:'Salle des fêtes du quartier · Présentiel + visio', attendees:5,  total:myCommune?.members || 23 },
+    { id:3, date:'2026-05-18', time:'20:30', title:`AG mensuelle Fédération ${myFed?.short || 'IDF–RA'}`,                                            type:'federation',  scope:'mes', location:'Visio uniquement', attendees:7, total:12 },
+    { id:4, date:'2026-06-01', time:'19:00', title:'Assemblée Confédérale (1ʳᵉ chambre + tirage 2ᵉ chambre)',                                          type:'confederation', scope:'toutes', location:'Visio + retransmission publique', attendees:24, total:38, important:true },
+    { id:5, date:'2026-06-12', time:'14:00', title:'Assemblée physique annuelle — Confédération nationale',                                            type:'confederation', scope:'toutes', location:'Saint-Étienne · Bourse du Travail', attendees:0, total:200, important:true },
+    { id:6, date:'2026-05-22', time:'18:30', title:`AG mensuelle Fédération du Grand Ouest`,                                                            type:'federation', scope:'toutes', location:'Visio', attendees:0, total:18 },
+    { id:7, date:'2026-05-30', time:'10:00', title:`AG plénière — Commune Libre des Cévennes`,                                                          type:'commune', scope:'toutes', location:'Mas du Crès · Le Vigan', attendees:0, total:8 },
+  ].sort((a, b) => new Date(a.date) - new Date(b.date)).filter(e => filter === 'toutes' || e.scope === 'mes');
+
+  const TYPE_META = {
+    commune:      { color:T.brand,   bg:'#FEE7EE', label:'COMMUNE' },
+    federation:   { color:'#0369A1', bg:'#DCEAF7', label:'FÉDÉRATION' },
+    confederation:{ color:'#7C3AED', bg:'#F1ECFE', label:'CONFÉD.' },
+  };
+
+  return (
+    <div>
+      {/* Toggle */}
+      <div style={{ display:'flex', border:`2px solid ${T.text1}`, marginBottom:16, maxWidth:340 }}>
+        {[['mes','★ MES ASSEMBLÉES'],['toutes','◉ TOUTES']].map(([k,l],i,arr)=>(
+          <button key={k} onClick={() => setFilter(k)} style={{ flex:1, padding:'10px 14px', border:'none', borderRight:i<arr.length-1?`2px solid ${T.text1}`:'none', background:filter===k?T.text1:'#fff', color:filter===k?'#FFD93D':T.text1, cursor:'pointer', fontFamily:"'Sora',sans-serif", fontSize:11, fontWeight:800, letterSpacing:'0.06em' }}>{l}</button>
+        ))}
+      </div>
+
+      {/* Liste timeline */}
+      <div style={{ position:'relative', paddingLeft:30, borderLeft:`3px solid ${T.text1}` }}>
+        {events.length === 0 && (
+          <div style={{ padding:'30px 20px', background:T.surface2, border:`2px solid ${T.text1}`, marginLeft:-30 }}>
+            <div style={{ fontSize:14, color:T.text2, fontWeight:600 }}>Aucune assemblée prévue.</div>
+          </div>
+        )}
+        {events.map(e => {
+          const eventDate = new Date(e.date);
+          const daysUntil = Math.ceil((eventDate - today) / 86400000);
+          const meta = TYPE_META[e.type];
+          const day = eventDate.toLocaleDateString('fr-FR', { day:'numeric' });
+          const month = eventDate.toLocaleDateString('fr-FR', { month:'short' }).toUpperCase().replace('.','');
+          const weekday = eventDate.toLocaleDateString('fr-FR', { weekday:'long' });
+          return (
+            <div key={e.id} style={{ position:'relative', marginBottom:14 }}>
+              {/* Pastille date */}
+              <div style={{ position:'absolute', left:-49, top:0, width:54, height:54, background: e.important ? '#FFD93D' : '#fff', border:`3px solid ${T.text1}`, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
+                <div style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, color:T.text1, lineHeight:1 }}>{day}</div>
+                <div style={{ fontSize:9, fontWeight:800, color:T.text1, letterSpacing:'0.04em', marginTop:2 }}>{month}</div>
+              </div>
+              {/* Carte event */}
+              <div style={{ marginLeft:24, background:'#fff', border:`2px solid ${T.text1}`, padding:'18px 22px', display:'flex', alignItems:'flex-start', gap:14, flexWrap:'wrap' }}>
+                <div style={{ flex:1, minWidth:240 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8, flexWrap:'wrap' }}>
+                    <span style={{ fontSize:10, fontWeight:800, letterSpacing:'0.1em', padding:'3px 8px', background:meta.color, color:'#fff' }}>{meta.label}</span>
+                    {e.important && <span style={{ fontSize:10, fontWeight:800, letterSpacing:'0.1em', padding:'3px 8px', background:'#FFD93D', color:T.text1 }}>★ MAJEUR</span>}
+                    <span style={{ fontSize:11, color:T.text4, fontWeight:600, textTransform:'capitalize' }}>{weekday} · {e.time}</span>
+                    {daysUntil > 0 && <span style={{ fontSize:10, fontWeight:800, color: daysUntil <= 7 ? T.brand : T.text3, letterSpacing:'0.04em' }}>DANS {daysUntil}J</span>}
+                    {daysUntil <= 0 && <span style={{ fontSize:10, fontWeight:800, color:T.text4, letterSpacing:'0.04em' }}>PASSÉ</span>}
+                  </div>
+                  <div style={{ fontFamily:"'Sora',sans-serif", fontSize:15, fontWeight:800, color:T.text1, letterSpacing:'-0.01em', marginBottom:6 }}>{e.title}</div>
+                  <div style={{ fontSize:12, color:T.text3, marginBottom:8 }}>📍 {e.location}</div>
+                  {e.attendees > 0 && (
+                    <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:11, color:T.text2 }}>
+                      <div style={{ flex:1, height:6, background:T.surface2, position:'relative', maxWidth:200 }}>
+                        <div style={{ height:'100%', background:meta.color, width:`${(e.attendees/e.total)*100}%` }}></div>
+                      </div>
+                      <span style={{ fontWeight:700 }}>{e.attendees}/{e.total} inscrit·es</span>
+                    </div>
+                  )}
+                </div>
+                {daysUntil >= 0 && (
+                  <button style={{ background:T.text1, color:'#fff', border:'none', padding:'10px 18px', fontFamily:"'Sora',sans-serif", fontSize:11, fontWeight:800, cursor:'pointer', textTransform:'uppercase', letterSpacing:'0.06em', flexShrink:0 }}>Je participe ►</button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
 // 7. PAGE PRINCIPALE — Hub de l'espace adhérent
 // ═══════════════════════════════════════════════════════════
 function EspaceAdherents({ user, onAuth, setPage }) {
@@ -669,6 +1115,7 @@ function EspaceAdherents({ user, onAuth, setPage }) {
   const [communes, setCommunes] = useState(SAMPLE_COMMUNES);
   const [federations, setFederations] = useState([...window.getUserCreations('federations'), ...SAMPLE_FEDERATIONS]);
   const [createFedOpen, setCreateFedOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('liste'); // 'liste' | 'carte'
 
   if (communeOpen) return <CommuneSpace c={communeOpen} onBack={()=>setCommuneOpen(null)} user={user} />;
   if (fedOpen) return <FederationSpace f={fedOpen} communes={communes} onBack={()=>setFedOpen(null)} onOpenCommune={c=>{ setFedOpen(null); setCommuneOpen(c); }} />;
@@ -760,18 +1207,34 @@ function EspaceAdherents({ user, onAuth, setPage }) {
               <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Chercher une commune libre, un quartier, une ville..."
                 style={{ width:'100%', height:48, padding:'0 16px', fontSize:14, fontFamily:'Inter,sans-serif', border:`2px solid ${T.text1}`, background:'#fff', outline:'none' }} />
             </div>
-            <button onClick={()=>setShowCreate(true)} style={{ background:T.text1, color:'#fff', border:'none', padding:'14px 22px', fontFamily:"'Sora',sans-serif", fontSize:13, fontWeight:800, cursor:'pointer', textTransform:'uppercase', letterSpacing:'0.06em' }}>+ Créer une commune</button>
+            {/* Toggle Liste / Carte */}
+            <div style={{ display:'flex', border:`2px solid ${T.text1}`, flexShrink:0 }}>
+              {[['liste','▤ LISTE'],['carte','◉ CARTE']].map(([k,l],i,arr)=>(
+                <button key={k} onClick={()=>setViewMode(k)} style={{ padding:'12px 16px', border:'none', borderRight:i<arr.length-1?`2px solid ${T.text1}`:'none', background:viewMode===k?T.text1:'#fff', color:viewMode===k?'#FFD93D':T.text1, cursor:'pointer', fontFamily:"'Sora',sans-serif", fontSize:11, fontWeight:800, letterSpacing:'0.06em' }}>{l}</button>
+              ))}
+            </div>
+            <button onClick={()=>setShowCreate(true)} style={{ background:T.text1, color:'#fff', border:'none', padding:'14px 22px', fontFamily:"'Sora',sans-serif", fontSize:13, fontWeight:800, cursor:'pointer', textTransform:'uppercase', letterSpacing:'0.06em', flexShrink:0 }}>+ Créer une commune</button>
           </div>
 
-          <div style={{ display:'flex', gap:0, marginBottom:20, border:`2px solid ${T.text1}`, overflowX:'auto' }}>
-            {[['Tous','TOUTES'],['quartier','QUARTIERS'],['commune','COMMUNES'],['village','VILLAGES'],['zad','ZAD'],['tiers_lieu','TIERS-LIEUX']].map(([k,l],i,arr)=>(
-              <button key={k} onClick={()=>setTypeFilter(k)} style={{ flex:1, padding:'12px 16px', border:'none', background:typeFilter===k?T.text1:'#fff', color:typeFilter===k?'#FFD93D':T.text2, cursor:'pointer', fontFamily:"'Sora',sans-serif", fontSize:11, fontWeight:800, letterSpacing:'0.08em', whiteSpace:'nowrap', borderRight:i<arr.length-1?`2px solid ${T.text1}`:'none' }}>{l}</button>
-            ))}
-          </div>
+          {viewMode === 'liste' && (
+            <>
+              <div style={{ display:'flex', gap:0, marginBottom:20, border:`2px solid ${T.text1}`, overflowX:'auto' }}>
+                {[['Tous','TOUTES'],['quartier','QUARTIERS'],['commune','COMMUNES'],['village','VILLAGES'],['zad','ZAD'],['tiers_lieu','TIERS-LIEUX']].map(([k,l],i,arr)=>(
+                  <button key={k} onClick={()=>setTypeFilter(k)} style={{ flex:1, padding:'12px 16px', border:'none', background:typeFilter===k?T.text1:'#fff', color:typeFilter===k?'#FFD93D':T.text2, cursor:'pointer', fontFamily:"'Sora',sans-serif", fontSize:11, fontWeight:800, letterSpacing:'0.08em', whiteSpace:'nowrap', borderRight:i<arr.length-1?`2px solid ${T.text1}`:'none' }}>{l}</button>
+                ))}
+              </div>
 
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(310px,1fr))', gap:16 }}>
-            {filtered.map(c=><CommuneCard key={c.id} c={c} onClick={()=>setCommuneOpen(c)} />)}
-          </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(310px,1fr))', gap:16 }}>
+                {filtered.map(c=><CommuneCard key={c.id} c={c} onClick={()=>setCommuneOpen(c)} />)}
+              </div>
+            </>
+          )}
+
+          {viewMode === 'carte' && (
+            <CommunesMap communes={communes} federations={federations}
+              onOpenCommune={c => setCommuneOpen(c)}
+              onOpenFed={f => setFedOpen(f)} />
+          )}
           {filtered.length===0 && (
             <div style={{ textAlign:'center', padding:'60px 24px', background:'#fff', border:`2px solid ${T.text1}` }}>
               <div style={{ fontFamily:"'Sora',sans-serif", fontSize:22, fontWeight:800, color:T.text1, letterSpacing:'-0.02em', marginBottom:8 }}>Aucune commune trouvée</div>
@@ -859,6 +1322,12 @@ function EspaceAdherents({ user, onAuth, setPage }) {
 
         {/* ─── MON ESPACE ─── */}
         {tab==='mon' && <>
+          {/* CALENDRIER DES AG À VENIR */}
+          <div style={{ marginBottom:32 }}>
+            <div style={{ fontSize:11, fontWeight:800, letterSpacing:'0.18em', color:T.brand, marginBottom:14, textTransform:'uppercase' }}>━ Calendrier de mes assemblées</div>
+            <AGCalendar communes={communes} federations={federations} myCommune={myCommune} myFed={myFed} />
+          </div>
+
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24, marginBottom:24 }} className="mn-detail-grid">
             <div style={{ background:T.text1, color:'#fff', border:`2px solid ${T.text1}`, padding:'28px 30px' }}>
               <div style={{ fontSize:10, fontWeight:800, letterSpacing:'0.16em', color:'#FFD93D', marginBottom:14 }}>━ MA CARTE D'ADHÉRENT·E</div>
