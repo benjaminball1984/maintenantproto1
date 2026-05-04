@@ -211,10 +211,12 @@ window.MediaPage = MediaPage;
 
 // ── MOBILISATIONS v2 ───────────────────────────────────────
 function MobilizationsPage({ user, adminMode, onAuth }) {
-  const [data, setData] = useState(AppData.mobilizations);
+  const [data, setData] = useState([...window.getUserCreations('mobilizations'), ...AppData.mobilizations]);
   const [detail, setDetail] = useState(null);
   const [filter, setFilter] = useState('Toutes');
   const [editItem, setEditItem] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [fundOpen, setFundOpen] = useState(false);
   // Re-render trigger pour reflet du toggle Participer
   const [joinedTick, setJoinedTick] = useState(0);
   const isJoined = id => window.isUserJoined?.('mobilizations', id);
@@ -226,9 +228,16 @@ function MobilizationsPage({ user, adminMode, onAuth }) {
     setData(d => d.map(m => m.id === mob.id ? { ...m, participants: Math.max(0, m.participants + (nowJoined ? 1 : -1)) } : m));
     window.showToast?.(nowJoined ? `Inscrit·e à : ${mob.title}` : `Désinscrit·e de : ${mob.title}`, { type: nowJoined ? 'success' : 'info', icon: nowJoined ? '✊' : '←' });
   };
+  const contactOrganizer = (mob) => {
+    if (!user) { onAuth(); return; }
+    window.showToast?.(`Message envoyé à ${mob.organizer} — réponse par messagerie`, { type:'success', icon:'✉️', duration: 4000 });
+  };
   const types = ['Toutes', ...new Set(data.map(m => m.type))];
   const filtered = filter === 'Toutes' ? data : data.filter(m => m.type === filter);
   const TYPE_COLOR = { 'Manifestation': T.brand, 'Assemblée': T.info, 'Grève': '#7C3AED', 'Veillée': T.warning, 'Rassemblement': T.success, 'Festival': T.accent, 'Forum': T.info, 'Action directe': T.brand, 'Camp': T.success };
+
+  // Image d'une mobilisation : priorité à celle de l'organisateur (m.image), fallback sur Picsum
+  const imageUrl = (m) => m.image || `https://picsum.photos/seed/mob${m.id}/1200/500`;
 
   if (detail) return (
     <div style={{ background: T.bg, minHeight: '100vh' }}>
@@ -238,15 +247,21 @@ function MobilizationsPage({ user, adminMode, onAuth }) {
           {adminMode && <AdminBtn onEdit={() => setEditItem(detail)} />}
         </div>
         <div style={{ background: T.surface, borderRadius: 24, border: `1px solid ${T.border}`, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.07)' }}>
-          <div style={{ background: `linear-gradient(135deg,${TYPE_COLOR[detail.type] || T.brand},${TYPE_COLOR[detail.type] || T.brand}99)`, padding: '36px 32px', color: '#fff' }}>
-            <Tag variant="dark" size="xs" style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', marginBottom: 16 }}>{detail.type}</Tag>
-            <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(20px,3.5vw,30px)', fontWeight: 800, margin: '0 0 14px', lineHeight: 1.2 }}>{detail.title}</h1>
-            <div style={{ display: 'flex', gap: 20, fontSize: 14, opacity: 0.88, flexWrap: 'wrap' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{ICONS.calendar} {new Date(detail.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{ICONS.clock} {detail.time}</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{ICONS.pin} {detail.location}</span>
+          {/* Visuel hero — photo de l'organisateur en grand */}
+          <div style={{ position: 'relative', height: 280, overflow: 'hidden' }}>
+            <img src={imageUrl(detail)} alt={detail.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />
+            <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${TYPE_COLOR[detail.type] || T.brand}D9, ${TYPE_COLOR[detail.type] || T.brand}99 60%, transparent)` }}></div>
+            <div style={{ position: 'absolute', inset: 0, padding: '32px 32px 28px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', color: '#fff' }}>
+              <Tag variant="dark" size="xs" style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', border: 'none', marginBottom: 12, alignSelf: 'flex-start', backdropFilter: 'blur(8px)' }}>{detail.type}</Tag>
+              <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(20px,3.5vw,32px)', fontWeight: 800, margin: '0 0 14px', lineHeight: 1.2, textShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>{detail.title}</h1>
+              <div style={{ display: 'flex', gap: 20, fontSize: 14, opacity: 0.95, flexWrap: 'wrap' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{ICONS.calendar} {new Date(detail.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{ICONS.clock} {detail.time}</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{ICONS.pin} {detail.location}</span>
+              </div>
             </div>
           </div>
+
           <div style={{ padding: '28px 32px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 24 }}>
               {[['Organisateur', detail.organizer], ['Participants', detail.participants.toLocaleString('fr-FR')], ['Heure', detail.time]].map(([l, v]) => (
@@ -257,19 +272,51 @@ function MobilizationsPage({ user, adminMode, onAuth }) {
               ))}
             </div>
             <p style={{ fontSize: 15, color: T.text2, lineHeight: 1.75, marginBottom: 24 }}>{detail.description}</p>
+
+            {/* Bouton principal : Participer */}
             <Btn full variant={isJoined(detail.id) ? 'success' : 'gradient'} size="lg" onClick={() => toggleJoin(detail)} icon={isJoined(detail.id) ? ICONS.check : null}>
               {isJoined(detail.id) ? '✓ Inscrit·e — Cliquez pour annuler' : 'Participer à cette mobilisation'}
             </Btn>
+
+            {/* Boutons secondaires : Contacter + Soutenir */}
+            <div className="mn-btn-row" style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+              <Btn full variant="outline" size="md" onClick={() => contactOrganizer(detail)} icon={ICONS.chat}>Contacter l'organisateur</Btn>
+              <Btn full variant="outline" size="md" onClick={() => { if (!user) { onAuth(); return; } setFundOpen(true); }} icon={ICONS.wallet}>Soutenir l'événement</Btn>
+            </div>
+            <div style={{ fontSize: 11, color: T.text4, textAlign: 'center', marginTop: 8, lineHeight: 1.5 }}>
+              Le soutien financier permet à l'organisateur de couvrir les frais (logistique, transports, matériel). Paiement en T99CP avec alternative en euros.
+            </div>
           </div>
         </div>
-        {editItem && <EditModal open onClose={() => setEditItem(null)} title="Mobilisation" data={editItem} onSave={f => { setData(d => d.map(m => m.id === editItem.id ? { ...m, ...f } : m)); setDetail(f); setEditItem(null); }} fields={[{ key: 'title', label: 'Titre' }, { key: 'type', label: 'Type', type: 'select', options: ['Manifestation', 'Assemblée', 'Grève', 'Veillée', 'Rassemblement', 'Festival', 'Forum', 'Action directe', 'Camp'] }, { key: 'date', label: 'Date', type: 'date' }, { key: 'time', label: 'Heure' }, { key: 'location', label: 'Lieu' }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'organizer', label: 'Organisateur' }, { key: 'participants', label: 'Participants', type: 'number' }]} />}
+
+        {/* Modal de soutien financier (T99CP / €) */}
+        <PayModal open={fundOpen} onClose={() => setFundOpen(false)} amount={10} item={`Soutien à : ${detail.title}`} description={`Don à l'organisateur ${detail.organizer} pour couvrir les frais de l'événement.`} seller={detail.organizer} />
+        {editItem && <EditModal open onClose={() => setEditItem(null)} title="Mobilisation" data={editItem} onSave={f => { setData(d => d.map(m => m.id === editItem.id ? { ...m, ...f } : m)); setDetail(f); setEditItem(null); }} fields={[{ key: 'title', label: 'Titre' }, { key: 'type', label: 'Type', type: 'select', options: ['Manifestation', 'Assemblée', 'Grève', 'Veillée', 'Rassemblement', 'Festival', 'Forum', 'Action directe', 'Camp'] }, { key: 'date', label: 'Date', type: 'date' }, { key: 'time', label: 'Heure' }, { key: 'location', label: 'Lieu' }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'organizer', label: 'Organisateur' }, { key: 'image', label: 'URL de la photo' }, { key: 'participants', label: 'Participants', type: 'number' }]} />}
       </div>
     </div>
   );
 
   return (
     <PageContainer>
-      <SectionTitle label="Agenda militant" title="Mobilisations & Événements" action={adminMode && <Btn variant="success" size="sm" icon={ICONS.plus}>+ Événement</Btn>} />
+      <SectionTitle label="Agenda militant" title="Mobilisations & Événements" action={
+        <Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Créer un événement</Btn>
+      } />
+      <CreateModal open={createOpen} onClose={() => setCreateOpen(false)} title="Créer un événement / une mobilisation"
+        subtitle="Annonce ta marche, ton AG, ton festival, ton camp militant. Tu peux ajouter ta propre photo."
+        domain="mobilizations" color={T.brand}
+        defaultPhoto="https://images.unsplash.com/photo-1591848478625-de43268e6fb8?w=1200&q=80"
+        fields={[
+          { id:'title',         label:'Titre de la mobilisation', required:true, placeholder:"Marche pour le climat — Paris" },
+          { id:'type',          label:'Type d\'événement', type:'select', required:true, options:['Manifestation','Assemblée','Grève','Veillée','Rassemblement','Festival','Forum','Action directe','Camp'] },
+          { id:'date',          label:'Date', type:'date', required:true },
+          { id:'time',          label:'Heure de rendez-vous', required:true, placeholder:"14:30" },
+          { id:'location',      label:'Lieu', required:true, placeholder:"Place de la République, Paris 11e" },
+          { id:'organizer',     label:'Organisateur·rice (collectif, syndicat, asso…)', required:true, placeholder:"Alternatiba Paris" },
+          { id:'description',   label:'Présentation de la mobilisation', type:'textarea', rows:4, required:true, placeholder:"Pourquoi cette mobilisation ? Programme ? Mots d'ordre ?" },
+          { id:'image',         label:'URL de la photo / visuel (optionnel)', type:'photo', hint:'Lien vers une image — sinon une photo générique sera utilisée.' },
+        ]}
+        onSubmit={item => { const enriched = { ...item, participants: 1, _userCreated: true }; setData(d => [enriched, ...d]); }}
+      />
       <FilterTabs options={types} active={filter} onChange={setFilter} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {filtered.map(m => {
@@ -280,10 +327,16 @@ function MobilizationsPage({ user, adminMode, onAuth }) {
               onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 10px 32px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
               onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
               {adminMode && <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 2 }} onClick={e => { e.stopPropagation(); setEditItem(m); }}><AdminBtn onEdit={() => setEditItem(m)} /></div>}
+              {m._userCreated && <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 2 }}><window.UserBadge /></div>}
+              {/* Bloc date coloré */}
               <div style={{ width: 72, background: color, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: '14px 0' }}>
                 <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{d.toLocaleDateString('fr-FR', { month: 'short' })}</div>
                 <div style={{ color: '#fff', fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 28, lineHeight: 1 }}>{d.getDate()}</div>
                 <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11 }}>{d.getFullYear()}</div>
+              </div>
+              {/* Photo de l'événement (visible dès tablette) */}
+              <div className="mn-mob-card-img" style={{ width: 130, flexShrink: 0, background: T.surface2, position: 'relative', overflow: 'hidden' }}>
+                <img src={imageUrl(m)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />
               </div>
               <div style={{ padding: '16px 20px', flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
