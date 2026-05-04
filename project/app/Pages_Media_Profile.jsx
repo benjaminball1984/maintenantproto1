@@ -312,6 +312,7 @@ function ProfilePage({ user, setUser, onAuth, setPage }) {
   const [tab, setTab] = useState('activity');
   const [editOpen, setEditOpen] = useState(false);
   const [profile, setProfile] = useState(user || AppData.defaultUser);
+  const [settingDetail, setSettingDetail] = useState(null);
 
   if (!user) return (
     <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, textAlign: 'center', background: T.bg }}>
@@ -322,14 +323,94 @@ function ProfilePage({ user, setUser, onAuth, setPage }) {
     </div>
   );
 
-  const activities = [
-    { icon: ICONS.trending, text: 'Signé : "Stop à la fermeture des urgences"', time: 'il y a 2h', color: T.brand },
-    { icon: ICONS.wallet, text: 'Contribution 15 T99CP — Camp du Larzac', time: 'il y a 1 jour', color: T.info },
-    { icon: ICONS.users, text: 'Service SEL échangé : Cours de yoga (60 min)', time: 'il y a 3 jours', color: '#7C3AED' },
-    { icon: ICONS.trending, text: 'Pétition créée : "Pour un RUB à 900€"', time: 'il y a 1 semaine', color: T.success },
-    { icon: ICONS.home, text: 'Hébergement réservé — Lyon Croix-Rousse (3 nuits)', time: 'il y a 2 semaines', color: T.accent },
-    { icon: ICONS.car, text: 'Covoiturage : Paris → Lyon', time: 'il y a 3 semaines', color: T.info },
+  // ── Activité dérivée depuis localStorage ──────────────────
+  const buildActivities = () => {
+    const acts = [];
+    const formatTime = (ts) => {
+      const diff = Date.now() - ts;
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor(diff / 60000);
+      if (d > 7) return `il y a ${Math.floor(d/7)} sem.`;
+      if (d > 0) return `il y a ${d} jour${d>1?'s':''}`;
+      if (h > 0) return `il y a ${h}h`;
+      if (m > 0) return `il y a ${m} min`;
+      return "à l'instant";
+    };
+    // Créations utilisateur (par domaine)
+    const domains = [
+      { key:'housing',       label:'Hébergement',     icon:ICONS.home,     color:T.hub.housing,      titleField:'title' },
+      { key:'marketplace',   label:'Article marketplace', icon:ICONS.grid, color:T.hub.marketplace,  titleField:'title' },
+      { key:'sel',           label:'Service SEL',     icon:ICONS.users,    color:T.hub.sel,          titleField:'service' },
+      { key:'crowdfunding',  label:'Cagnotte',        icon:ICONS.wallet,   color:T.hub.crowdfunding, titleField:'title' },
+      { key:'garden',        label:'Surplus jardin',  icon:ICONS.heart,    color:T.hub.garden,       titleField:'item' },
+      { key:'lending',       label:'Objet à prêter',  icon:ICONS.share,    color:'#A21CAF',          titleField:'name' },
+      { key:'carpool_offers',label:'Trajet covoit',   icon:ICONS.car,      color:T.hub.carpooling,   titleField:'from' },
+      { key:'polls',         label:'Sondage',         icon:ICONS.trending, color:T.brand,            titleField:'title' },
+      { key:'federations',   label:'Fédération',      icon:ICONS.sparkle,  color:T.brand,            titleField:'name' },
+    ];
+    domains.forEach(d => {
+      (window.getUserCreations?.(d.key) || []).forEach(item => {
+        const tt = item[d.titleField] || item.title || 'Création';
+        acts.push({ icon:d.icon, color:d.color, time:formatTime(item._createdAt || Date.now()), ts:item._createdAt||0, text:`Tu as publié : ${d.label} — « ${tt} »` });
+      });
+    });
+    // Joins
+    const joinedMobs = window.getUserJoined?.('mobilizations') || [];
+    const allMobs = window.AppData?.mobilizations || [];
+    joinedMobs.forEach(id => {
+      const m = allMobs.find(x => x.id === id);
+      if (m) acts.push({ icon:ICONS.calendar, color:'#7C3AED', time:'récemment', ts:Date.now()-1000, text:`Inscrit·e à : ${m.title}` });
+    });
+    const joinedGroups = window.getUserJoined?.('groups') || [];
+    joinedGroups.forEach(id => {
+      acts.push({ icon:ICONS.users, color:T.hub.network, time:'récemment', ts:Date.now()-2000, text:`Tu as rejoint un groupe du réseau` });
+    });
+    // Votes sondages
+    try {
+      const votes = JSON.parse(localStorage.getItem('mn_poll_votes') || '{}');
+      Object.keys(votes).forEach(pollId => {
+        const poll = (window.AppData?.polls || []).find(p => p.id === +pollId);
+        if (poll) acts.push({ icon:ICONS.check, color:T.brand, time:'récemment', ts:Date.now()-3000, text:`Tu as voté au sondage : « ${poll.title} »` });
+      });
+    } catch {}
+    // Tri par récence (descend)
+    acts.sort((a,b) => b.ts - a.ts);
+    return acts;
+  };
+
+  const realActivities = buildActivities();
+  const fallbackActivities = [
+    { icon: ICONS.trending, text: 'Bienvenue sur Maintenant !', time: 'à l\'instant', color: T.brand },
+    { icon: ICONS.sparkle, text: 'Crée ta première contribution depuis n\'importe quel service !', time: '', color: T.accent },
   ];
+  const activities = realActivities.length > 0 ? realActivities : fallbackActivities;
+
+  // ── Compteurs par service pour l'onglet "Mes services" ───
+  const buildServiceStats = () => {
+    return [
+      { label:'Hébergement',     page:'housing',      created:(window.getUserCreations?.('housing')||[]).length,        joins:0, color:T.hub.housing },
+      { label:'Marketplace',     page:'marketplace',  created:(window.getUserCreations?.('marketplace')||[]).length,    joins:0, color:T.hub.marketplace },
+      { label:'Services SEL',    page:'sel',          created:(window.getUserCreations?.('sel')||[]).length,            joins:0, color:T.hub.sel },
+      { label:'Cagnottes',       page:'crowdfunding', created:(window.getUserCreations?.('crowdfunding')||[]).length,   joins:0, color:T.hub.crowdfunding },
+      { label:'Surplus jardin',  page:'garden',       created:(window.getUserCreations?.('garden')||[]).length,         joins:0, color:T.hub.garden },
+      { label:'Ki Prête Tout',   page:'lending',      created:(window.getUserCreations?.('lending')||[]).length,        joins:0, color:'#A21CAF' },
+      { label:'Covoiturage',     page:'carpooling',   created:(window.getUserCreations?.('carpool_offers')||[]).length+(window.getUserCreations?.('carpool_requests')||[]).length, joins:0, color:T.hub.carpooling },
+      { label:'Sondages',        page:'polls',        created:(window.getUserCreations?.('polls')||[]).length,          joins:Object.keys((()=>{ try{return JSON.parse(localStorage.getItem('mn_poll_votes')||'{}');}catch{return {};} })()).length, color:T.brand, joinLabel:'votes' },
+      { label:'Mobilisations',   page:'mobilizations',created:0,                                                         joins:(window.getUserJoined?.('mobilizations')||[]).length, color:'#7C3AED', joinLabel:'inscriptions' },
+      { label:'Pétitions',       page:'petitions',    created:0,                                                         joins:profile.petitions_signed||0, color:T.brand, joinLabel:'signatures' },
+      { label:'Réseau',          page:'reseau',       created:0,                                                         joins:(window.getUserJoined?.('groups')||[]).length, color:T.hub.network, joinLabel:'groupes' },
+      { label:'Communes Libres', page:'communes',     created:(window.getUserCreations?.('federations')||[]).length,    joins:0, color:T.hub.communes, createLabel:'fédérations' },
+    ];
+  };
+  const serviceStats = buildServiceStats();
+
+  // Bouton Partager
+  const handleShareProfile = () => {
+    const url = `${location.origin}${location.pathname}#profile/${encodeURIComponent(profile.name||'me')}`;
+    if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => window.showToast?.('Lien du profil copié dans le presse-papiers', { type:'success', icon:'🔗' }));
+    else window.showToast?.('Lien : ' + url, { type:'info' });
+  };
 
   return (
     <div style={{ background: T.bg, minHeight: '100vh' }}>
@@ -360,7 +441,7 @@ function ProfilePage({ user, setUser, onAuth, setPage }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10, paddingBottom: 8 }}>
-            <Btn variant="surface" size="sm" icon={ICONS.share}>Partager le profil</Btn>
+            <Btn variant="surface" size="sm" icon={ICONS.share} onClick={handleShareProfile}>Partager le profil</Btn>
           </div>
         </div>
 
@@ -420,29 +501,149 @@ function ProfilePage({ user, setUser, onAuth, setPage }) {
         )}
 
         {tab === 'services' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 12 }}>
-            {[['Pétitions', 'petitions'], ['Mobilisations', 'mobilizations'], ['Services SEL', 'sel'], ['Marketplace', 'marketplace'], ['Hébergement', 'housing'], ['Cagnottes', 'crowdfunding']].map(([label, page]) => (
-              <div key={page} onClick={() => setPage(page)} style={{ background: T.surface, borderRadius: 14, border: `1px solid ${T.border}`, padding: '16px 18px', cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = T.brand; e.currentTarget.style.boxShadow = '0 4px 16px rgba(225,29,116,0.1)'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.boxShadow = 'none'; }}>
-                <span style={{ fontWeight: 600, fontSize: 14, color: T.text1 }}>{label}</span>
-                <div style={{ color: T.text4 }}>{ICONS.arrow_r}</div>
-              </div>
-            ))}
+          <div>
+            <p style={{ fontSize: 13, color: T.text3, margin: '0 0 16px', lineHeight: 1.55 }}>Tes contributions et participations dans chaque service. Les <strong style={{ color: T.brand }}>compteurs</strong> reflètent ce que tu as réellement fait — clique sur un service pour ouvrir la liste filtrée.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 12 }}>
+              {serviceStats.map(s => {
+                const total = s.created + s.joins;
+                const empty = total === 0;
+                return (
+                  <div key={s.page} onClick={() => setPage(s.page)} style={{
+                    background: T.surface, borderRadius: 14, border: `1px solid ${empty ? T.border : `${s.color}40`}`,
+                    borderTop: `3px solid ${s.color}`,
+                    padding: '14px 16px', cursor: 'pointer', transition: 'all 0.18s',
+                    opacity: empty ? 0.7 : 1,
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = s.color; e.currentTarget.style.boxShadow = `0 6px 20px ${s.color}20`; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = empty ? T.border : `${s.color}40`; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 10 }}>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: T.text1, fontFamily:"'Sora',sans-serif" }}>{s.label}</span>
+                      <div style={{ color: s.color, opacity: empty ? 0.4 : 1 }}>{ICONS.arrow_r}</div>
+                    </div>
+                    <div style={{ display:'flex', gap: 12, flexWrap:'wrap' }}>
+                      {s.created > 0 && (
+                        <div>
+                          <div style={{ fontFamily:"'Sora',sans-serif", fontWeight: 800, fontSize: 20, color: s.color, lineHeight: 1 }}>{s.created}</div>
+                          <div style={{ fontSize: 10, color: T.text4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 3 }}>{s.createLabel || (s.created > 1 ? 'créations' : 'création')}</div>
+                        </div>
+                      )}
+                      {s.joins > 0 && (
+                        <div>
+                          <div style={{ fontFamily:"'Sora',sans-serif", fontWeight: 800, fontSize: 20, color: T.text1, lineHeight: 1 }}>{s.joins}</div>
+                          <div style={{ fontSize: 10, color: T.text4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 3 }}>{s.joinLabel || 'participations'}</div>
+                        </div>
+                      )}
+                      {empty && <span style={{ fontSize: 12, color: T.text4, fontStyle: 'italic' }}>Aucune contribution pour l'instant</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
         {tab === 'settings' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 500 }}>
-            {[['Notifications', 'Gérer vos alertes'], ['Sécurité & Confidentialité', 'Mot de passe, 2FA'], ['RGPD — Export données', 'Télécharger vos données'], ['Wallet T99CP', 'Gérer votre monnaie solidaire']].map(([title, desc]) => (
-              <div key={title} style={{ background: T.surface, borderRadius: 14, border: `1px solid ${T.border}`, padding: '14px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.15s' }}
+            {[
+              { id:'notifications',  title:'Notifications',                desc:'Gérer vos alertes (email, push, in-app)' },
+              { id:'security',       title:'Sécurité & Confidentialité',    desc:'Mot de passe, 2FA, sessions actives' },
+              { id:'rgpd',           title:'RGPD — Export de mes données',  desc:'Télécharger un fichier JSON complet' },
+              { id:'wallet',         title:'Wallet T99CP',                  desc:'Gérer votre monnaie solidaire sur Polygon' },
+            ].map(s => (
+              <div key={s.id} onClick={() => {
+                if (s.id === 'wallet') { window.open('https://the99coinproject.org','_blank'); return; }
+                if (s.id === 'rgpd') {
+                  // Génération d'un export JSON local et téléchargement
+                  const data = {
+                    profile,
+                    creations: ['housing','marketplace','sel','crowdfunding','garden','lending','carpool_offers','carpool_requests','polls','federations']
+                      .reduce((a,d)=>{ a[d] = window.getUserCreations?.(d)||[]; return a; }, {}),
+                    joins: { mobilizations:window.getUserJoined?.('mobilizations')||[], groups:window.getUserJoined?.('groups')||[] },
+                    poll_votes: (()=>{ try{return JSON.parse(localStorage.getItem('mn_poll_votes')||'{}');}catch{return{};} })(),
+                    exported_at: new Date().toISOString(),
+                  };
+                  const blob = new Blob([JSON.stringify(data,null,2)], { type:'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url; link.download = `maintenant-${(profile.name||'export').replace(/\s+/g,'-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.json`;
+                  link.click();
+                  URL.revokeObjectURL(url);
+                  window.showToast?.('Export RGPD téléchargé', { type:'success', icon:'📥' });
+                  return;
+                }
+                setSettingDetail(s);
+              }} style={{ background: T.surface, borderRadius: 14, border: `1px solid ${T.border}`, padding: '14px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.15s' }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = T.brand} onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
-                <div><div style={{ fontWeight: 600, fontSize: 14, color: T.text1 }}>{title}</div><div style={{ fontSize: 12, color: T.text4 }}>{desc}</div></div>
+                <div><div style={{ fontWeight: 600, fontSize: 14, color: T.text1 }}>{s.title}</div><div style={{ fontSize: 12, color: T.text4 }}>{s.desc}</div></div>
                 <div style={{ color: T.text4 }}>{ICONS.arrow_r}</div>
               </div>
             ))}
             <Btn variant="outline" style={{ borderColor: '#EF4444', color: '#EF4444', marginTop: 8 }} onClick={() => { setUser(null); setPage('home'); }} icon={ICONS.logout}>Se déconnecter</Btn>
           </div>
+        )}
+
+        {/* Modal détail des paramètres */}
+        {settingDetail && (
+          <Modal open onClose={()=>setSettingDetail(null)} title={`⚙ ${settingDetail.title}`} width={520}>
+            {settingDetail.id === 'notifications' && (
+              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                <p style={{ fontSize:13, color:T.text3, margin:0, lineHeight:1.55 }}>Choisis quelles notifications tu veux recevoir et par quel canal.</p>
+                {[
+                  ['Nouvelles pétitions de tes thématiques', true, true, false],
+                  ['Mobilisations dans ta région',           true, true, true],
+                  ['Réponses à tes posts du réseau',          true, false, true],
+                  ['Versement T99CP reçu sur ton wallet',     true, false, true],
+                  ['Récap hebdo de la plateforme',            true, false, false],
+                ].map(([label, email, push, inapp]) => (
+                  <div key={label} style={{ background:T.surface2, borderRadius:10, padding:'12px 14px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+                    <span style={{ fontSize:13, color:T.text2, flex:1 }}>{label}</span>
+                    <div style={{ display:'flex', gap:6 }}>
+                      <span style={{ fontSize:10, padding:'3px 8px', borderRadius:6, background: email ? T.successLight : '#fff', color: email ? T.success : T.text4, border:`1px solid ${email ? T.success : T.border}`, fontWeight:600 }}>📧 Email</span>
+                      <span style={{ fontSize:10, padding:'3px 8px', borderRadius:6, background: push ? T.successLight : '#fff', color: push ? T.success : T.text4, border:`1px solid ${push ? T.success : T.border}`, fontWeight:600 }}>📱 Push</span>
+                      <span style={{ fontSize:10, padding:'3px 8px', borderRadius:6, background: inapp ? T.successLight : '#fff', color: inapp ? T.success : T.text4, border:`1px solid ${inapp ? T.success : T.border}`, fontWeight:600 }}>🔔 In-app</span>
+                    </div>
+                  </div>
+                ))}
+                <div style={{ background:'#FEF3C7', border:`1px solid #FCD34D`, borderRadius:10, padding:'10px 14px', fontSize:12, color:'#78350F', lineHeight:1.55 }}>
+                  <strong>Mode prototype :</strong> les bascules seront cliquables dans la version production.
+                </div>
+              </div>
+            )}
+            {settingDetail.id === 'security' && (
+              <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                <div style={{ background:T.surface2, borderRadius:12, padding:'16px' }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:T.text3, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>Mot de passe</div>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                    <span style={{ fontSize:13, color:T.text2 }}>Dernière modification : il y a 4 mois</span>
+                    <Btn variant="outline" size="sm" onClick={()=>window.showToast?.('Lien de réinitialisation envoyé par email', { type:'success' })}>Modifier</Btn>
+                  </div>
+                </div>
+                <div style={{ background:T.surface2, borderRadius:12, padding:'16px' }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:T.text3, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>Authentification à 2 facteurs (2FA)</div>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                    <span style={{ fontSize:13, color:T.text2 }}>Statut : <strong style={{ color:'#DC2626' }}>Désactivée</strong></span>
+                    <Btn variant="gradient" size="sm" onClick={()=>window.showToast?.('Configuration 2FA — démo prototype', { type:'info' })}>Activer</Btn>
+                  </div>
+                </div>
+                <div style={{ background:T.surface2, borderRadius:12, padding:'16px' }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:T.text3, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>Sessions actives</div>
+                  {[['🖥️','Chrome · Linux','Lyon, France · à l\'instant',true],['📱','Firefox · Android','Lyon, France · il y a 3 j',false]].map(([ic,dev,loc,curr])=>(
+                    <div key={dev} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderBottom:`1px solid ${T.border}` }}>
+                      <span style={{ fontSize:18 }}>{ic}</span>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:13, color:T.text1, fontWeight:600 }}>{dev}{curr && <span style={{ fontSize:10, fontWeight:800, color:T.success, marginLeft:6, padding:'2px 6px', background:T.successLight, borderRadius:4, letterSpacing:'0.04em' }}>SESSION ACTUELLE</span>}</div>
+                        <div style={{ fontSize:11, color:T.text4 }}>{loc}</div>
+                      </div>
+                      {!curr && <button onClick={()=>window.showToast?.('Session déconnectée', { type:'info' })} style={{ padding:'4px 10px', border:`1px solid ${T.border}`, background:'transparent', borderRadius:8, fontSize:11, color:T.text3, cursor:'pointer' }}>Déconnecter</button>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div style={{ marginTop:14 }}>
+              <Btn full variant="ghost" size="md" onClick={()=>setSettingDetail(null)}>Fermer</Btn>
+            </div>
+          </Modal>
         )}
       </div>
 
