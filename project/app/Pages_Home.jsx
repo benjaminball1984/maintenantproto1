@@ -402,128 +402,323 @@ function HomePage({ setPage, user, onAuth }) {
 window.HomePage = HomePage;
 
 // ── SERVICES HUB ──────────────────────────────────────────
-function ServicesHub({ setPage }) {
+function ServicesHub({ setPage, user, onAuth }) {
+  const [search, setSearch] = useState('');
+
+  // ─── STATS LIVE depuis AppData (calculées, pas mockées) ───
+  const ad = window.AppData || {};
+  const userCreations = (k) => (window.getUserCreations?.(k) || []).length;
+  const liveStats = {
+    petitions:     (ad.petitions || []).filter(p => p.status === 'active').length + userCreations('petitions'),
+    petitionSigs:  (ad.petitions || []).reduce((s, p) => s + (p.signatures || 0), 0),
+    mobs:          (ad.mobilizations || []).length + userCreations('mobilizations'),
+    crowdfunding:  (ad.crowdfunding || []).length + userCreations('crowdfunding'),
+    cfRaised:      (ad.crowdfunding || []).reduce((s, c) => s + (c.raised_t99cp || 0), 0),
+    cfContrib:     (ad.crowdfunding || []).reduce((s, c) => s + (c.contributors || 0), 0),
+    sel:           (ad.sel || []).length + userCreations('sel'),
+    housing:       (ad.housing || []).length + userCreations('housing'),
+    carpooling:    (ad.carpooling_offers || []).length + userCreations('carpool_offers'),
+    lending:       (ad.lending || []).length + userCreations('lending'),
+    garden:        (ad.garden || []).length + userCreations('garden'),
+    marketplace:   (ad.marketplace || []).length + userCreations('marketplace'),
+    media:         (ad.media || []).length + userCreations('media'),
+    polls:         (ad.polls || []).filter(p => new Date(p.closes) > new Date()).length,
+    members:       946,
+    t99cpCirc:     450000,
+  };
+
+  // ─── DÉTECTE LES SERVICES UTILISÉS PAR L'UTILISATEUR ───
+  const userServiceUsage = user ? {
+    petitions:     userCreations('petitions'),
+    mobilizations: userCreations('mobilizations'),
+    crowdfunding:  userCreations('crowdfunding'),
+    sel:           userCreations('sel'),
+    housing:       userCreations('housing'),
+    carpooling:    userCreations('carpool_offers') + userCreations('carpool_requests'),
+    lending:       userCreations('lending'),
+    garden:        userCreations('garden'),
+    marketplace:   userCreations('marketplace'),
+    media:         userCreations('media'),
+  } : {};
+  const myServices = Object.entries(userServiceUsage).filter(([_, n]) => n > 0).sort(([,a],[,b]) => b - a);
+
   const groups = [
     { label: 'Mobilisation', desc: 'Faire entendre les voix du peuple', services: [
-      { id: 'petitions',     title: 'Pétitions',      desc: 'Signez et lancez des pétitions citoyennes',          color: T.hub.petitions,    icon:'📜', stat:'2 340 actives' },
-      { id: 'mobilizations', title: 'Mobilisations',  desc: 'Marches, assemblées, camps militants',                color: T.hub.mobilizations,icon:'📅', stat:'186 cette semaine' },
-      { id: 'crowdfunding',  title: 'Cagnottes',      desc: 'Caisses solidaires et budget participatif',           color: T.hub.crowdfunding, icon:'💰', stat:'12 450 T99CP versés' },
-      { id: 'campaigns',     title: 'Campagnes',      desc: 'Agrégez 12 services en une seule page',                color: '#9D174D',          icon:'🎯', stat:'24 campagnes en cours' },
+      { id: 'petitions',     title: 'Pétitions',      desc: 'Signez et lancez des pétitions citoyennes',          color: T.hub.petitions,    icon:'📜', stat:`${liveStats.petitions} actives · ${liveStats.petitionSigs.toLocaleString('fr-FR')} signatures`, kw:'pétition signer signature' },
+      { id: 'mobilizations', title: 'Mobilisations',  desc: 'Marches, assemblées, camps militants',                color: T.hub.mobilizations,icon:'📅', stat:`${liveStats.mobs} mobilisations en cours`, kw:'manifestation marche action' },
+      { id: 'crowdfunding',  title: 'Cagnottes',      desc: 'Caisses solidaires et budget participatif',           color: T.hub.crowdfunding, icon:'💰', stat:`${liveStats.cfRaised.toLocaleString('fr-FR')} T99CP collectés`, kw:'cagnotte don financement' },
+      { id: 'campaigns',     title: 'Campagnes',      desc: 'Agrégez 12 services en une seule page',                color: '#9D174D',          icon:'🎯', stat:'6 campagnes en cours', kw:'campagne builder' },
     ]},
     { label: 'Services solidaires', desc: 'L\'entraide au quotidien · paiement T99CP ou €', services: [
-      { id: 'sel',           title: 'SEL',                  desc: '1 minute de service = 1 T99CP',                  color: T.hub.sel,          icon:'🤲', stat:'946 services échangés' },
-      { id: 'housing',       title: 'Hébergement',          desc: 'Logement solidaire et temporaire',               color: T.hub.housing,      icon:'🏠', stat:'412 hôtes inscrits' },
-      { id: 'carpooling',    title: 'Covoiturage',          desc: 'Trajets partagés entre militants',               color: T.hub.carpooling,   icon:'🚗', stat:'3 200 km cette semaine' },
-      { id: 'lending',       title: 'Ki Prête Tout',        desc: 'Empruntez des objets de votre réseau',           color: '#A21CAF',          icon:'🔧', stat:'1 280 objets disponibles' },
-      { id: 'garden',        title: 'Surplus de Jardin',    desc: 'Légumes, fruits, plants, miel',                  color: T.hub.garden,       icon:'🌱', stat:'89 producteurs' },
+      { id: 'sel',           title: 'SEL',                  desc: '1 minute de service = 1 T99CP',                  color: T.hub.sel,          icon:'🤲', stat:`${liveStats.sel} services proposés`, kw:'sel échange compétence service' },
+      { id: 'housing',       title: 'Hébergement',          desc: 'Logement solidaire et temporaire',               color: T.hub.housing,      icon:'🏠', stat:`${liveStats.housing} hébergements`, kw:'logement chambre studio' },
+      { id: 'carpooling',    title: 'Covoiturage',          desc: 'Trajets partagés entre militants',               color: T.hub.carpooling,   icon:'🚗', stat:`${liveStats.carpooling} trajets disponibles`, kw:'covoit voiture trajet' },
+      { id: 'lending',       title: 'Ki Prête Tout',        desc: 'Empruntez des objets de votre réseau',           color: '#A21CAF',          icon:'🔧', stat:`${liveStats.lending} objets disponibles`, kw:'prêt outil emprunt' },
+      { id: 'garden',        title: 'Surplus de Jardin',    desc: 'Légumes, fruits, plants, miel',                  color: T.hub.garden,       icon:'🌱', stat:`${liveStats.garden} surplus partagés`, kw:'jardin légume fruit' },
     ]},
     { label: 'Commerce solidaire', desc: 'Acheter local, acheter juste', services: [
-      { id: 'marketplace',   title: 'Marketplace',          desc: 'Seconde main · ports en € ou Polygon',            color: T.hub.marketplace,  icon:'🛍️', stat:'2 105 articles' },
+      { id: 'marketplace',   title: 'Marketplace',          desc: 'Seconde main · ports en € ou Polygon',            color: T.hub.marketplace,  icon:'🛍️', stat:`${liveStats.marketplace} articles en vente`, kw:'achat vendre vente' },
     ]},
     { label: 'Information & Réseau', desc: 'Sortir des bulles algorithmiques', services: [
-      { id: 'media',         title: 'Média',                desc: 'Journalisme militant et analyses',                color: T.hub.media,        icon:'📰', stat:'67 articles ce mois' },
-      { id: 'polls',         title: 'Sondages',             desc: 'Élections, société, pronostics — votre voix',     color: '#0891B2',          icon:'📊', stat:'5 sondages actifs' },
-      { id: 'reseau',        title: 'Réseau Social',        desc: 'Sans pub ni algorithme commercial',               color: T.hub.network,      icon:'💬', stat:'14 200 membres' },
+      { id: 'media',         title: 'Média',                desc: 'Journalisme militant et analyses',                color: T.hub.media,        icon:'📰', stat:`${liveStats.media} articles publiés`, kw:'média article info presse' },
+      { id: 'polls',         title: 'Sondages',             desc: 'Élections, société, pronostics — votre voix',     color: '#0891B2',          icon:'📊', stat:`${liveStats.polls} sondages actifs`, kw:'sondage vote consultation' },
+      { id: 'reseau',        title: 'Réseau Social',        desc: 'Sans pub ni algorithme commercial',               color: T.hub.network,      icon:'💬', stat:`${liveStats.members.toLocaleString('fr-FR')} membres connecté·es`, kw:'réseau ami fil' },
     ]},
     { label: 'Espace adhérent·es', desc: 'Réservé aux membres certifié·es de la Confédération', services: [
-      { id: 'communes',      title: 'Communes Libres',      desc: 'Quartiers, communes, ZAD, tiers-lieux confédérés', color: T.hub.communes,     icon:'★', stat:'238 communes fondées', locked:true },
+      { id: 'communes',      title: 'Communes Libres',      desc: 'Quartiers, communes, ZAD, tiers-lieux confédérés', color: T.hub.communes,     icon:'★', stat:'238 communes fondées', locked:true, kw:'commune confédération adhérent' },
     ]},
   ];
 
+  // Index aplati pour la recherche
+  const allServices = groups.flatMap(g => g.services.map(s => ({ ...s, _group: g.label })));
+  const matchSearch = (s) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (s.title + ' ' + s.desc + ' ' + (s.kw || '') + ' ' + s._group).toLowerCase().includes(q);
+  };
+
+  // ─── PARCOURS RAPIDES (entrée pour les nouveaux visiteurs) ───
+  const quickPaths = [
+    { icon:'✍️', label:'Je signe',      desc:'une pétition citoyenne', color:T.hub.petitions,    page:'petitions',    time:'30 sec' },
+    { icon:'💰', label:'Je donne',      desc:'à une caisse solidaire', color:T.hub.crowdfunding, page:'crowdfunding', time:'1 min' },
+    { icon:'🤝', label:'J\'échange',    desc:'un service en SEL',       color:T.hub.sel,          page:'sel',          time:'2 min' },
+    { icon:'🚀', label:'J\'organise',  desc:'une campagne',            color:'#9D174D',          page:'campaigns',    time:'10 min' },
+  ];
+
+  // ─── ÉCOSYSTÈME — comment les services s'enchainent (parcours type) ───
+  const ecosystem = [
+    { step:'01', label:'Une pétition naît', icon:'📜', color:T.hub.petitions,    desc:'Tu identifies un problème, tu lances une pétition.', page:'petitions' },
+    { step:'02', label:'On la fait grandir', icon:'💬', color:T.hub.network,     desc:'Le réseau social la diffuse à tes contacts et leurs ami·es.', page:'reseau' },
+    { step:'03', label:'On se mobilise',     icon:'📅', color:T.hub.mobilizations,desc:'Une mobilisation s\'organise autour de la cause.', page:'mobilizations' },
+    { step:'04', label:'On finance la lutte',icon:'💰', color:T.hub.crowdfunding,desc:'Une cagnotte solidaire couvre les frais.', page:'crowdfunding' },
+    { step:'05', label:'On agrège tout',     icon:'🎯', color:'#9D174D',         desc:'Une campagne réunit pétitions, cagnottes, mobs, articles.', page:'campaigns' },
+    { step:'06', label:'On documente',       icon:'📰', color:T.hub.media,       desc:'Le média militant relaie la victoire.', page:'media' },
+  ];
+
+  // Filtre les groupes selon recherche
+  const visibleGroups = search
+    ? [{ label: `Résultats pour « ${search} »`, desc: `${allServices.filter(matchSearch).length} service(s) trouvé(s)`, services: allServices.filter(matchSearch) }]
+    : groups;
+
+  // Helper trouver service par id (pour Mes services)
+  const findService = (id) => allServices.find(s => s.id === id);
+
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 24px 80px' }}>
-      {/* Hero compact */}
-      <div style={{ position:'relative', borderRadius:24, overflow:'hidden', marginBottom:48, background:T.grad, padding:'48px 36px', color:'#fff' }}>
+      {/* HERO valorisé avec stats live */}
+      <div style={{ position:'relative', borderRadius:24, overflow:'hidden', marginBottom:32, background:T.grad, padding:'48px 36px 40px', color:'#fff' }}>
         <div style={{ position:'absolute', top:-60, right:-60, width:240, height:240, borderRadius:'50%', background:'rgba(255,255,255,0.10)', filter:'blur(40px)' }}></div>
         <div style={{ position:'absolute', bottom:-40, left:-40, width:180, height:180, borderRadius:'50%', background:'rgba(255,255,255,0.08)', filter:'blur(30px)' }}></div>
-        <div style={{ position:'relative', maxWidth:760 }}>
-          <div style={{ fontSize:11, fontWeight:800, letterSpacing:'0.16em', textTransform:'uppercase', opacity:0.75, marginBottom:14 }}>━━ La voix des 99%</div>
-          <h1 style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(28px,4.5vw,44px)', fontWeight:800, margin:'0 0 14px', letterSpacing:'-0.03em', lineHeight:1.05 }}>
-            Tous les services solidaires de la plateforme
-          </h1>
-          <p style={{ fontSize:16, opacity:0.92, lineHeight:1.55, margin:'0 0 24px', maxWidth:600 }}>
-            Mobilisation, entraide, commerce, information. Une plateforme unique au service du peuple, payable en T99CP ou en euros.
-          </p>
-          <div style={{ display:'flex', gap:24, flexWrap:'wrap' }}>
-            {[['12','Services'],['89k','Membres'],['450k','T99CP en circulation']].map(([n,l])=>(
-              <div key={l}>
-                <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:24, lineHeight:1 }}>{n}</div>
-                <div style={{ fontSize:11, opacity:0.75, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', marginTop:4 }}>{l}</div>
-              </div>
-            ))}
+        <div style={{ position:'relative' }}>
+          <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:24, flexWrap:'wrap' }}>
+            <div style={{ flex:'1 1 460px', maxWidth:680 }}>
+              <div style={{ fontSize:11, fontWeight:800, letterSpacing:'0.16em', textTransform:'uppercase', opacity:0.75, marginBottom:14 }}>━━ La voix des 99%</div>
+              <h1 style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(28px,4.5vw,44px)', fontWeight:800, margin:'0 0 14px', letterSpacing:'-0.03em', lineHeight:1.05 }}>
+                Tous les services solidaires de la plateforme
+              </h1>
+              <p style={{ fontSize:16, opacity:0.92, lineHeight:1.55, margin:'0 0 22px', maxWidth:600 }}>
+                Mobilisation, entraide, commerce, information. Une plateforme unique au service du peuple, payable en T99CP ou en euros — sans publicité, sans algorithme commercial.
+              </p>
+            </div>
+            {/* Stats live calculées */}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:10, minWidth:240 }}>
+              {[
+                { label:'Services', value:'12' },
+                { label:'Pétitions', value:liveStats.petitionSigs >= 1000 ? `${(liveStats.petitionSigs/1000).toFixed(1)}k` : liveStats.petitionSigs, sub:'signatures' },
+                { label:'T99CP', value:`${(liveStats.t99cpCirc/1000).toFixed(0)}k`, sub:'en circulation' },
+                { label:'Membres', value:liveStats.members.toLocaleString('fr-FR') },
+              ].map(s => (
+                <div key={s.label} style={{ background:'rgba(255,255,255,0.12)', backdropFilter:'blur(8px)', border:'1px solid rgba(255,255,255,0.2)', borderRadius:14, padding:'14px 16px' }}>
+                  <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:24, lineHeight:1, letterSpacing:'-0.02em' }}>{s.value}</div>
+                  <div style={{ fontSize:10, opacity:0.85, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', marginTop:6 }}>{s.label}{s.sub && <span style={{ display:'block', opacity:0.7, marginTop:2, textTransform:'none', letterSpacing:'normal' }}>{s.sub}</span>}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Recherche */}
+          <div style={{ marginTop:28, position:'relative', maxWidth:520 }}>
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="🔍 Cherche un service : pétition, covoit, SEL, T99CP…"
+              style={{ width:'100%', height:48, padding:'0 18px', borderRadius:9999, border:'2px solid rgba(255,255,255,0.25)', background:'rgba(255,255,255,0.95)', color:T.text1, fontSize:14, fontFamily:'Inter,sans-serif', outline:'none', boxSizing:'border-box', boxShadow:'0 6px 20px rgba(0,0,0,0.15)' }} />
+            {search && <button onClick={() => setSearch('')} style={{ position:'absolute', right:10, top:10, width:28, height:28, border:'none', borderRadius:'50%', background:T.surface2, color:T.text3, cursor:'pointer', fontSize:14, fontWeight:700 }}>×</button>}
           </div>
         </div>
       </div>
 
-      {/* Groupes de services */}
-      {groups.map((g, gi) => (
-        <div key={g.label} style={{ marginBottom: 56 }}>
+      {/* PARCOURS RAPIDES — visible si pas de recherche active */}
+      {!search && (
+        <div style={{ marginBottom:48 }}>
+          <div style={{ display:'flex', alignItems:'baseline', gap:10, marginBottom:16 }}>
+            <h2 style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, color:T.text1, margin:0, letterSpacing:'-0.02em' }}>Comment commencer ?</h2>
+            <span style={{ fontSize:12, color:T.text3, fontStyle:'italic' }}>4 actions pour rejoindre le mouvement</span>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))', gap:12 }}>
+            {quickPaths.map(p => (
+              <button key={p.label} onClick={() => setPage(p.page)}
+                style={{ position:'relative', textAlign:'left', background:T.surface, border:`1px solid ${T.border}`, borderRadius:16, padding:'20px 22px', cursor:'pointer', transition:'all 0.2s', fontFamily:'Inter,sans-serif', overflow:'hidden' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = p.color; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 14px 36px ${p.color}25`; e.currentTarget.querySelector('[data-arrow]').style.transform = 'translateX(4px)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.querySelector('[data-arrow]').style.transform = 'none'; }}>
+                <div style={{ position:'absolute', top:-20, right:-20, width:80, height:80, borderRadius:'50%', background:`${p.color}10`, pointerEvents:'none' }}></div>
+                <div style={{ position:'relative' }}>
+                  <div style={{ width:48, height:48, borderRadius:14, background:`${p.color}18`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, marginBottom:14 }}>{p.icon}</div>
+                  <div style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, color:T.text1, letterSpacing:'-0.01em', marginBottom:4 }}>{p.label}</div>
+                  <div style={{ fontSize:13, color:T.text3, marginBottom:12, lineHeight:1.5 }}>{p.desc}</div>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                    <span style={{ fontSize:10, fontWeight:700, padding:'3px 9px', borderRadius:9999, background:`${p.color}15`, color:p.color, letterSpacing:'0.04em' }}>⏱ {p.time}</span>
+                    <span data-arrow style={{ fontSize:18, color:p.color, fontWeight:800, transition:'transform 0.18s' }}>→</span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* MES SERVICES — visible si user connecté avec créations */}
+      {!search && user && myServices.length > 0 && (
+        <div style={{ marginBottom:48, padding:'24px 26px', background:'linear-gradient(135deg, #FDE9F2 0%, #F3EBFE 100%)', borderRadius:16, border:`1px solid ${T.border}` }}>
+          <div style={{ display:'flex', alignItems:'baseline', gap:10, marginBottom:14, flexWrap:'wrap' }}>
+            <h2 style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, color:T.text1, margin:0, letterSpacing:'-0.02em' }}>★ Mes services</h2>
+            <span style={{ fontSize:12, color:T.text3, fontStyle:'italic' }}>les outils que tu utilises déjà</span>
+          </div>
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+            {myServices.slice(0, 6).map(([sid, count]) => {
+              const s = findService(sid);
+              if (!s) return null;
+              return (
+                <button key={sid} onClick={() => setPage(s.id)}
+                  style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px 10px 10px', background:'#fff', border:`1.5px solid ${s.color}40`, borderRadius:9999, cursor:'pointer', fontFamily:'Inter,sans-serif', transition:'all 0.18s' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = s.color; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = `${s.color}40`; e.currentTarget.style.transform = 'none'; }}>
+                  <span style={{ width:30, height:30, borderRadius:'50%', background:`${s.color}18`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14 }}>{s.icon}</span>
+                  <span style={{ fontWeight:700, fontSize:13, color:T.text1 }}>{s.title}</span>
+                  <span style={{ fontSize:10, fontWeight:800, padding:'2px 8px', borderRadius:9999, background:s.color, color:'#fff' }}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* GROUPES DE SERVICES — la grille existante (filtre par recherche) */}
+      {visibleGroups.map((g, gi) => g.services.length > 0 && (
+        <div key={g.label} style={{ marginBottom: 48 }}>
           <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', flexWrap:'wrap', gap:8, marginBottom: 18, paddingBottom:14, borderBottom:`2px solid ${T.text1}` }}>
             <h2 style={{ fontFamily:"'Sora',sans-serif", fontSize:24, fontWeight:800, color:T.text1, margin:0, letterSpacing:'-0.02em' }}>
-              <span style={{ color: T.brand, marginRight:10, fontFamily:'monospace', fontSize:18 }}>0{gi+1}</span>{g.label}
+              {!search && <span style={{ color: T.brand, marginRight:10, fontFamily:'monospace', fontSize:18 }}>0{gi+1}</span>}{g.label}
             </h2>
             <span style={{ fontSize:13, color:T.text3, fontStyle:'italic' }}>{g.desc}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 14 }}>
-            {g.services.map(s => (
-              <div key={s.id} onClick={() => setPage(s.id)}
-                style={{
-                  background: T.surface,
-                  border: `1px solid ${T.border}`,
-                  borderTop: `4px solid ${s.color}`,
-                  borderRadius: 14,
-                  padding: '20px 22px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  position: 'relative',
-                  overflow: 'hidden',
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.borderColor = s.color;
-                  e.currentTarget.style.transform = 'translateY(-3px)';
-                  e.currentTarget.style.boxShadow = `0 12px 32px ${s.color}22`;
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.borderColor = T.border;
-                  e.currentTarget.style.transform = 'none';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}>
-                {/* Halo couleur */}
-                <div style={{ position:'absolute', top:-30, right:-30, width:90, height:90, borderRadius:'50%', background:`${s.color}12`, pointerEvents:'none' }}></div>
+            {g.services.map(s => {
+              const isMine = user && userServiceUsage[s.id] > 0;
+              return (
+                <div key={s.id} onClick={() => setPage(s.id)}
+                  style={{
+                    background: T.surface,
+                    border: `1px solid ${T.border}`,
+                    borderTop: `4px solid ${s.color}`,
+                    borderRadius: 14,
+                    padding: '20px 22px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = s.color;
+                    e.currentTarget.style.transform = 'translateY(-3px)';
+                    e.currentTarget.style.boxShadow = `0 12px 32px ${s.color}22`;
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = T.border;
+                    e.currentTarget.style.transform = 'none';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}>
+                  {/* Halo couleur */}
+                  <div style={{ position:'absolute', top:-30, right:-30, width:90, height:90, borderRadius:'50%', background:`${s.color}12`, pointerEvents:'none' }}></div>
 
-                <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:14, position:'relative' }}>
-                  <div style={{ width:42, height:42, borderRadius:12, background:`${s.color}18`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, color:s.color, flexShrink:0 }}>
-                    {s.icon}
+                  <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:14, position:'relative' }}>
+                    <div style={{ width:42, height:42, borderRadius:12, background:`${s.color}18`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, color:s.color, flexShrink:0 }}>
+                      {s.icon}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 16, color: T.text1, lineHeight:1.2 }}>{s.title}</div>
+                    </div>
+                    {isMine && <span style={{ fontSize:9, fontWeight:800, padding:'3px 6px', background:s.color, color:'#fff', letterSpacing:'0.06em', borderRadius:4 }}>★ MIEN</span>}
+                    {s.locked && <span style={{ fontSize:9, fontWeight:800, padding:'3px 6px', background:T.text1, color:'#FFD93D', letterSpacing:'0.06em' }}>ADHÉRENT·ES</span>}
                   </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 16, color: T.text1, lineHeight:1.2 }}>{s.title}</div>
+
+                  <div style={{ fontSize: 13, color: T.text3, lineHeight: 1.5, marginBottom: 14, position:'relative' }}>{s.desc}</div>
+
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:12, borderTop:`1px solid ${T.border}`, position:'relative' }}>
+                    <span style={{ fontSize:11, fontWeight:600, color:T.text4, letterSpacing:'0.04em' }}>{s.stat}</span>
+                    <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:12, fontWeight:700, color:s.color }}>
+                      Ouvrir <span style={{ display:'inline-flex' }}>{ICONS.arrow_r}</span>
+                    </span>
                   </div>
-                  {s.locked && (
-                    <span style={{ fontSize:9, fontWeight:800, padding:'3px 6px', background:T.text1, color:'#FFD93D', letterSpacing:'0.06em' }}>ADHÉRENT·ES</span>
-                  )}
                 </div>
-
-                <div style={{ fontSize: 13, color: T.text3, lineHeight: 1.5, marginBottom: 14, position:'relative' }}>{s.desc}</div>
-
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:12, borderTop:`1px solid ${T.border}`, position:'relative' }}>
-                  <span style={{ fontSize:11, fontWeight:600, color:T.text4, letterSpacing:'0.04em' }}>{s.stat}</span>
-                  <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:12, fontWeight:700, color:s.color }}>
-                    Ouvrir <span style={{ display:'inline-flex' }}>{ICONS.arrow_r}</span>
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ))}
 
+      {/* ÉCOSYSTÈME — comment les services s'enchaînent (parcours type) */}
+      {!search && (
+        <div style={{ marginBottom:48, padding:'32px 28px', background:T.text1, color:'#fff', borderRadius:20, position:'relative', overflow:'hidden' }}>
+          <div style={{ position:'absolute', top:-50, right:-50, width:200, height:200, borderRadius:'50%', background:`${T.brand}18`, filter:'blur(40px)' }}></div>
+          <div style={{ position:'relative' }}>
+            <div style={{ fontSize:11, fontWeight:800, letterSpacing:'0.16em', textTransform:'uppercase', color:'#FFD93D', marginBottom:10 }}>━━ L'écosystème en action</div>
+            <h2 style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(22px,3vw,30px)', fontWeight:800, margin:'0 0 8px', letterSpacing:'-0.02em', lineHeight:1.1 }}>Comment les services s'enchaînent ?</h2>
+            <p style={{ fontSize:14, color:'rgba(255,255,255,0.75)', margin:'0 0 28px', maxWidth:680, lineHeight:1.55 }}>
+              Chaque outil renforce les autres. Un parcours type d'une lutte qui démarre, prend de l'ampleur, se finance et se documente.
+            </p>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))', gap:14 }}>
+              {ecosystem.map((e, i) => (
+                <div key={e.step} onClick={() => setPage(e.page)}
+                  style={{ position:'relative', padding:'18px 20px', background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:14, cursor:'pointer', transition:'all 0.18s' }}
+                  onMouseEnter={ev => { ev.currentTarget.style.background = `${e.color}25`; ev.currentTarget.style.borderColor = e.color; ev.currentTarget.style.transform = 'translateY(-3px)'; }}
+                  onMouseLeave={ev => { ev.currentTarget.style.background = 'rgba(255,255,255,0.06)'; ev.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; ev.currentTarget.style.transform = 'none'; }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+                    <span style={{ fontFamily:'monospace', fontSize:11, fontWeight:800, color:e.color, padding:'2px 7px', background:`${e.color}25`, borderRadius:4, letterSpacing:'0.06em' }}>{e.step}</span>
+                    <span style={{ fontSize:18 }}>{e.icon}</span>
+                  </div>
+                  <div style={{ fontFamily:"'Sora',sans-serif", fontSize:15, fontWeight:800, marginBottom:6, letterSpacing:'-0.01em' }}>{e.label}</div>
+                  <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.5 }}>{e.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BANDEAU T99CP / Modèle économique */}
+      {!search && (
+        <div style={{ marginBottom:48, display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))', gap:14 }}>
+          {[
+            { icon:'₮', title:'T99CP — la monnaie du commun', desc:'Adossée à l\'euro et au temps de travail (1 T99CP = 1€ = 1 minute). Sans frais de transaction, indexée sur la valeur réelle.', color:'#0891B2', cta:'En savoir plus', page:'creer' },
+            { icon:'🚫', title:'Zéro publicité, zéro algorithme commercial', desc:'Ton fil n\'est pas optimisé pour ton temps d\'écran. Il sert tes engagements, pas ceux d\'annonceurs.', color:'#7C3AED' },
+            { icon:'🤝', title:'Auto-géré, démocratiquement', desc:'Pas d\'actionnaire, pas de patron. Les Communes Libres et leur Assemblée Confédérale décident.', color:T.brand, cta:'Devenir adhérent·e', page:'communes' },
+          ].map(b => (
+            <div key={b.title} style={{ background:T.surface, border:`1px solid ${T.border}`, borderTop:`4px solid ${b.color}`, borderRadius:16, padding:'22px 24px' }}>
+              <div style={{ width:42, height:42, borderRadius:12, background:`${b.color}18`, color:b.color, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, fontWeight:800, marginBottom:14 }}>{b.icon}</div>
+              <div style={{ fontFamily:"'Sora',sans-serif", fontSize:15, fontWeight:800, color:T.text1, marginBottom:6, lineHeight:1.3, letterSpacing:'-0.01em' }}>{b.title}</div>
+              <div style={{ fontSize:13, color:T.text3, lineHeight:1.55, marginBottom: b.cta ? 14 : 0 }}>{b.desc}</div>
+              {b.cta && <button onClick={() => setPage(b.page)} style={{ background:'transparent', border:'none', color:b.color, fontWeight:800, fontSize:12, cursor:'pointer', padding:0, fontFamily:'Inter,sans-serif' }}>{b.cta} →</button>}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* CTA fin de page */}
-      <div style={{ marginTop:40, padding:'32px 28px', background:T.surface, borderRadius:20, border:`1px solid ${T.border}`, display:'flex', alignItems:'center', justifyContent:'space-between', gap:20, flexWrap:'wrap' }}>
+      <div style={{ padding:'32px 28px', background:T.surface, borderRadius:20, border:`1px solid ${T.border}`, display:'flex', alignItems:'center', justifyContent:'space-between', gap:20, flexWrap:'wrap' }}>
         <div style={{ flex:1, minWidth:280 }}>
           <h3 style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, color:T.text1, margin:'0 0 6px' }}>Une idée de service à ajouter ?</h3>
           <p style={{ fontSize:14, color:T.text3, margin:0, lineHeight:1.55 }}>La plateforme évolue avec ses membres. Proposez un nouveau service, signalez un besoin.</p>
         </div>
-        <Btn variant="outline" size="md" onClick={()=>setPage('reseau')}>Proposer un service</Btn>
+        <Btn variant="outline" size="md" onClick={()=> user ? setPage('reseau') : onAuth?.()}>{user ? 'Proposer un service' : 'Rejoindre le mouvement'}</Btn>
       </div>
     </div>
   );

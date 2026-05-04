@@ -322,7 +322,7 @@ function App() {
       case 'media':         return <div className="page-enter"><MediaPage adminMode={adminMode} onAuth={() => setAuthOpen(true)} /></div>;
       case 'garden':        return <div className="page-enter"><GardenPage {...common} /></div>;
       case 'sel':           return <div className="page-enter"><SELPage {...common} /></div>;
-      case 'services':      return <div className="page-enter"><ServicesHub setPage={setPage} /></div>;
+      case 'services':      return <div className="page-enter"><ServicesHub setPage={setPage} user={user} onAuth={() => setAuthOpen(true)} /></div>;
       case 'creer':         return <div className="page-enter"><CreerPage setPage={setPage} user={user} onAuth={() => setAuthOpen(true)} /></div>;
       case 'campaigns':     return <div className="page-enter"><CampaignsPage {...common} /></div>;
       case 'reseau':        return <div className="page-enter"><ReseauPage user={user} onOpenAuth={() => setAuthOpen(true)} setActivePage={setPage} adminMode={adminMode} /></div>;
