@@ -135,75 +135,303 @@ function MediaArticle({ a, onBack, adminMode, onSave }) {
   );
 }
 
+// Métadonnées par format de contenu
+const FORMAT_META = {
+  article: { label:'Article',  icon:'📰', color:'#5B21B6' },
+  video:   { label:'Vidéo',    icon:'▶',  color:'#DC2654' },
+  podcast: { label:'Podcast',  icon:'🎙', color:'#7C3AED' },
+  live:    { label:'Live',     icon:'●',  color:'#DC2626' },
+  dessin:  { label:'Dessin',   icon:'✏',  color:'#EA580C' },
+  breve:   { label:'Brève',    icon:'⚡', color:'#0891B2' },
+};
+
+const formatDuration = (sec) => {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+};
+
+// Petit badge de format affiché sur les cards
+function FormatBadge({ format, item }) {
+  const meta = FORMAT_META[format] || FORMAT_META.article;
+  if (format === 'live') return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'3px 9px', background:'#DC2626', color:'#fff', borderRadius:9999, fontSize:10, fontWeight:800, letterSpacing:'0.06em', textTransform:'uppercase', boxShadow:'0 2px 8px rgba(220,38,38,0.4)' }}>
+      <span style={{ width:6, height:6, borderRadius:'50%', background:'#fff', animation:'fadeUp 1s infinite alternate' }}></span>
+      EN DIRECT · {item?.live_viewers?.toLocaleString('fr-FR') || 0}
+    </span>
+  );
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'3px 9px', background:`${meta.color}18`, color:meta.color, border:`1px solid ${meta.color}33`, borderRadius:9999, fontSize:10, fontWeight:800, letterSpacing:'0.06em', textTransform:'uppercase' }}>
+      <span>{meta.icon}</span> {meta.label}
+    </span>
+  );
+}
+
+// Card universelle pour tout type de contenu
+function MediaCard({ item, onClick, adminMode, onEdit, size = 'md' }) {
+  const meta = FORMAT_META[item.format || 'article'];
+  const isCompact = size === 'sm' || item.format === 'breve';
+
+  // Brève : layout texte uniquement
+  if (item.format === 'breve') {
+    return (
+      <div onClick={onClick} style={{ background: T.surface, borderRadius: 14, border: `1px solid ${T.border}`, borderLeft: `4px solid ${FORMAT_META.breve.color}`, padding: '16px 18px', cursor: 'pointer', transition: 'all 0.2s', position: 'relative' }}
+        onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.06)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+        onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
+        {adminMode && <div style={{ position: 'absolute', top: 8, right: 8 }} onClick={e => { e.stopPropagation(); onEdit?.(item); }}><AdminBtn onEdit={() => onEdit?.(item)} /></div>}
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+          <FormatBadge format="breve" />
+          <span style={{ fontSize:11, color:T.text4, fontWeight:600 }}>{new Date(item.date).toLocaleDateString('fr-FR', { day:'numeric', month:'short' })}</span>
+        </div>
+        <h3 style={{ fontFamily:"'Sora',sans-serif", fontSize:15, fontWeight:700, color:T.text1, margin:'0 0 6px', lineHeight:1.35 }}>{item.title}</h3>
+        <p style={{ fontSize:13, color:T.text3, margin:0, lineHeight:1.55, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{item.excerpt}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div onClick={onClick} style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden', cursor: 'pointer', transition: 'all 0.2s', position: 'relative' }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 12px 36px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
+      {adminMode && <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 3 }} onClick={e => { e.stopPropagation(); onEdit?.(item); }}><AdminBtn onEdit={() => onEdit?.(item)} /></div>}
+
+      {/* Visual */}
+      <div style={{ height: isCompact ? 150 : 200, overflow: 'hidden', position: 'relative', background: `${meta.color}10` }}>
+        <img src={item.image || `https://picsum.photos/seed/m${item.id}/600/360`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.4),transparent 50%)' }}></div>
+
+        {/* Format badge top-left */}
+        <div style={{ position: 'absolute', top: 12, left: 12 }}><FormatBadge format={item.format || 'article'} item={item} /></div>
+
+        {/* Play overlay pour video / podcast */}
+        {(item.format === 'video' || item.format === 'podcast') && (
+          <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <div style={{ width:54, height:54, borderRadius:'50%', background:'rgba(255,255,255,0.95)', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 8px 24px rgba(0,0,0,0.3)', color:meta.color, fontSize:22, paddingLeft:item.format==='video'?4:0 }}>
+              {item.format === 'video' ? '▶' : '🎙'}
+            </div>
+          </div>
+        )}
+
+        {/* Durée pour video / podcast */}
+        {item.duration_sec && (
+          <span style={{ position:'absolute', bottom:12, right:12, padding:'3px 8px', background:'rgba(0,0,0,0.75)', color:'#fff', fontSize:11, fontWeight:700, borderRadius:6, fontVariantNumeric:'tabular-nums' }}>
+            {formatDuration(item.duration_sec)}
+          </span>
+        )}
+      </div>
+
+      <div style={{ padding: '14px 18px 16px' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.text4, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>{item.category}</div>
+        <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 15, fontWeight: 700, color: T.text1, margin: '0 0 8px', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.title}</h3>
+        {!isCompact && item.excerpt && <p style={{ fontSize: 12.5, color: T.text3, margin: '0 0 10px', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.excerpt}</p>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: T.text4 }}>
+          <Avatar name={item.author} size={20} />
+          <span>{item.author}</span>
+          {item.reading_time && <><span>·</span><span style={{ display:'flex', alignItems:'center', gap:3 }}>{ICONS.clock} {item.reading_time} min</span></>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MediaPage({ adminMode, onAuth }) {
   const [data, setData] = useState(AppData.media);
   const [detail, setDetail] = useState(null);
   const [search, setSearch] = useState('');
-  const [cat, sCat] = useState('Toutes');
+  const [format, setFormat] = useState('Tous');
   const [editItem, setEditItem] = useState(null);
-  const cats = ['Toutes', ...new Set(data.map(a => a.category))];
-  const filtered = data.filter(a => (cat === 'Toutes' || a.category === cat) && (!search || a.title.toLowerCase().includes(search.toLowerCase()) || a.author.toLowerCase().includes(search.toLowerCase())));
-  const featured = filtered.filter(a => a.featured);
-  const rest = filtered.filter(a => !a.featured);
+  const [tipOpen, setTipOpen] = useState(false);
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [subscribed, setSubscribed] = useState(() => { try { return localStorage.getItem('mn_newsletter_sub') === '1'; } catch { return false; } });
+
+  const formats = ['Tous', 'Articles', 'Vidéos', 'Podcasts', 'Lives', 'Dessins', 'Brèves'];
+  const formatMap = { 'Articles':'article', 'Vidéos':'video', 'Podcasts':'podcast', 'Lives':'live', 'Dessins':'dessin', 'Brèves':'breve' };
+
+  const filtered = data.filter(a => {
+    const fok = format === 'Tous' || a.format === formatMap[format];
+    const sok = !search || a.title.toLowerCase().includes(search.toLowerCase()) || (a.author||'').toLowerCase().includes(search.toLowerCase()) || (a.category||'').toLowerCase().includes(search.toLowerCase());
+    return fok && sok;
+  });
+
+  const lives    = filtered.filter(a => a.format === 'live');
+  const featured = filtered.filter(a => a.featured && a.format !== 'live');
+  const breves   = filtered.filter(a => a.format === 'breve');
+  const others   = filtered.filter(a => !a.featured && a.format !== 'live' && a.format !== 'breve');
+
+  const handleSubscribe = () => {
+    if (!newsletterEmail.trim() || !/.+@.+\..+/.test(newsletterEmail)) {
+      window.showToast?.('Adresse email invalide', { type:'error' });
+      return;
+    }
+    try { localStorage.setItem('mn_newsletter_sub', '1'); localStorage.setItem('mn_newsletter_email', newsletterEmail); } catch {}
+    setSubscribed(true);
+    window.showToast?.(`Inscrit·e à la newsletter hebdomadaire !`, { type:'success', icon:'📬' });
+  };
+
   if (detail) return <MediaArticle a={detail} onBack={() => setDetail(null)} adminMode={adminMode} onSave={u => setData(d => d.map(a => a.id === u.id ? u : a))} />;
 
   return (
     <PageContainer maxWidth={1200}>
-      <SectionTitle label="Journalisme militant" title="Maintenant! Média" action={adminMode && <Btn variant="success" size="sm" icon={ICONS.plus}>Nouvel article</Btn>} />
-      <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
-        <div style={{ flex: 1 }}><SearchInput value={search} onChange={setSearch} placeholder="Rechercher un article, un auteur..." /></div>
-      </div>
-      <FilterTabs options={cats} active={cat} onChange={sCat} />
-
-      {/* Featured — big card */}
-      {featured.map(a => (
-        <div key={a.id} onClick={() => setDetail(a)} style={{ background: T.surface, borderRadius: 20, border: `1px solid ${T.border}`, overflow: 'hidden', cursor: 'pointer', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, marginBottom: 32, transition: 'all 0.22s', position: 'relative' }}
-          className="mn-media-featured"
-          onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 20px 60px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
-          onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-          {adminMode && <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 3 }} onClick={e => { e.stopPropagation(); setEditItem(a); }}><AdminBtn onEdit={() => setEditItem(a)} /></div>}
-          <div style={{ position: 'relative', overflow: 'hidden', minHeight: 280 }}>
-            <img src={`https://picsum.photos/seed/feat${a.id}/800/600`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
-            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right,transparent,rgba(0,0,0,0.3))' }}></div>
-          </div>
-          <div style={{ padding: '32px 32px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <Tag variant="brand" style={{ marginBottom: 16, alignSelf: 'flex-start' }}>{a.category}</Tag>
-            <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(18px,2.5vw,26px)', fontWeight: 800, color: T.text1, margin: '0 0 14px', lineHeight: 1.25, letterSpacing: '-0.03em' }}>{a.title}</h2>
-            <p style={{ fontSize: 14, color: T.text3, lineHeight: 1.65, margin: '0 0 20px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.excerpt}</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Avatar name={a.author} size={32} />
-              <div style={{ fontSize: 13, color: T.text3 }}>{a.author} · {a.reading_time} min</div>
-            </div>
-          </div>
+      {/* Hero éditorial */}
+      <div style={{ borderBottom: `2px solid ${T.text1}`, paddingBottom: 18, marginBottom: 28, display:'flex', alignItems:'flex-end', justifyContent:'space-between', gap:14, flexWrap:'wrap' }} className="mn-section-title">
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.brand, textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 6 }}>━━ Le média militant</div>
+          <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(28px,4.5vw,40px)', fontWeight: 800, color: T.text1, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.05 }}>
+            Maintenant ! <span style={{ color: T.brand }}>Média</span>
+          </h1>
+          <p style={{ fontSize: 14, color: T.text3, margin: '8px 0 0', lineHeight: 1.55, maxWidth: 560 }}>
+            Articles, vidéos, podcasts, lives, dessins de presse. Journalisme militant indépendant, gratuit, financé par les adhérent·es.
+          </p>
         </div>
-      ))}
+        {adminMode && <Btn variant="success" size="sm" icon={ICONS.plus}>Nouveau contenu</Btn>}
+      </div>
 
-      {/* Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 20 }}>
-        {rest.map(a => (
-          <div key={a.id} onClick={() => setDetail(a)} style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden', cursor: 'pointer', transition: 'all 0.2s', position: 'relative' }}
-            onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 12px 36px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
-            onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-            {adminMode && <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 3 }} onClick={e => { e.stopPropagation(); setEditItem(a); }}><AdminBtn onEdit={() => setEditItem(a)} /></div>}
-            <div style={{ height: 180, overflow: 'hidden', position: 'relative' }}>
-              <img src={`https://picsum.photos/seed/art${a.id}/600/360`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s' }} onMouseEnter={e => e.target.style.transform = 'scale(1.06)'} onMouseLeave={e => e.target.style.transform = 'scale(1)'} onError={e => e.target.style.display = 'none'} />
-              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.3),transparent)' }}></div>
-              <Tag variant="brand" size="xs" style={{ position: 'absolute', top: 12, left: 12 }}>{a.category}</Tag>
-            </div>
-            <div style={{ padding: '16px 18px 18px' }}>
-              <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 15, fontWeight: 700, color: T.text1, margin: '0 0 8px', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.title}</h3>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: T.text4 }}>
-                <Avatar name={a.author} size={20} />
-                <span>{a.author}</span>
-                <span>·</span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>{ICONS.clock} {a.reading_time} min</span>
-              </div>
-            </div>
-          </div>
+      {/* Search + format chips */}
+      <div style={{ marginBottom: 14 }}>
+        <SearchInput value={search} onChange={setSearch} placeholder="Rechercher un article, un·e journaliste, un sujet..." />
+      </div>
+      <div data-mn-chips style={{ display: 'flex', gap: 8, marginBottom: 30, overflowX:'auto', paddingBottom:4 }}>
+        {formats.map(f => (
+          <button key={f} onClick={() => setFormat(f)}
+            style={{
+              padding: '8px 16px', borderRadius: 9999,
+              border: format === f ? `1.5px solid ${T.brand}` : `1.5px solid ${T.border}`,
+              background: format === f ? T.brand : T.surface,
+              color: format === f ? '#fff' : T.text2,
+              fontSize: 13, fontWeight: 600, fontFamily: 'Inter,sans-serif', cursor: 'pointer',
+              whiteSpace: 'nowrap', flexShrink: 0,
+              boxShadow: format === f ? `0 4px 12px ${T.brand}40` : 'none',
+              transition: 'all 0.18s',
+            }}>{f}</button>
         ))}
       </div>
-      {filtered.length === 0 && <EmptyState title="Aucun article trouvé" desc="Essayez d'autres filtres." />}
-      {editItem && <EditModal open onClose={() => setEditItem(null)} title="Article" data={editItem} onSave={f => { setData(d => d.map(a => a.id === editItem.id ? { ...a, ...f } : a)); setEditItem(null); }} fields={[{ key: 'title', label: 'Titre' }, { key: 'category', label: 'Catégorie' }, { key: 'excerpt', label: 'Chapeau', type: 'textarea' }, { key: 'author', label: 'Auteur' }]} />}
+
+      {/* LIVES — bandeau rouge en haut si présent */}
+      {lives.length > 0 && (
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: '#DC2626', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12, display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ width:8, height:8, borderRadius:'50%', background:'#DC2626', boxShadow:'0 0 0 4px rgba(220,38,38,0.2)' }}></span>
+            En direct maintenant
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 16 }}>
+            {lives.map(a => <MediaCard key={a.id} item={a} onClick={() => setDetail(a)} adminMode={adminMode} onEdit={setEditItem} />)}
+          </div>
+        </div>
+      )}
+
+      {/* FEATURED — gros bloc en avant */}
+      {featured.length > 0 && (
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.text4, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>━ À la une</div>
+          {featured.slice(0, 1).map(a => (
+            <div key={a.id} onClick={() => setDetail(a)} className="mn-media-featured" style={{ background: T.surface, borderRadius: 20, border: `1px solid ${T.border}`, overflow: 'hidden', cursor: 'pointer', display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 0, transition: 'all 0.22s', position: 'relative', marginBottom: 16 }}
+              onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 20px 60px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
+              {adminMode && <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 3 }} onClick={e => { e.stopPropagation(); setEditItem(a); }}><AdminBtn onEdit={() => setEditItem(a)} /></div>}
+              <div style={{ position: 'relative', overflow: 'hidden', minHeight: 320, background: `${(FORMAT_META[a.format] || FORMAT_META.article).color}15` }}>
+                <img src={a.image || `https://picsum.photos/seed/feat${a.id}/800/600`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
+                <div style={{ position: 'absolute', top: 16, left: 16 }}><FormatBadge format={a.format || 'article'} item={a} /></div>
+              </div>
+              <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: T.brand, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>{a.category}</div>
+                <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(18px,2.4vw,26px)', fontWeight: 800, color: T.text1, margin: '0 0 14px', lineHeight: 1.25, letterSpacing: '-0.025em' }}>{a.title}</h2>
+                <p style={{ fontSize: 14, color: T.text3, lineHeight: 1.65, margin: '0 0 20px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.excerpt}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Avatar name={a.author} size={32} />
+                  <div style={{ fontSize: 13, color: T.text3 }}>
+                    <strong style={{ color: T.text1 }}>{a.author}</strong>
+                    {a.reading_time && <> · {a.reading_time} min de lecture</>}
+                    {a.duration_sec && <> · {formatDuration(a.duration_sec)}</>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+          {featured.length > 1 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 16 }}>
+              {featured.slice(1).map(a => <MediaCard key={a.id} item={a} onClick={() => setDetail(a)} adminMode={adminMode} onEdit={setEditItem} />)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* NEWSLETTER hebdo — entre les featured et le reste */}
+      <div style={{ background: 'linear-gradient(135deg, #FDE9F2 0%, #F3EBFE 100%)', borderRadius: 20, padding: '28px 32px', marginBottom: 32, border: `1.5px solid ${T.brandLight}`, display:'grid', gridTemplateColumns:'1fr auto', gap:20, alignItems:'center' }} className="mn-newsletter-block">
+        <div>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+            <span style={{ fontSize: 24 }}>📬</span>
+            <span style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:15, color:T.brand, letterSpacing:'0.04em', textTransform:'uppercase' }}>Newsletter hebdomadaire</span>
+          </div>
+          <h3 style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(18px,2.5vw,22px)', fontWeight:800, color:T.text1, margin:'0 0 8px', letterSpacing:'-0.02em', lineHeight:1.2 }}>
+            Notre semaine, dans ta boîte mail tous les vendredis.
+          </h3>
+          <p style={{ fontSize:13.5, color:T.text2, margin:0, lineHeight:1.55, maxWidth: 540 }}>
+            Une sélection de nos articles, vidéos, podcasts et brèves, sans pub ni traceur. Désabonnement en 1 clic.
+          </p>
+        </div>
+        {!subscribed ? (
+          <div className="mn-btn-row" style={{ display:'flex', gap:8, alignItems:'stretch' }}>
+            <input
+              type="email" value={newsletterEmail} onChange={e => setNewsletterEmail(e.target.value)}
+              placeholder="ton@email.fr"
+              onKeyDown={e => e.key === 'Enter' && handleSubscribe()}
+              style={{ height:48, minWidth:240, border:`1.5px solid ${T.border}`, borderRadius:12, padding:'0 16px', fontSize:14, fontFamily:'Inter,sans-serif', color:T.text1, background:'#fff', outline:'none' }}
+              onFocus={e => e.target.style.borderColor = T.brand} onBlur={e => e.target.style.borderColor = T.border}
+            />
+            <Btn variant="gradient" size="lg" onClick={handleSubscribe}>S'inscrire</Btn>
+          </div>
+        ) : (
+          <div style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'10px 16px', background:T.successLight, border:`1px solid ${T.success}`, borderRadius:12, color:T.success, fontWeight:700, fontSize:13 }}>
+            ✓ Inscrit·e
+          </div>
+        )}
+      </div>
+
+      {/* GRILLE PRINCIPALE — tous les autres contenus */}
+      {others.length > 0 && (
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.text4, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>━ {format === 'Tous' ? 'Tous nos contenus' : format}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 16 }}>
+            {others.map(a => <MediaCard key={a.id} item={a} onClick={() => setDetail(a)} adminMode={adminMode} onEdit={setEditItem} />)}
+          </div>
+        </div>
+      )}
+
+      {/* BRÈVES — colonne dédiée si présentes */}
+      {breves.length > 0 && (
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: FORMAT_META.breve.color, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>━ Brèves de la semaine</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 12 }}>
+            {breves.map(a => <MediaCard key={a.id} item={a} onClick={() => setDetail(a)} adminMode={adminMode} onEdit={setEditItem} />)}
+          </div>
+        </div>
+      )}
+
+      {filtered.length === 0 && <EmptyState title="Aucun contenu trouvé" desc="Essayez d'autres filtres ou termes de recherche." />}
+
+      {/* SOUTENIR — tip jar T99CP / euros */}
+      <div style={{ background: T.text1, borderRadius: 24, padding: '36px 36px', marginTop: 40, position:'relative', overflow:'hidden', color:'#fff' }} className="mn-wallet-card">
+        <div style={{ position:'absolute', top:-100, right:-100, width:360, height:360, borderRadius:'50%', background:'radial-gradient(circle, rgba(225,29,116,0.25) 0%, transparent 70%)', filter:'blur(8px)' }}></div>
+        <div style={{ position:'absolute', bottom:-80, left:-80, width:280, height:280, borderRadius:'50%', background:'radial-gradient(circle, rgba(124,58,237,0.2) 0%, transparent 70%)', filter:'blur(8px)' }}></div>
+        <div style={{ position:'relative', display:'grid', gridTemplateColumns:'1fr auto', gap:24, alignItems:'center' }}>
+          <div>
+            <div style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'5px 12px', background:'rgba(255,255,255,0.10)', borderRadius:9999, fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:14 }}>
+              <span>♥</span> Soutenir le média
+            </div>
+            <h3 style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(20px,3vw,28px)', fontWeight:800, margin:'0 0 10px', letterSpacing:'-0.02em', lineHeight:1.2 }}>
+              Notre indépendance dépend de toi.
+            </h3>
+            <p style={{ fontSize:14, color:'rgba(255,255,255,0.7)', margin:'0 0 20px', lineHeight:1.6, maxWidth:540 }}>
+              Sans pub, sans actionnaire, sans subvention publique. 100 % financé par les dons des lectrices et lecteurs. Paiement en T99CP avec alternative en euros.
+            </p>
+          </div>
+          <Btn variant="white" size="lg" onClick={() => setTipOpen(true)} icon={ICONS.wallet}>Faire un don</Btn>
+        </div>
+      </div>
+
+      <PayModal open={tipOpen} onClose={() => setTipOpen(false)} amount={10} item="Don à Maintenant ! Média" description="Soutien au journalisme militant indépendant. Paiement en T99CP ou en euros, sans intermédiaire." seller="Maintenant ! Média" />
+
+      {editItem && <EditModal open onClose={() => setEditItem(null)} title="Contenu média" data={editItem} onSave={f => { setData(d => d.map(a => a.id === editItem.id ? { ...a, ...f } : a)); setEditItem(null); }} fields={[{ key: 'title', label: 'Titre' }, { key: 'category', label: 'Catégorie' }, { key: 'format', label: 'Format', type: 'select', options: ['article','video','podcast','live','dessin','breve'] }, { key: 'excerpt', label: 'Chapeau', type: 'textarea' }, { key: 'author', label: 'Auteur·rice' }, { key: 'image', label: 'URL photo' }]} />}
     </PageContainer>
   );
 }
