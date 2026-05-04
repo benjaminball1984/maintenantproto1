@@ -250,58 +250,551 @@ function SELPage({ user, adminMode, onAuth }) {
 }
 window.SELPage = SELPage;
 
-// ── CROWDFUNDING v2 ────────────────────────────────────────
+// ── CROWDFUNDING v3 ────────────────────────────────────────
+// Page Cagnottes : hero + stats + filtres + vedette + grille +
+// modale détail (story / utilisation des fonds / équipe / news)
+const CF_CATEGORIES = ['Toutes', 'Luttes', 'Solidaires', 'Participatif', 'Grandes Caisses'];
+const CF_SORTS = [
+  { id: 'recent',  label: 'Plus récentes' },
+  { id: 'urgent',  label: 'Urgentes (fin proche)' },
+  { id: 'progress',label: '% le plus avancé' },
+  { id: 'amount',  label: 'Plus gros montants' },
+];
+
+// Carte mini (grille)
+function CFCard({ c, onClick, adminMode, onEdit }) {
+  const pct = Math.min(100, Math.round(c.raised_t99cp / c.goal_t99cp * 100));
+  const urgent = c.days_left <= 14;
+  return (
+    <div onClick={onClick} style={{ background: T.surface, borderRadius: 20, border: `1px solid ${T.border}`, overflow: 'hidden', position: 'relative', cursor:'pointer', transition: 'all 0.22s' }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 18px 48px rgba(0,0,0,0.10)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
+      {adminMode && <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 3 }} onClick={e => { e.stopPropagation(); onEdit(); }}><AdminBtn onEdit={onEdit} /></div>}
+      {c._userCreated && <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 3 }}><window.UserBadge /></div>}
+      <div style={{ height: 170, position: 'relative', overflow: 'hidden', background: T.surface2 }}>
+        <img src={c.cover || `https://picsum.photos/seed/crowd${c.id}/600/300`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent 60%)' }}></div>
+        <div style={{ position:'absolute', top:12, right:12, display:'flex', gap:6 }}>
+          {urgent && <span style={{ padding:'4px 9px', borderRadius:9999, background:'#FEE2E2', color:'#DC2626', fontSize:10, fontWeight:800, letterSpacing:'0.05em' }}>⏰ {c.days_left}J</span>}
+        </div>
+        <div style={{ position: 'absolute', bottom: 14, left: 16, right: 16, display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+          <Tag variant={c.category === 'Luttes' ? 'brand' : c.category === 'Solidaires' ? 'success' : c.category === 'Participatif' ? 'info' : 'warn'}>{c.category}</Tag>
+          <span style={{ fontSize:11, color:'#fff', fontWeight:700, background:'rgba(0,0,0,0.5)', padding:'4px 8px', borderRadius:9999 }}>{pct}%</span>
+        </div>
+      </div>
+      <div style={{ padding: '18px 20px 20px' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8, fontSize:11, color:T.text3 }}>
+          <span style={{ width:22, height:22, borderRadius:'50%', background:`${T.hub.crowdfunding}20`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12 }}>{c.organizer_avatar || '🤝'}</span>
+          <span style={{ fontWeight:600 }}>{c.organizer}</span>
+        </div>
+        <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 15, fontWeight: 700, color: T.text1, margin: '0 0 8px', lineHeight: 1.35, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{c.title}</h3>
+        <p style={{ fontSize: 12, color: T.text3, margin: '0 0 14px', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{c.description}</p>
+        <ProgressBar value={c.raised_t99cp} max={c.goal_t99cp} height={6} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.text3, margin: '10px 0 0', flexWrap: 'wrap', gap: 4 }}>
+          <span><strong style={{ color: T.hub.crowdfunding, fontSize: 13 }}>{c.raised_t99cp.toLocaleString('fr-FR')} T99CP</strong> / {c.goal_t99cp.toLocaleString('fr-FR')}</span>
+          <span>{c.contributors} contributeur·ices</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Carte vedette (large, format paysage)
+function CFFeaturedCard({ c, onClick }) {
+  const pct = Math.min(100, Math.round(c.raised_t99cp / c.goal_t99cp * 100));
+  return (
+    <div onClick={onClick} style={{ background: T.surface, borderRadius: 24, border: `1px solid ${T.border}`, overflow: 'hidden', cursor:'pointer', display:'grid', gridTemplateColumns:'minmax(0, 1.2fr) minmax(0, 1fr)', minHeight: 280, transition: 'all 0.25s' }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 24px 60px rgba(0,0,0,0.12)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
+      <div style={{ position:'relative', minHeight:240, overflow:'hidden', background:T.surface2 }}>
+        <img src={c.cover || `https://picsum.photos/seed/crowd${c.id}/800/600`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
+        <div style={{ position:'absolute', top:14, left:14, padding:'5px 11px', borderRadius:9999, background:'rgba(0,0,0,0.55)', color:'#fff', fontSize:10, fontWeight:800, letterSpacing:'0.08em', textTransform:'uppercase' }}>★ Vedette</div>
+        <div style={{ position:'absolute', bottom:14, left:14 }}><Tag variant={c.category === 'Luttes' ? 'brand' : 'success'}>{c.category}</Tag></div>
+      </div>
+      <div style={{ padding:'24px 28px', display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
+        <div>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10, fontSize:11, color:T.text3 }}>
+            <span style={{ width:24, height:24, borderRadius:'50%', background:`${T.hub.crowdfunding}20`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13 }}>{c.organizer_avatar}</span>
+            <span style={{ fontWeight:700 }}>{c.organizer}</span>
+          </div>
+          <h3 style={{ fontFamily:"'Sora',sans-serif", fontSize:20, fontWeight:800, color:T.text1, margin:'0 0 10px', lineHeight:1.25 }}>{c.title}</h3>
+          <p style={{ fontSize:13, color:T.text3, margin:0, lineHeight:1.6, display:'-webkit-box', WebkitLineClamp:3, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{c.description}</p>
+        </div>
+        <div style={{ marginTop:18 }}>
+          <ProgressBar value={c.raised_t99cp} max={c.goal_t99cp} height={8} />
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginTop:10, gap:6, flexWrap:'wrap' }}>
+            <div>
+              <div style={{ fontSize:18, fontWeight:800, color:T.hub.crowdfunding, fontFamily:"'Sora',sans-serif" }}>{c.raised_t99cp.toLocaleString('fr-FR')} T99CP</div>
+              <div style={{ fontSize:11, color:T.text3 }}>sur {c.goal_t99cp.toLocaleString('fr-FR')} · <strong style={{ color:T.text2 }}>{pct}%</strong></div>
+            </div>
+            <div style={{ textAlign:'right', fontSize:11, color:T.text3 }}>
+              <div><strong style={{ color:T.text2, fontSize:13 }}>{c.contributors}</strong> contributeur·ices</div>
+              <div>⏰ {c.days_left} jours restants</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Modale détail — onglets : Projet · Fonds · Équipe · Mises à jour · Contributeur·ices
+function CFDetailModal({ cagnotte: c, user, onClose, onContribute }) {
+  const [tab, setTab] = useState('story');
+  const [contribAmount, setContribAmount] = useState(20);
+  if (!c) return null;
+  const pct = Math.min(100, Math.round(c.raised_t99cp / c.goal_t99cp * 100));
+  const totalAlloc = (c.fundUsage || []).reduce((s, f) => s + f.amount, 0);
+  const tabs = [
+    { id:'story',  label:'Le projet',          icon:'📖' },
+    { id:'funds',  label:'Utilisation des fonds', icon:'💰' },
+    { id:'team',   label:'L\'équipe',           icon:'👥' },
+    { id:'updates',label:'Mises à jour',         icon:'🔔', count: c.updates?.length || 0 },
+  ];
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', backdropFilter:'blur(4px)', zIndex:1500, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'40px 16px', overflowY:'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:T.surface, borderRadius:24, maxWidth:920, width:'100%', overflow:'hidden', boxShadow:'0 30px 80px rgba(0,0,0,0.3)', position:'relative' }}>
+        <button onClick={onClose} style={{ position:'absolute', top:14, right:14, width:36, height:36, borderRadius:'50%', background:'rgba(255,255,255,0.95)', border:'none', cursor:'pointer', fontSize:18, color:'#333', zIndex:5, fontWeight:700 }}>×</button>
+
+        {/* Cover */}
+        <div style={{ height:240, position:'relative', overflow:'hidden', background:T.surface2 }}>
+          <img src={c.cover || `https://picsum.photos/seed/crowd${c.id}/1200/600`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e => e.target.style.display='none'} />
+          <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(0,0,0,0.85), transparent 50%)' }}></div>
+          <div style={{ position:'absolute', bottom:18, left:24, right:24, color:'#fff' }}>
+            <div style={{ display:'flex', gap:8, marginBottom:10 }}>
+              <Tag variant={c.category === 'Luttes' ? 'brand' : 'success'}>{c.category}</Tag>
+              {c.featured && <span style={{ padding:'4px 10px', borderRadius:9999, background:'rgba(255,255,255,0.2)', color:'#fff', fontSize:10, fontWeight:800, letterSpacing:'0.06em' }}>★ VEDETTE</span>}
+            </div>
+            <h2 style={{ fontFamily:"'Sora',sans-serif", fontSize:24, fontWeight:800, margin:'0 0 6px', lineHeight:1.25 }}>{c.title}</h2>
+            <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:13 }}>
+              <span style={{ width:24, height:24, borderRadius:'50%', background:'rgba(255,255,255,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13 }}>{c.organizer_avatar}</span>
+              <span style={{ fontWeight:600 }}>{c.organizer}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats bar */}
+        <div style={{ padding:'20px 28px', borderBottom:`1px solid ${T.border}`, background:T.surface2 }}>
+          <ProgressBar value={c.raised_t99cp} max={c.goal_t99cp} height={10} />
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:14, marginTop:14 }}>
+            <div><div style={{ fontSize:18, fontWeight:800, color:T.hub.crowdfunding, fontFamily:"'Sora',sans-serif" }}>{c.raised_t99cp.toLocaleString('fr-FR')}</div><div style={{ fontSize:10, color:T.text3, textTransform:'uppercase', letterSpacing:'0.06em' }}>T99CP collectés</div></div>
+            <div><div style={{ fontSize:18, fontWeight:800, color:T.text1, fontFamily:"'Sora',sans-serif" }}>{c.goal_t99cp.toLocaleString('fr-FR')}</div><div style={{ fontSize:10, color:T.text3, textTransform:'uppercase', letterSpacing:'0.06em' }}>objectif</div></div>
+            <div><div style={{ fontSize:18, fontWeight:800, color:T.text1, fontFamily:"'Sora',sans-serif" }}>{c.contributors}</div><div style={{ fontSize:10, color:T.text3, textTransform:'uppercase', letterSpacing:'0.06em' }}>contributeur·ices</div></div>
+            <div><div style={{ fontSize:18, fontWeight:800, color:c.days_left <= 14 ? '#DC2626' : T.text1, fontFamily:"'Sora',sans-serif" }}>{c.days_left}j</div><div style={{ fontSize:10, color:T.text3, textTransform:'uppercase', letterSpacing:'0.06em' }}>restants</div></div>
+          </div>
+          {/* Paliers */}
+          {c.milestones && (
+            <div style={{ marginTop:18, padding:'14px 16px', background:T.surface, borderRadius:12, border:`1px solid ${T.border}` }}>
+              <div style={{ fontSize:10, color:T.text3, textTransform:'uppercase', letterSpacing:'0.08em', fontWeight:700, marginBottom:10 }}>Paliers</div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:10 }}>
+                {c.milestones.map((m,i) => (
+                  <div key={i} style={{ padding:'10px 8px', borderRadius:10, background: m.reached ? `${T.hub.crowdfunding}15` : T.surface2, border: m.reached ? `1.5px solid ${T.hub.crowdfunding}` : `1px solid ${T.border}`, textAlign:'center' }}>
+                    <div style={{ fontSize:16, fontWeight:800, color: m.reached ? T.hub.crowdfunding : T.text3, fontFamily:"'Sora',sans-serif" }}>{m.percent}%</div>
+                    <div style={{ fontSize:10, color: m.reached ? T.text2 : T.text3, marginTop:3, lineHeight:1.3 }}>{m.label}</div>
+                    {m.reached && <div style={{ fontSize:10, color:T.hub.crowdfunding, marginTop:3, fontWeight:700 }}>✓ Atteint</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display:'flex', gap:0, padding:'0 28px', borderBottom:`1px solid ${T.border}`, overflowX:'auto' }}>
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{ padding:'14px 18px', border:'none', background:'transparent', cursor:'pointer', fontSize:13, fontWeight:tab===t.id ? 700 : 500, color: tab===t.id ? T.hub.crowdfunding : T.text3, borderBottom: tab===t.id ? `2px solid ${T.hub.crowdfunding}` : '2px solid transparent', fontFamily:'Inter,sans-serif', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:7 }}>
+              <span>{t.icon}</span>{t.label}{t.count !== undefined && t.count > 0 && <span style={{ fontSize:10, padding:'2px 6px', borderRadius:9999, background: tab===t.id ? T.hub.crowdfunding : T.border, color: tab===t.id ? '#fff' : T.text3, fontWeight:700 }}>{t.count}</span>}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab content */}
+        <div style={{ padding:'24px 28px', maxHeight:420, overflowY:'auto' }}>
+          {tab === 'story' && (
+            <div style={{ fontSize:14, color:T.text2, lineHeight:1.7, whiteSpace:'pre-line' }}>
+              {c.story || c.description}
+            </div>
+          )}
+
+          {tab === 'funds' && (
+            <div>
+              <div style={{ fontSize:13, color:T.text3, marginBottom:18, lineHeight:1.6 }}>
+                Voici comment seront utilisés les <strong style={{ color:T.hub.crowdfunding }}>{c.goal_t99cp.toLocaleString('fr-FR')} T99CP</strong> demandés. Détail transparent ligne par ligne.
+              </div>
+              {/* Barre allocation visuelle */}
+              <div style={{ display:'flex', height:14, borderRadius:9999, overflow:'hidden', marginBottom:18, border:`1px solid ${T.border}` }}>
+                {(c.fundUsage || []).map((f,i) => (
+                  <div key={i} title={`${f.label} : ${f.amount}`} style={{ background:f.color, width:`${f.amount/totalAlloc*100}%` }}></div>
+                ))}
+              </div>
+              {/* Lignes détail */}
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                {(c.fundUsage || []).map((f,i) => {
+                  const pctFund = (f.amount / totalAlloc * 100).toFixed(1);
+                  return (
+                    <div key={i} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', background:T.surface2, borderRadius:10, border:`1px solid ${T.border}` }}>
+                      <div style={{ width:8, height:36, borderRadius:4, background:f.color, flexShrink:0 }}></div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:13, color:T.text1, fontWeight:600 }}>{f.label}</div>
+                        <div style={{ fontSize:11, color:T.text3, marginTop:2 }}>{pctFund}% du budget total</div>
+                      </div>
+                      <div style={{ fontFamily:"'Sora',sans-serif", fontSize:15, fontWeight:800, color:f.color }}>{f.amount.toLocaleString('fr-FR')} T</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ marginTop:14, padding:'10px 14px', background:T.surface2, borderRadius:8, fontSize:11, color:T.text3, fontStyle:'italic', lineHeight:1.5 }}>
+                ⓘ Bilan d'utilisation publié dans la rubrique « Mises à jour » à mesure que les fonds sont engagés.
+              </div>
+            </div>
+          )}
+
+          {tab === 'team' && (
+            <div>
+              <div style={{ fontSize:13, color:T.text3, marginBottom:18, lineHeight:1.6 }}>
+                {c.team?.length || 0} personne{(c.team?.length||0) > 1 ? 's' : ''} portent ce projet.
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:14 }}>
+                {(c.team || []).map((m,i) => (
+                  <div key={i} style={{ padding:'16px', background:T.surface2, borderRadius:14, border:`1px solid ${T.border}` }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:10 }}>
+                      <div style={{ width:46, height:46, borderRadius:'50%', background:`linear-gradient(135deg, ${T.hub.crowdfunding}, #DC2654)`, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:800, fontSize:14, fontFamily:"'Sora',sans-serif", flexShrink:0 }}>{m.avatar}</div>
+                      <div style={{ minWidth:0 }}>
+                        <div style={{ fontSize:14, fontWeight:700, color:T.text1, fontFamily:"'Sora',sans-serif" }}>{m.name}</div>
+                        <div style={{ fontSize:11, color:T.hub.crowdfunding, fontWeight:600 }}>{m.role}</div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize:12, color:T.text3, lineHeight:1.5 }}>{m.bio}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {tab === 'updates' && (
+            <div>
+              {(c.updates || []).length === 0 ? (
+                <div style={{ padding:'40px 20px', textAlign:'center', color:T.text3, fontSize:13 }}>Aucune mise à jour pour l'instant.</div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                  {(c.updates || []).map((u,i) => (
+                    <div key={i} style={{ padding:'16px 18px', background:T.surface2, borderRadius:12, border:`1px solid ${T.border}`, borderLeft:`3px solid ${T.hub.crowdfunding}` }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:8, marginBottom:6, flexWrap:'wrap' }}>
+                        <div style={{ fontSize:14, fontWeight:700, color:T.text1, fontFamily:"'Sora',sans-serif" }}>{u.title}</div>
+                        <div style={{ fontSize:11, color:T.text3, fontWeight:500 }}>{new Date(u.date).toLocaleDateString('fr-FR', { day:'numeric', month:'long', year:'numeric' })}</div>
+                      </div>
+                      <div style={{ fontSize:13, color:T.text2, lineHeight:1.6 }}>{u.content}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer contribution */}
+        <div style={{ padding:'18px 28px', borderTop:`1px solid ${T.border}`, background:T.surface2, display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+          <div style={{ flex:1, minWidth:200 }}>
+            <div style={{ fontSize:11, color:T.text3, marginBottom:4 }}>Ta contribution (T99CP)</div>
+            <div style={{ display:'flex', gap:6 }}>
+              {[5, 10, 20, 50, 100].map(v => (
+                <button key={v} onClick={() => setContribAmount(v)} style={{ padding:'8px 12px', borderRadius:8, border:`1.5px solid ${contribAmount===v ? T.hub.crowdfunding : T.border}`, background: contribAmount===v ? `${T.hub.crowdfunding}15` : T.surface, color: contribAmount===v ? T.hub.crowdfunding : T.text2, fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'Inter,sans-serif' }}>{v}</button>
+              ))}
+              <input type="number" value={contribAmount} onChange={e => setContribAmount(+e.target.value || 0)} min="1" style={{ width:80, height:34, border:`1.5px solid ${T.border}`, borderRadius:8, padding:'0 10px', fontSize:13, color:T.text1, background:T.surface, outline:'none', textAlign:'center' }} />
+            </div>
+          </div>
+          <Btn variant="gradient" size="md" icon={ICONS.wallet} onClick={() => onContribute(c, contribAmount)}>Contribuer · {contribAmount} T99CP</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Modal de création multi-sections (titre, présentation, fonds, équipe)
+function CFCreateModal({ open, onClose, onSubmit, user }) {
+  const [step, setStep] = useState(1);
+  const [form, setForm] = useState({
+    title:'', category:'Luttes', goal_t99cp:'', days_left:'30',
+    description:'', story:'',
+    fundUsage: [{ label:'', amount:'', color:'#DC2654' }],
+    team:     [{ name: user?.name || '', role:'Porteur·euse principal·e', bio:'', avatar:(user?.name||'')[0]?.toUpperCase() || 'U' }],
+  });
+  const reset = () => { setStep(1); setForm({ title:'', category:'Luttes', goal_t99cp:'', days_left:'30', description:'', story:'', fundUsage:[{label:'',amount:'',color:'#DC2654'}], team:[{name:user?.name||'',role:'Porteur·euse principal·e',bio:'',avatar:(user?.name||'')[0]?.toUpperCase()||'U'}] }); };
+  if (!open) return null;
+  const COLORS_PALETTE = ['#DC2654', '#7C3AED', '#16A34A', '#F59E0B', '#0891B2', '#A21CAF'];
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setUsage = (i, k, v) => setForm(f => ({ ...f, fundUsage: f.fundUsage.map((u, idx) => idx === i ? { ...u, [k]: v } : u) }));
+  const addUsage = () => setForm(f => ({ ...f, fundUsage: [...f.fundUsage, { label:'', amount:'', color: COLORS_PALETTE[f.fundUsage.length % COLORS_PALETTE.length] }] }));
+  const delUsage = (i) => setForm(f => ({ ...f, fundUsage: f.fundUsage.filter((_, idx) => idx !== i) }));
+  const setTeam = (i, k, v) => setForm(f => ({ ...f, team: f.team.map((m, idx) => idx === i ? { ...m, [k]: v, ...(k === 'name' ? { avatar: v[0]?.toUpperCase() || '?' } : {}) } : m) }));
+  const addTeam = () => setForm(f => ({ ...f, team: [...f.team, { name:'', role:'', bio:'', avatar:'?' }] }));
+  const delTeam = (i) => setForm(f => ({ ...f, team: f.team.filter((_, idx) => idx !== i) }));
+
+  const stepValid = () => {
+    if (step === 1) return form.title && form.category && form.goal_t99cp && form.days_left;
+    if (step === 2) return form.description && form.story;
+    if (step === 3) return form.fundUsage.length > 0 && form.fundUsage.every(u => u.label && u.amount);
+    if (step === 4) return form.team.length > 0 && form.team.every(m => m.name && m.role);
+    return true;
+  };
+  const submit = () => {
+    const enriched = {
+      id: Date.now(),
+      ...form,
+      organizer: user?.name || 'Vous',
+      organizer_avatar: '🤝',
+      raised_t99cp: 0, contributors: 0, featured: false,
+      goal_t99cp: +form.goal_t99cp,
+      days_left: +form.days_left,
+      fundUsage: form.fundUsage.map(u => ({ ...u, amount: +u.amount })),
+      milestones: [
+        { percent: 25, label: "Premier palier", reached: false },
+        { percent: 50, label: "Mi-parcours",     reached: false },
+        { percent: 75, label: "Quasi-bouclage",  reached: false },
+        { percent: 100,label: "Objectif atteint",reached: false },
+      ],
+      updates: [{ date: new Date().toISOString().slice(0,10), title:'🚀 Cagnotte lancée', content:`Merci de votre soutien — la collecte commence aujourd'hui pour ${form.days_left} jours.` }],
+      _userCreated: true,
+    };
+    onSubmit(enriched);
+    reset(); onClose();
+  };
+
+  const STEPS = [
+    { id:1, title:'L\'essentiel',         icon:'📝' },
+    { id:2, title:'Présenter le projet',  icon:'📖' },
+    { id:3, title:'Utilisation des fonds', icon:'💰' },
+    { id:4, title:'L\'équipe',             icon:'👥' },
+  ];
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', backdropFilter:'blur(4px)', zIndex:1500, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'40px 16px', overflowY:'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:T.surface, borderRadius:24, maxWidth:760, width:'100%', overflow:'hidden', boxShadow:'0 30px 80px rgba(0,0,0,0.3)' }}>
+        <div style={{ padding:'22px 28px', background:`linear-gradient(135deg, ${T.hub.crowdfunding}15, #FDE9F2)`, borderBottom:`1px solid ${T.border}`, position:'relative' }}>
+          <button onClick={onClose} style={{ position:'absolute', top:14, right:14, width:32, height:32, borderRadius:'50%', background:'rgba(255,255,255,0.9)', border:'none', cursor:'pointer', fontSize:18, color:'#333', fontWeight:700 }}>×</button>
+          <div style={{ fontSize:11, fontWeight:700, color:T.hub.crowdfunding, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Nouvelle cagnotte</div>
+          <h2 style={{ fontFamily:"'Sora',sans-serif", fontSize:22, fontWeight:800, color:T.text1, margin:0 }}>Lance ta collecte solidaire</h2>
+        </div>
+
+        {/* Stepper */}
+        <div style={{ display:'flex', padding:'18px 28px', background:T.surface2, borderBottom:`1px solid ${T.border}`, gap:8, overflowX:'auto' }}>
+          {STEPS.map((s, idx) => (
+            <div key={s.id} onClick={() => stepValid() && setStep(s.id)} style={{ flex:1, minWidth:140, padding:'10px 12px', borderRadius:10, background: step===s.id ? T.hub.crowdfunding : (s.id < step ? `${T.hub.crowdfunding}20` : T.surface), color: step===s.id ? '#fff' : (s.id < step ? T.hub.crowdfunding : T.text3), cursor: 'pointer', display:'flex', alignItems:'center', gap:8, transition:'all 0.18s', border: step===s.id ? 'none' : `1px solid ${T.border}` }}>
+              <div style={{ width:26, height:26, borderRadius:'50%', background: step===s.id ? 'rgba(255,255,255,0.2)' : (s.id < step ? T.hub.crowdfunding : T.surface2), color: step===s.id || s.id < step ? '#fff' : T.text3, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:800, flexShrink:0 }}>{s.id < step ? '✓' : s.id}</div>
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontSize:11, opacity:0.85, marginBottom:1 }}>Étape {s.id}</div>
+                <div style={{ fontSize:12, fontWeight:700, fontFamily:"'Sora',sans-serif", whiteSpace:'nowrap' }}>{s.title}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Step content */}
+        <div style={{ padding:'24px 28px', maxHeight:480, overflowY:'auto' }}>
+          {step === 1 && (
+            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+              <div>
+                <label style={{ fontSize:12, fontWeight:700, color:T.text2, marginBottom:6, display:'block' }}>Titre de la cagnotte *</label>
+                <input value={form.title} onChange={e => set('title', e.target.value)} placeholder="Caisse de grève cheminot·es PACA" style={{ width:'100%', height:42, padding:'0 14px', border:`1.5px solid ${T.border}`, borderRadius:10, fontSize:14, color:T.text1, background:T.surface, outline:'none', fontFamily:'Inter,sans-serif', boxSizing:'border-box' }} />
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:14 }}>
+                <div>
+                  <label style={{ fontSize:12, fontWeight:700, color:T.text2, marginBottom:6, display:'block' }}>Catégorie *</label>
+                  <select value={form.category} onChange={e => set('category', e.target.value)} style={{ width:'100%', height:42, padding:'0 12px', border:`1.5px solid ${T.border}`, borderRadius:10, fontSize:14, color:T.text1, background:T.surface, outline:'none', fontFamily:'Inter,sans-serif' }}>
+                    {['Luttes','Solidaires','Participatif','Grandes Caisses'].map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize:12, fontWeight:700, color:T.text2, marginBottom:6, display:'block' }}>Objectif T99CP *</label>
+                  <input type="number" value={form.goal_t99cp} onChange={e => set('goal_t99cp', e.target.value)} placeholder="5000" style={{ width:'100%', height:42, padding:'0 14px', border:`1.5px solid ${T.border}`, borderRadius:10, fontSize:14, color:T.text1, background:T.surface, outline:'none', fontFamily:'Inter,sans-serif', boxSizing:'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize:12, fontWeight:700, color:T.text2, marginBottom:6, display:'block' }}>Durée (jours) *</label>
+                  <input type="number" value={form.days_left} onChange={e => set('days_left', e.target.value)} placeholder="30" style={{ width:'100%', height:42, padding:'0 14px', border:`1.5px solid ${T.border}`, borderRadius:10, fontSize:14, color:T.text1, background:T.surface, outline:'none', fontFamily:'Inter,sans-serif', boxSizing:'border-box' }} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+              <div>
+                <label style={{ fontSize:12, fontWeight:700, color:T.text2, marginBottom:6, display:'block' }}>Pitch court (1-2 phrases) *</label>
+                <div style={{ fontSize:11, color:T.text3, marginBottom:6 }}>Ce qui apparaîtra sur la carte de la cagnotte.</div>
+                <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={2} placeholder="Soutien aux cheminot·es grévistes pendant les négociations salariales." style={{ width:'100%', padding:'10px 14px', border:`1.5px solid ${T.border}`, borderRadius:10, fontSize:14, color:T.text1, background:T.surface, outline:'none', fontFamily:'Inter,sans-serif', boxSizing:'border-box', resize:'vertical', lineHeight:1.5 }} />
+              </div>
+              <div>
+                <label style={{ fontSize:12, fontWeight:700, color:T.text2, marginBottom:6, display:'block' }}>Présentation détaillée du projet *</label>
+                <div style={{ fontSize:11, color:T.text3, marginBottom:6 }}>Raconte : le contexte, l'urgence, la portée. Sois concret·e — c'est ce qui convaincra les contributeur·ices.</div>
+                <textarea value={form.story} onChange={e => set('story', e.target.value)} rows={8} placeholder="Depuis le 15 mars, plus de 400 cheminot·es sont en grève reconductible..." style={{ width:'100%', padding:'12px 14px', border:`1.5px solid ${T.border}`, borderRadius:10, fontSize:13, color:T.text1, background:T.surface, outline:'none', fontFamily:'Inter,sans-serif', boxSizing:'border-box', resize:'vertical', lineHeight:1.6 }} />
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div>
+              <div style={{ marginBottom:14, padding:'12px 14px', background:`${T.hub.crowdfunding}10`, borderRadius:10, fontSize:12, color:T.text2, lineHeight:1.5 }}>
+                💰 <strong>Détaille à quoi serviront les fonds.</strong> Plus c'est précis, plus tu inspires confiance. Total cible : <strong style={{ color:T.hub.crowdfunding }}>{form.goal_t99cp || 0} T99CP</strong>.
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                {form.fundUsage.map((u, i) => (
+                  <div key={i} style={{ display:'flex', gap:8, alignItems:'flex-start', padding:'12px', background:T.surface2, borderRadius:10, border:`1px solid ${T.border}` }}>
+                    <div style={{ width:8, height:38, borderRadius:4, background:u.color, flexShrink:0, marginTop:2 }}></div>
+                    <input value={u.label} onChange={e => setUsage(i, 'label', e.target.value)} placeholder="Ex : Honoraires avocats" style={{ flex:1, height:38, padding:'0 12px', border:`1px solid ${T.border}`, borderRadius:8, fontSize:13, color:T.text1, background:T.surface, outline:'none', fontFamily:'Inter,sans-serif', minWidth:0 }} />
+                    <input type="number" value={u.amount} onChange={e => setUsage(i, 'amount', e.target.value)} placeholder="T99CP" style={{ width:100, height:38, padding:'0 12px', border:`1px solid ${T.border}`, borderRadius:8, fontSize:13, color:T.text1, background:T.surface, outline:'none', fontFamily:'Inter,sans-serif', textAlign:'right' }} />
+                    <select value={u.color} onChange={e => setUsage(i, 'color', e.target.value)} style={{ width:50, height:38, border:`1px solid ${T.border}`, borderRadius:8, background:u.color, color:'#fff', fontSize:11, outline:'none' }}>
+                      {COLORS_PALETTE.map(c => <option key={c} value={c} style={{ background:'#fff', color:'#000' }}>●</option>)}
+                    </select>
+                    {form.fundUsage.length > 1 && <button onClick={() => delUsage(i)} style={{ width:38, height:38, border:`1px solid ${T.border}`, borderRadius:8, background:T.surface, color:T.text3, cursor:'pointer', fontSize:16, fontWeight:700 }}>×</button>}
+                  </div>
+                ))}
+              </div>
+              <button onClick={addUsage} style={{ marginTop:10, width:'100%', padding:'10px', borderRadius:10, border:`1.5px dashed ${T.border}`, background:'transparent', color:T.text3, fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'Inter,sans-serif' }}>+ Ajouter une ligne d'utilisation</button>
+              <div style={{ marginTop:14, padding:'10px 14px', background:T.surface2, borderRadius:8, fontSize:12, color:T.text3, display:'flex', justifyContent:'space-between' }}>
+                <span>Total alloué :</span>
+                <strong style={{ color: form.fundUsage.reduce((s,u) => s + (+u.amount||0), 0) === +form.goal_t99cp ? T.hub.crowdfunding : '#F59E0B' }}>{form.fundUsage.reduce((s,u) => s + (+u.amount||0), 0).toLocaleString('fr-FR')} / {(+form.goal_t99cp).toLocaleString('fr-FR')} T99CP</strong>
+              </div>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div>
+              <div style={{ marginBottom:14, padding:'12px 14px', background:`${T.hub.crowdfunding}10`, borderRadius:10, fontSize:12, color:T.text2, lineHeight:1.5 }}>
+                👥 <strong>Présente les personnes derrière le projet.</strong> Une équipe identifiée rassure les contributeur·ices.
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                {form.team.map((m, i) => (
+                  <div key={i} style={{ padding:'14px', background:T.surface2, borderRadius:10, border:`1px solid ${T.border}`, position:'relative' }}>
+                    {form.team.length > 1 && <button onClick={() => delTeam(i)} style={{ position:'absolute', top:8, right:8, width:26, height:26, border:'none', borderRadius:'50%', background:T.surface, color:T.text3, cursor:'pointer', fontSize:14 }}>×</button>}
+                    <div style={{ display:'flex', gap:10, marginBottom:8 }}>
+                      <div style={{ width:42, height:42, borderRadius:'50%', background:`linear-gradient(135deg, ${T.hub.crowdfunding}, #DC2654)`, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:800, fontSize:14, fontFamily:"'Sora',sans-serif", flexShrink:0 }}>{m.avatar}</div>
+                      <div style={{ flex:1, display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                        <input value={m.name} onChange={e => setTeam(i, 'name', e.target.value)} placeholder="Nom complet" style={{ height:36, padding:'0 12px', border:`1px solid ${T.border}`, borderRadius:8, fontSize:13, color:T.text1, background:T.surface, outline:'none', fontFamily:'Inter,sans-serif', minWidth:0 }} />
+                        <input value={m.role} onChange={e => setTeam(i, 'role', e.target.value)} placeholder="Rôle dans le projet" style={{ height:36, padding:'0 12px', border:`1px solid ${T.border}`, borderRadius:8, fontSize:13, color:T.text1, background:T.surface, outline:'none', fontFamily:'Inter,sans-serif', minWidth:0 }} />
+                      </div>
+                    </div>
+                    <textarea value={m.bio} onChange={e => setTeam(i, 'bio', e.target.value)} rows={2} placeholder="Bio courte : expérience, ce qu'iel apporte au projet…" style={{ width:'100%', padding:'8px 12px', border:`1px solid ${T.border}`, borderRadius:8, fontSize:12, color:T.text1, background:T.surface, outline:'none', fontFamily:'Inter,sans-serif', resize:'vertical', boxSizing:'border-box', lineHeight:1.5 }} />
+                  </div>
+                ))}
+              </div>
+              <button onClick={addTeam} style={{ marginTop:10, width:'100%', padding:'10px', borderRadius:10, border:`1.5px dashed ${T.border}`, background:'transparent', color:T.text3, fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'Inter,sans-serif' }}>+ Ajouter un·e membre d'équipe</button>
+            </div>
+          )}
+        </div>
+
+        {/* Footer nav */}
+        <div style={{ display:'flex', justifyContent:'space-between', padding:'18px 28px', borderTop:`1px solid ${T.border}`, background:T.surface2 }}>
+          <Btn variant="ghost" size="md" onClick={() => step > 1 ? setStep(step - 1) : onClose()}>{step > 1 ? '← Précédent' : 'Annuler'}</Btn>
+          {step < 4
+            ? <Btn variant="gradient" size="md" disabled={!stepValid()} onClick={() => setStep(step + 1)}>Suivant →</Btn>
+            : <Btn variant="gradient" size="md" disabled={!stepValid()} onClick={submit} icon="🚀">Lancer la cagnotte</Btn>
+          }
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CrowdfundingPage({ user, adminMode, onAuth }) {
   const [data, setData] = useState([...window.getUserCreations('crowdfunding'), ...AppData.crowdfunding]);
   const [payItem, setPayItem] = useState(null);
-  const [amount, setAmount] = useState(10);
+  const [amount, setAmount] = useState(20);
   const [editItem, setEditItem] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [detail, setDetail] = useState(null);
+  const [cat, setCat] = useState('Toutes');
+  const [sort, setSort] = useState('recent');
+  const [search, setSearch] = useState('');
+
+  // Stats globales
+  const stats = data.reduce((acc, c) => ({
+    raised: acc.raised + c.raised_t99cp,
+    contributors: acc.contributors + c.contributors,
+    active: acc.active + 1,
+  }), { raised:0, contributors:0, active:0 });
+
+  // Filtre + tri
+  let filtered = data.filter(c => cat === 'Toutes' || c.category === cat);
+  if (search) filtered = filtered.filter(c => (c.title + c.description).toLowerCase().includes(search.toLowerCase()));
+  if (sort === 'urgent')   filtered.sort((a,b) => a.days_left - b.days_left);
+  if (sort === 'progress') filtered.sort((a,b) => (b.raised_t99cp/b.goal_t99cp) - (a.raised_t99cp/a.goal_t99cp));
+  if (sort === 'amount')   filtered.sort((a,b) => b.raised_t99cp - a.raised_t99cp);
+
+  const featured = data.filter(c => c.featured).slice(0, 3);
+
+  const handleContribute = (c, amt) => {
+    if (!user) { onAuth(); return; }
+    setAmount(amt); setPayItem(c); setDetail(null);
+  };
+
   return (
     <PageContainer>
-      <SectionTitle label="Finance solidaire" title="Cagnottes & Collectes" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Créer une cagnotte</Btn>} />
-      <CreateModal open={createOpen} onClose={() => setCreateOpen(false)} title="Créer une cagnotte solidaire"
-        subtitle="Lance une collecte pour soutenir une lutte, un projet, une caisse de grève. Paiement en T99CP."
-        domain="crowdfunding" color={T.hub.crowdfunding}
-        fields={[
-          { id:'title',         label:'Titre de la cagnotte', required:true, placeholder:"Caisse de grève cheminot·es PACA" },
-          { id:'category',      label:'Catégorie', type:'select', required:true, options:['Solidaires','Luttes','Participatif','Grandes Caisses'] },
-          { id:'goal_t99cp',    label:'Objectif (en T99CP)', type:'number', required:true, placeholder:'5000' },
-          { id:'days_left',     label:'Durée de la collecte (en jours)', type:'number', required:true, placeholder:'30' },
-          { id:'description',   label:'Présente ta cause', type:'textarea', rows:4, required:true, placeholder:"Pourquoi cette cagnotte ? À quoi servira l'argent ?" },
-        ]}
-        onSubmit={item => { const enriched = { ...item, organizer: user?.name || 'Vous', raised_t99cp: 0, contributors: 0, featured: false, goal_t99cp: +item.goal_t99cp, days_left: +item.days_left }; setData(d => [enriched, ...d]); }}
-      />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 24 }}>
-        {data.map(c => (
-          <div key={c.id} style={{ background: T.surface, borderRadius: 20, border: `1px solid ${T.border}`, overflow: 'hidden', position: 'relative', transition: 'all 0.22s' }}
-            onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 16px 48px rgba(0,0,0,0.09)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
-            onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-            {adminMode && <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 3 }} onClick={() => setEditItem(c)}><AdminBtn onEdit={() => setEditItem(c)} /></div>}
-            {c._userCreated && <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 3 }}><window.UserBadge /></div>}
-            <div style={{ height: 180, position: 'relative', overflow: 'hidden' }}>
-              <img src={`https://picsum.photos/seed/crowd${c.id}/600/300`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
-              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.6),transparent)' }}></div>
-              <div style={{ position: 'absolute', bottom: 14, left: 16, right: 16 }}>
-                <Tag variant={c.category === 'Luttes' ? 'brand' : 'success'}>{c.category}</Tag>
-              </div>
+      {/* HERO avec stats */}
+      <div style={{ background:`linear-gradient(135deg, ${T.hub.crowdfunding} 0%, #BE185D 100%)`, borderRadius:24, padding:'32px 32px 28px', color:'#fff', marginBottom:24, position:'relative', overflow:'hidden' }}>
+        <div style={{ position:'absolute', top:-30, right:-30, fontSize:200, opacity:0.1 }}>💰</div>
+        <div style={{ position:'relative', zIndex:1 }}>
+          <div style={{ fontSize:11, fontWeight:800, letterSpacing:'0.1em', textTransform:'uppercase', opacity:0.9, marginBottom:8 }}>Finance solidaire</div>
+          <h1 style={{ fontFamily:"'Sora',sans-serif", fontSize:30, fontWeight:800, margin:'0 0 10px', lineHeight:1.15 }}>Cagnottes & Collectes</h1>
+          <p style={{ fontSize:14, opacity:0.92, maxWidth:540, margin:'0 0 22px', lineHeight:1.6 }}>Soutiens des luttes, des projets, des caisses de grève en T99CP. Aucune commission, 100 % redistribué·e. Transparence sur l'utilisation des fonds garantie.</p>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:14, marginBottom:18 }}>
+            <div style={{ padding:'14px 16px', background:'rgba(255,255,255,0.15)', borderRadius:12, backdropFilter:'blur(8px)' }}>
+              <div style={{ fontFamily:"'Sora',sans-serif", fontSize:24, fontWeight:800 }}>{stats.raised.toLocaleString('fr-FR')}</div>
+              <div style={{ fontSize:11, opacity:0.85, textTransform:'uppercase', letterSpacing:'0.05em' }}>T99CP collectés</div>
             </div>
-            <div style={{ padding: '20px 22px 24px' }}>
-              <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 16, fontWeight: 700, color: T.text1, margin: '0 0 8px', lineHeight: 1.35 }}>{c.title}</h3>
-              <p style={{ fontSize: 13, color: T.text3, margin: '0 0 16px', lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{c.description}</p>
-              <ProgressBar value={c.raised_t99cp} max={c.goal_t99cp} height={6} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: T.text3, margin: '10px 0 16px', flexWrap: 'wrap', gap: 4 }}>
-                <span><strong style={{ color: T.info, fontSize: 14 }}>{c.raised_t99cp} T99CP</strong> collectés</span>
-                <span>{c.contributors} contributeurs · {c.days_left}j restants</span>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input type="number" value={amount} onChange={e => setAmount(+e.target.value)} min="1" placeholder="Montant" style={{ flex: 1, height: 42, border: `1.5px solid ${T.border}`, borderRadius: 12, padding: '0 14px', fontSize: 14, fontFamily: 'Inter,sans-serif', color: T.text1, background: T.bg, outline: 'none' }} />
-                <Btn variant="blue" size="md" onClick={() => { if (!user) { onAuth(); return; } setPayItem(c); }} icon={ICONS.wallet}>Contribuer</Btn>
-              </div>
+            <div style={{ padding:'14px 16px', background:'rgba(255,255,255,0.15)', borderRadius:12, backdropFilter:'blur(8px)' }}>
+              <div style={{ fontFamily:"'Sora',sans-serif", fontSize:24, fontWeight:800 }}>{stats.contributors.toLocaleString('fr-FR')}</div>
+              <div style={{ fontSize:11, opacity:0.85, textTransform:'uppercase', letterSpacing:'0.05em' }}>contributeur·ices</div>
+            </div>
+            <div style={{ padding:'14px 16px', background:'rgba(255,255,255,0.15)', borderRadius:12, backdropFilter:'blur(8px)' }}>
+              <div style={{ fontFamily:"'Sora',sans-serif", fontSize:24, fontWeight:800 }}>{stats.active}</div>
+              <div style={{ fontSize:11, opacity:0.85, textTransform:'uppercase', letterSpacing:'0.05em' }}>cagnottes actives</div>
             </div>
           </div>
-        ))}
+          <Btn variant="white" size="md" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Lancer ma cagnotte</Btn>
+        </div>
       </div>
+
+      {/* VEDETTES */}
+      {featured.length > 0 && (
+        <div style={{ marginBottom:32 }}>
+          <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:14 }}>
+            <h2 style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, color:T.text1, margin:0, display:'flex', alignItems:'center', gap:8 }}>★ Cagnottes en vedette</h2>
+            <span style={{ fontSize:11, color:T.text3 }}>Sélectionnées par la communauté</span>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(420px, 1fr))', gap:18 }}>
+            {featured.map(c => <CFFeaturedCard key={c.id} c={c} onClick={() => setDetail(c)} />)}
+          </div>
+        </div>
+      )}
+
+      {/* FILTRES */}
+      <div style={{ marginBottom:18, padding:'14px 18px', background:T.surface, borderRadius:14, border:`1px solid ${T.border}`, display:'flex', gap:12, flexWrap:'wrap', alignItems:'center' }}>
+        <div style={{ display:'flex', gap:6, flexWrap:'wrap', flex:1, minWidth:240 }}>
+          {CF_CATEGORIES.map(c => (
+            <button key={c} onClick={() => setCat(c)} style={{ padding:'7px 14px', borderRadius:9999, border:`1px solid ${cat===c ? T.hub.crowdfunding : T.border}`, background: cat===c ? T.hub.crowdfunding : T.surface, color: cat===c ? '#fff' : T.text2, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Inter,sans-serif', transition:'all 0.18s' }}>{c}</button>
+          ))}
+        </div>
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Rechercher…" style={{ height:36, padding:'0 12px', border:`1px solid ${T.border}`, borderRadius:9999, fontSize:13, color:T.text1, background:T.surface2, outline:'none', fontFamily:'Inter,sans-serif', width:200 }} />
+        <select value={sort} onChange={e => setSort(e.target.value)} style={{ height:36, padding:'0 12px', border:`1px solid ${T.border}`, borderRadius:9999, fontSize:12, color:T.text2, background:T.surface2, outline:'none', cursor:'pointer', fontFamily:'Inter,sans-serif' }}>
+          {CF_SORTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
+      </div>
+
+      {/* GRILLE */}
+      {filtered.length === 0 ? (
+        <div style={{ padding:'60px 20px', textAlign:'center', color:T.text3, background:T.surface, borderRadius:16, border:`1px dashed ${T.border}` }}>
+          <div style={{ fontSize:40, marginBottom:10 }}>🔍</div>
+          <div style={{ fontSize:14 }}>Aucune cagnotte ne correspond à ces critères.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 18 }}>
+          {filtered.map(c => <CFCard key={c.id} c={c} onClick={() => setDetail(c)} adminMode={adminMode} onEdit={() => setEditItem(c)} />)}
+        </div>
+      )}
+
+      {/* MODALES */}
+      <CFCreateModal open={createOpen} onClose={() => setCreateOpen(false)} user={user} onSubmit={item => setData(d => [item, ...d])} />
+      {detail && <CFDetailModal cagnotte={detail} user={user} onClose={() => setDetail(null)} onContribute={handleContribute} />}
       {payItem && <PayModal open onClose={() => setPayItem(null)} amount={amount} item={payItem.title} description={`Contribution solidaire · ${payItem.organizer}`} seller={payItem.organizer} />}
       {editItem && <EditModal open onClose={() => setEditItem(null)} title="Cagnotte" data={editItem} onSave={f => { setData(d => d.map(c => c.id === editItem.id ? { ...c, ...f } : c)); setEditItem(null); }} fields={[{ key: 'title', label: 'Titre' }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'goal_t99cp', label: 'Objectif T99CP', type: 'number' }, { key: 'days_left', label: 'Jours restants', type: 'number' }]} />}
     </PageContainer>
