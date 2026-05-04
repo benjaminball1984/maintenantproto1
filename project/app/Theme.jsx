@@ -494,3 +494,212 @@ window.EmptyState = EmptyState;
 
 // Expose all
 Object.assign(window, { T, ICONS, Btn, Card, Tag, ProgressBar, TokenDisplay, Stars, Avatar, Photo, Modal, AdminBtn, SearchInput, FilterTabs, SectionTitle, PageContainer, EmptyState });
+
+// ════════════════════════════════════════════════════════════
+//   useLocalStore — hook de persistance localStorage
+//   Utilisé pour stocker les contributions de l'utilisateur·rice
+//   (logements, articles, sondages, etc. créés depuis l'app).
+// ════════════════════════════════════════════════════════════
+function useLocalStore(key, initial = []) {
+  const [value, setValue] = useState(() => {
+    try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : initial; } catch { return initial; }
+  });
+  const update = useCallback((next) => {
+    const v = typeof next === 'function' ? next(value) : next;
+    setValue(v);
+    try { localStorage.setItem(key, JSON.stringify(v)); } catch {}
+  }, [key, value]);
+  return [value, update];
+}
+window.useLocalStore = useLocalStore;
+
+// Helper : ajouter une création utilisateur dans un store par domaine
+// Utilisation : addUserCreation('housing', { title, ... }) → renvoie l'objet stocké
+window.addUserCreation = function(domain, data) {
+  const key = `mn_user_${domain}`;
+  let arr = [];
+  try { arr = JSON.parse(localStorage.getItem(key) || '[]'); } catch {}
+  const item = { id: `u_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, _userCreated: true, _createdAt: Date.now(), ...data };
+  arr = [item, ...arr];
+  try { localStorage.setItem(key, JSON.stringify(arr)); } catch {}
+  return item;
+};
+
+window.getUserCreations = function(domain) {
+  try { return JSON.parse(localStorage.getItem(`mn_user_${domain}`) || '[]'); } catch { return []; }
+};
+
+window.deleteUserCreation = function(domain, id) {
+  try {
+    const key = `mn_user_${domain}`;
+    const arr = JSON.parse(localStorage.getItem(key) || '[]').filter(x => x.id !== id);
+    localStorage.setItem(key, JSON.stringify(arr));
+    return arr;
+  } catch { return []; }
+};
+
+// ════════════════════════════════════════════════════════════
+//   Toast — notification non-bloquante en bas d'écran
+//   Remplace les alert() de "succès" par une bannière temporaire.
+// ════════════════════════════════════════════════════════════
+function ToastProvider({ children }) {
+  const [toasts, setToasts] = useState([]);
+  const remove = id => setToasts(ts => ts.filter(t => t.id !== id));
+  const push = (msg, opts = {}) => {
+    const id = Date.now() + Math.random();
+    setToasts(ts => [...ts, { id, msg, type: opts.type || 'success', icon: opts.icon }]);
+    setTimeout(() => remove(id), opts.duration || 3500);
+  };
+  // Expose globalement
+  useEffect(() => { window.showToast = push; return () => { delete window.showToast; }; }, []);
+  return (
+    <>
+      {children}
+      <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', zIndex:9999, display:'flex', flexDirection:'column', gap:8, pointerEvents:'none', maxWidth:'92vw' }}>
+        {toasts.map(t => {
+          const colors = {
+            success: { bg:'#16A34A', icon:'✓' },
+            info:    { bg:T.info, icon:'ℹ' },
+            error:   { bg:'#DC2626', icon:'✕' },
+            warn:    { bg:T.warning, icon:'⚠' },
+          };
+          const c = colors[t.type] || colors.success;
+          return (
+            <div key={t.id} onClick={() => remove(t.id)}
+              style={{
+                pointerEvents:'auto',
+                background:c.bg, color:'#fff',
+                padding:'12px 20px', borderRadius:12,
+                fontSize:14, fontWeight:600,
+                fontFamily:'Inter,sans-serif', letterSpacing:'-0.01em',
+                boxShadow:'0 12px 36px rgba(0,0,0,0.18)',
+                display:'inline-flex', alignItems:'center', gap:10,
+                animation:'fadeUp 0.3s cubic-bezier(0.4,0,0.2,1)',
+                cursor:'pointer', minWidth:200,
+              }}>
+              <span style={{ fontSize:16 }}>{t.icon || c.icon}</span>
+              <span style={{ flex:1 }}>{t.msg}</span>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+window.ToastProvider = ToastProvider;
+
+// ════════════════════════════════════════════════════════════
+//   CreateModal — formulaire de création générique
+//   Configurable : title, fields (id, label, type, options...), onSave
+//   Sauvegarde automatiquement dans localStorage via addUserCreation().
+// ════════════════════════════════════════════════════════════
+//   field = {
+//     id, label, type ('text'|'textarea'|'select'|'number'|'date'|'photo'),
+//     options (pour select), placeholder, required, hint
+//   }
+function CreateModal({ open, onClose, title, subtitle, fields = [], submitLabel = 'Publier', onSubmit, domain, defaultPhoto, color }) {
+  const [form, setForm] = useState({});
+  const [errors, setErrors] = useState({});
+  const c = color || T.brand;
+
+  useEffect(() => { if (open) { setForm({}); setErrors({}); } }, [open]);
+
+  const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); if (errors[k]) setErrors(e => ({ ...e, [k]: null })); };
+
+  const validate = () => {
+    const errs = {};
+    fields.forEach(f => {
+      if (f.required && !String(form[f.id] || '').trim()) errs[f.id] = 'Champ requis';
+      if (f.type === 'number' && form[f.id] && isNaN(+form[f.id])) errs[f.id] = 'Doit être un nombre';
+    });
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const submit = () => {
+    if (!validate()) return;
+    const data = {};
+    fields.forEach(f => { data[f.id] = form[f.id] !== undefined ? form[f.id] : (f.default || ''); });
+    if (!data.image && defaultPhoto) data.image = defaultPhoto;
+    if (domain) {
+      const stored = window.addUserCreation(domain, data);
+      if (typeof onSubmit === 'function') onSubmit(stored);
+    } else if (typeof onSubmit === 'function') {
+      onSubmit(data);
+    }
+    if (window.showToast) window.showToast(`${title} : publié·e !`, { type: 'success', icon: '🎉' });
+    onClose();
+  };
+
+  const inputStyle = (err) => ({
+    width:'100%', minHeight:44, border:`1.5px solid ${err ? '#DC2626' : T.border}`, borderRadius:12,
+    padding:'10px 14px', fontSize:14, fontFamily:'Inter,sans-serif', color:T.text1,
+    background:T.bg, outline:'none', boxSizing:'border-box', transition:'border-color 0.15s',
+  });
+
+  return (
+    <Modal open={open} onClose={onClose} title={title} width={560}>
+      {subtitle && <p style={{ fontSize:13, color:T.text3, margin:'-4px 0 18px', lineHeight:1.55 }}>{subtitle}</p>}
+      <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+        {fields.map(f => (
+          <div key={f.id}>
+            <label style={{ fontSize:11, fontWeight:700, color:T.text2, display:'block', marginBottom:5, textTransform:'uppercase', letterSpacing:'0.06em' }}>
+              {f.label}{f.required && <span style={{ color:'#DC2626', marginLeft:4 }}>*</span>}
+            </label>
+            {f.type === 'textarea' ? (
+              <textarea value={form[f.id] || ''} onChange={e => set(f.id, e.target.value)} rows={f.rows || 3} placeholder={f.placeholder || ''}
+                style={{ ...inputStyle(errors[f.id]), height:'auto', padding:'12px 14px', resize:'vertical', lineHeight:1.5, minHeight:f.rows ? f.rows * 24 : 80 }}
+                onFocus={e => !errors[f.id] && (e.target.style.borderColor = c)} onBlur={e => !errors[f.id] && (e.target.style.borderColor = T.border)} />
+            ) : f.type === 'select' ? (
+              <select value={form[f.id] || ''} onChange={e => set(f.id, e.target.value)} style={inputStyle(errors[f.id])}
+                onFocus={e => !errors[f.id] && (e.target.style.borderColor = c)} onBlur={e => !errors[f.id] && (e.target.style.borderColor = T.border)}>
+                <option value="">— Choisir —</option>
+                {(f.options || []).map(o => <option key={typeof o === 'string' ? o : o.value} value={typeof o === 'string' ? o : o.value}>{typeof o === 'string' ? o : o.label}</option>)}
+              </select>
+            ) : f.type === 'photo' ? (
+              <input type="text" value={form[f.id] || ''} onChange={e => set(f.id, e.target.value)} placeholder="https://images.unsplash.com/..."
+                style={inputStyle(errors[f.id])}
+                onFocus={e => !errors[f.id] && (e.target.style.borderColor = c)} onBlur={e => !errors[f.id] && (e.target.style.borderColor = T.border)} />
+            ) : (
+              <input type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
+                value={form[f.id] || ''} onChange={e => set(f.id, e.target.value)}
+                placeholder={f.placeholder || ''} min={f.min} max={f.max}
+                style={inputStyle(errors[f.id])}
+                onFocus={e => !errors[f.id] && (e.target.style.borderColor = c)} onBlur={e => !errors[f.id] && (e.target.style.borderColor = T.border)} />
+            )}
+            {errors[f.id] && <div style={{ fontSize:11, color:'#DC2626', marginTop:4 }}>{errors[f.id]}</div>}
+            {!errors[f.id] && f.hint && <div style={{ fontSize:11, color:T.text4, marginTop:4 }}>{f.hint}</div>}
+          </div>
+        ))}
+
+        <div style={{ background:T.surface2, borderRadius:10, padding:'10px 14px', fontSize:11, color:T.text3, lineHeight:1.5 }}>
+          <strong style={{ color:T.text2 }}>Mode prototype :</strong> ta contribution sera enregistrée dans le navigateur (localStorage) et apparaîtra dans la liste avec un badge <strong>« Vous »</strong>. Pas de back-office en prod ici, mais ça résiste à un rechargement de page.
+        </div>
+
+        <div style={{ display:'flex', gap:8, marginTop:6 }}>
+          <Btn variant="gradient" full size="lg" onClick={submit} icon={ICONS.check}>{submitLabel}</Btn>
+          <Btn variant="ghost" size="lg" onClick={onClose}>Annuler</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+window.CreateModal = CreateModal;
+
+// ── Badge "Vous" pour les créations de l'utilisateur·rice ───
+function UserBadge({ style = {} }) {
+  return (
+    <span style={{
+      display:'inline-flex', alignItems:'center', gap:4,
+      padding:'2px 8px', borderRadius:9999,
+      background:'linear-gradient(90deg, #7C3AED, #E11D74)',
+      color:'#fff', fontSize:10, fontWeight:800,
+      letterSpacing:'0.06em', textTransform:'uppercase',
+      boxShadow:'0 2px 6px rgba(225,29,116,0.3)',
+      ...style,
+    }}>
+      ✨ Vous
+    </span>
+  );
+}
+window.UserBadge = UserBadge;

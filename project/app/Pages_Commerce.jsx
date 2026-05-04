@@ -9,8 +9,9 @@ function MPCard({ item, onClick, adminMode, onEdit }) {
       onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 12px 36px rgba(0,0,0,0.09)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
       {adminMode && <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 3 }} onClick={e => { e.stopPropagation(); onEdit(); }}><AdminBtn onEdit={onEdit} /></div>}
+      {item._userCreated && <div style={{ position:'absolute', top: 8, left: adminMode ? 96 : 8, zIndex: 3 }}><window.UserBadge /></div>}
       <div style={{ position: 'relative', height: 180, overflow: 'hidden', background: T.surface2 }}>
-        <img src={`https://picsum.photos/seed/mp${item.id}/400/300`} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s' }} onMouseEnter={e => e.target.style.transform = 'scale(1.06)'} onMouseLeave={e => e.target.style.transform = 'scale(1)'} onError={e => e.target.style.display = 'none'} />
+        <img src={item.images?.[0] || `https://picsum.photos/seed/mp${item.id}/400/300`} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s' }} onMouseEnter={e => e.target.style.transform = 'scale(1.06)'} onMouseLeave={e => e.target.style.transform = 'scale(1)'} onError={e => e.target.style.display = 'none'} />
         <button onClick={e => { e.stopPropagation(); setSaved(!saved); }} style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(4px)', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: saved ? T.brand : T.text3 }}>{saved ? ICONS.heartFill : ICONS.heart}</button>
         <Tag variant={item.condition === 'Excellent' ? 'success' : item.condition === 'Très bon' ? 'info' : 'default'} size="xs" style={{ position: 'absolute', bottom: 10, left: 10 }}>{item.condition}</Tag>
       </div>
@@ -68,7 +69,7 @@ function MPDetail({ item, onBack, user, onAuth, adminMode, onSave }) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <Btn full variant="gradient" size="lg" onClick={() => user ? setPayOpen(true) : onAuth()} icon={ICONS.wallet}>Acheter · <TokenDisplay amount={data.price_t99cp} size="sm" showLabel={false} /> T99CP</Btn>
-              <Btn full variant="outline" size="md" onClick={() => user ? alert('Message envoyé !') : onAuth()} icon={ICONS.chat}>Contacter le vendeur</Btn>
+              <Btn full variant="outline" size="md" onClick={() => user ? window.showToast?.(`Message envoyé à ${item.seller} — réponse par messagerie`, { type:'success', icon:'✉️' }) : onAuth()} icon={ICONS.chat}>Contacter le vendeur</Btn>
               <p style={{ fontSize: 11, color: T.text4, textAlign: 'center', margin: 0 }}>+ frais de port Polygon (Gas fees) selon poids et destination</p>
             </div>
           </div>
@@ -87,12 +88,13 @@ function MPDetail({ item, onBack, user, onAuth, adminMode, onSave }) {
 }
 
 function MarketplacePage({ user, adminMode, onAuth }) {
-  const [data, setData] = useState(AppData.marketplace);
+  const [data, setData] = useState([...window.getUserCreations('marketplace'), ...AppData.marketplace]);
   const [detail, setDetail] = useState(null);
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState('Toutes');
   const [sort, setSort] = useState('recent');
   const [editItem, setEditItem] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const cats = ['Toutes', ...new Set(data.map(i => i.category))];
   let filtered = data.filter(i => (cat === 'Toutes' || i.category === cat) && (!search || i.title.toLowerCase().includes(search.toLowerCase())));
   if (sort === 'asc') filtered = [...filtered].sort((a, b) => a.price_t99cp - b.price_t99cp);
@@ -100,7 +102,21 @@ function MarketplacePage({ user, adminMode, onAuth }) {
   if (detail) return <MPDetail item={detail} onBack={() => setDetail(null)} user={user} onAuth={onAuth} adminMode={adminMode} onSave={u => setData(d => d.map(i => i.id === u.id ? u : i))} />;
   return (
     <PageContainer>
-      <SectionTitle label="Commerce solidaire" title="Marketplace" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? alert('Vendre') : onAuth()}>Vendre un article</Btn>} />
+      <SectionTitle label="Commerce solidaire" title="Marketplace" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Vendre un article</Btn>} />
+      <CreateModal open={createOpen} onClose={() => setCreateOpen(false)} title="Vendre un article"
+        subtitle="Publie une annonce. Le prix en T99CP est environ 45% en dessous du prix euro habituel (1 T99CP = 1 €)."
+        domain="marketplace" color={T.hub.marketplace}
+        defaultPhoto="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&q=70"
+        fields={[
+          { id:'title',         label:'Titre de l\'article', required:true, placeholder:"Veste en jean Levi's taille M" },
+          { id:'category',      label:'Catégorie', type:'select', required:true, options:['Vêtements','Mobilier','High-tech','Livres','Sport','Cuisine','Jouets','Autre'] },
+          { id:'condition',     label:'État', type:'select', required:true, options:['Neuf','Excellent','Très bon','Bon','Moyen'] },
+          { id:'price_t99cp',   label:'Prix en T99CP', type:'number', required:true, placeholder:'12', hint:'1 T99CP ≈ 1 €. Frais de port en € si paiement €, en gas Polygon si T99CP.' },
+          { id:'description',   label:'Description', type:'textarea', rows:3, required:true, placeholder:"Acheté il y a 2 ans, peu porté..." },
+          { id:'image',         label:'URL de la photo (optionnel)', type:'photo' },
+        ]}
+        onSubmit={item => { const enriched = { ...item, seller: user?.name || 'Vous', location: user?.location || 'France', images: [item.image].filter(Boolean), price_t99cp: +item.price_t99cp }; setData(d => [enriched, ...d]); }}
+      />
       <div style={{ display: 'flex', gap: 10, marginBottom: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 220 }}><SearchInput value={search} onChange={setSearch} placeholder="Rechercher un article..." /></div>
         <select value={sort} onChange={e => setSort(e.target.value)} style={{ height: 48, border: `1.5px solid ${T.border}`, borderRadius: 14, padding: '0 16px', fontSize: 14, fontFamily: 'Inter,sans-serif', color: T.text2, background: T.surface, outline: 'none', cursor: 'pointer' }}>
@@ -189,11 +205,12 @@ function SELDetail({ s, onBack, user, onAuth, adminMode, onSave }) {
 }
 
 function SELPage({ user, adminMode, onAuth }) {
-  const [data, setData] = useState(AppData.sel);
+  const [data, setData] = useState([...window.getUserCreations('sel'), ...AppData.sel]);
   const [detail, setDetail] = useState(null);
   const [search, setSearch] = useState('');
   const [cat, sCat] = useState('Toutes');
   const [editItem, setEditItem] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const filtered = data.filter(s => (cat === 'Toutes' || s.category === cat) && (!search || s.service.toLowerCase().includes(search.toLowerCase()) || s.provider.toLowerCase().includes(search.toLowerCase())));
   if (detail) return <SELDetail s={detail} onBack={() => setDetail(null)} user={user} onAuth={onAuth} adminMode={adminMode} onSave={u => setData(d => d.map(s => s.id === u.id ? u : s))} />;
   return (
@@ -204,8 +221,22 @@ function SELPage({ user, adminMode, onAuth }) {
           <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(18px,3vw,26px)', fontWeight: 800, color: '#fff', margin: '0 0 8px', letterSpacing: '-0.03em' }}>1 minute = 1 T99CP</h2>
           <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)', margin: 0 }}>Échangez vos compétences sans argent. Yoga, jardinage, plomberie, cours... chaque minute a la même valeur.</p>
         </div>
-        <Btn variant="white" size="md" onClick={() => user ? alert('Proposer') : onAuth()} icon={ICONS.plus}>Proposer un service</Btn>
+        <Btn variant="white" size="md" onClick={() => user ? setCreateOpen(true) : onAuth()} icon={ICONS.plus}>Proposer un service</Btn>
       </div>
+      <CreateModal open={createOpen} onClose={() => setCreateOpen(false)} title="Proposer un service SEL"
+        subtitle="1 minute de service = 1 T99CP. Toutes les heures se valent."
+        domain="sel" color={T.hub.sel}
+        defaultPhoto="https://images.unsplash.com/photo-1521791136064-7986c2920216?w=600&q=70"
+        fields={[
+          { id:'service',      label:'Nom du service', required:true, placeholder:"Cours de guitare débutant" },
+          { id:'category',     label:'Catégorie', type:'select', required:true, options:Object.keys(SEL_CATS) },
+          { id:'duration_min', label:'Durée d\'une séance (en minutes)', type:'number', required:true, placeholder:'60', hint:'1 séance de 60 min = 60 T99CP' },
+          { id:'location',     label:'Lieu', required:true, placeholder:"Chez moi · Paris 11e · Visio" },
+          { id:'description',  label:'Description', type:'textarea', rows:3, required:true, placeholder:"Je joue depuis 15 ans, j'enseigne aux débutant·es..." },
+          { id:'available',    label:'Disponibilité', placeholder:"Soirs en semaine · weekend" },
+        ]}
+        onSubmit={item => { const enriched = { ...item, provider: user?.name || 'Vous', rating: 0, reviews_count: 0, duration_min: +item.duration_min }; setData(d => [enriched, ...d]); }}
+      />
       <SearchInput value={search} onChange={setSearch} placeholder="Yoga, plomberie, anglais, guitare..." />
       <FilterTabs options={['Toutes', ...Object.keys(SEL_CATS)]} active={cat} onChange={sCat} />
       {filtered.length === 0 ? <EmptyState title="Aucun service" desc="Essayez d'autres mots-clés." /> :
@@ -220,13 +251,26 @@ window.SELPage = SELPage;
 
 // ── CROWDFUNDING v2 ────────────────────────────────────────
 function CrowdfundingPage({ user, adminMode, onAuth }) {
-  const [data, setData] = useState(AppData.crowdfunding);
+  const [data, setData] = useState([...window.getUserCreations('crowdfunding'), ...AppData.crowdfunding]);
   const [payItem, setPayItem] = useState(null);
   const [amount, setAmount] = useState(10);
   const [editItem, setEditItem] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
   return (
     <PageContainer>
-      <SectionTitle label="Finance solidaire" title="Cagnottes & Collectes" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? alert('Créer') : onAuth()}>Créer une cagnotte</Btn>} />
+      <SectionTitle label="Finance solidaire" title="Cagnottes & Collectes" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Créer une cagnotte</Btn>} />
+      <CreateModal open={createOpen} onClose={() => setCreateOpen(false)} title="Créer une cagnotte solidaire"
+        subtitle="Lance une collecte pour soutenir une lutte, un projet, une caisse de grève. Paiement en T99CP."
+        domain="crowdfunding" color={T.hub.crowdfunding}
+        fields={[
+          { id:'title',         label:'Titre de la cagnotte', required:true, placeholder:"Caisse de grève cheminot·es PACA" },
+          { id:'category',      label:'Catégorie', type:'select', required:true, options:['Solidaires','Luttes','Participatif','Grandes Caisses'] },
+          { id:'goal_t99cp',    label:'Objectif (en T99CP)', type:'number', required:true, placeholder:'5000' },
+          { id:'days_left',     label:'Durée de la collecte (en jours)', type:'number', required:true, placeholder:'30' },
+          { id:'description',   label:'Présente ta cause', type:'textarea', rows:4, required:true, placeholder:"Pourquoi cette cagnotte ? À quoi servira l'argent ?" },
+        ]}
+        onSubmit={item => { const enriched = { ...item, organizer: user?.name || 'Vous', raised_t99cp: 0, contributors: 0, featured: false, goal_t99cp: +item.goal_t99cp, days_left: +item.days_left }; setData(d => [enriched, ...d]); }}
+      />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 24 }}>
         {data.map(c => (
           <div key={c.id} style={{ background: T.surface, borderRadius: 20, border: `1px solid ${T.border}`, overflow: 'hidden', position: 'relative', transition: 'all 0.22s' }}
@@ -265,16 +309,30 @@ window.CrowdfundingPage = CrowdfundingPage;
 
 // ── GARDEN v2 ─────────────────────────────────────────────
 function GardenPage({ user, adminMode, onAuth }) {
-  const [data, setData] = useState(AppData.garden);
+  const [data, setData] = useState([...window.getUserCreations('garden'), ...AppData.garden]);
   const [search, setSearch] = useState('');
   const [type, setType] = useState('Tous');
   const [editItem, setEditItem] = useState(null);
   const [payItem, setPayItem] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const types = ['Tous', 'Légume', 'Fruit', 'Plant', 'Herbe', 'Œufs', 'Autre'];
   const filtered = data.filter(i => (type === 'Tous' || i.type === type) && (!search || i.item.toLowerCase().includes(search.toLowerCase())));
   return (
     <PageContainer>
-      <SectionTitle label="Partage" title="Surplus de Jardin" action={<Btn variant="success" size="sm" icon={ICONS.plus} onClick={() => user ? alert('Proposer') : onAuth()}>Proposer un surplus</Btn>} />
+      <SectionTitle label="Partage" title="Surplus de Jardin" action={<Btn variant="success" size="sm" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Proposer un surplus</Btn>} />
+      <CreateModal open={createOpen} onClose={() => setCreateOpen(false)} title="Proposer un surplus de jardin"
+        subtitle="Tomates, miel, plants, œufs... partage tes surplus avec ton voisinage. Gratuit ou en T99CP."
+        domain="garden" color={T.hub.garden}
+        fields={[
+          { id:'item',         label:'Nom du surplus', required:true, placeholder:"Tomates cerises bio" },
+          { id:'type',         label:'Type', type:'select', required:true, options:types.slice(1) },
+          { id:'quantity',     label:'Quantité', required:true, placeholder:"2 kg · 6 bouquets · 1 caisse" },
+          { id:'location',     label:'Lieu de récupération', required:true, placeholder:"Lyon 7e · gare TGV" },
+          { id:'price_t99cp',  label:'Prix en T99CP (0 = gratuit)', type:'number', required:true, placeholder:'0' },
+          { id:'description',  label:'Description', type:'textarea', rows:2, placeholder:"Ramassées ce matin, à emporter avant samedi..." },
+        ]}
+        onSubmit={item => { const enriched = { ...item, giver: user?.name || 'Vous', free: +item.price_t99cp === 0, price_t99cp: +item.price_t99cp }; setData(d => [enriched, ...d]); }}
+      />
       <SearchInput value={search} onChange={setSearch} placeholder="Tomates, courgettes, miel..." />
       <FilterTabs options={types} active={type} onChange={setType} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
@@ -282,7 +340,7 @@ function GardenPage({ user, adminMode, onAuth }) {
           <div key={i.id} style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden', position: 'relative', transition: 'all 0.2s', cursor: 'pointer' }}
             onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 10px 30px rgba(22,163,74,0.1)'; e.currentTarget.style.borderColor = T.success; e.currentTarget.style.transform = 'translateY(-3px)'; }}
             onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = 'none'; }}
-            onClick={() => { if (!i.free) { if (!user) { onAuth(); } else setPayItem(i); } else { alert(`Contacter ${i.giver} pour récupérer : ${i.item}`); } }}>
+            onClick={() => { if (!i.free) { if (!user) { onAuth(); } else setPayItem(i); } else { window.showToast?.(`Demande envoyée à ${i.giver} pour : ${i.item}`, { type:'success', icon:'🌱' }); } }}>
             {adminMode && <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 3 }} onClick={e => { e.stopPropagation(); setEditItem(i); }}><AdminBtn onEdit={() => setEditItem(i)} /></div>}
             <div style={{ height: 130, position: 'relative', overflow: 'hidden' }}>
               <img src={`https://picsum.photos/seed/garden${i.id}/400/250`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; e.target.parentElement.style.background = 'linear-gradient(135deg,#14532d,#166534)'; }} />
@@ -305,18 +363,33 @@ window.GardenPage = GardenPage;
 
 // ── LENDING v2 ────────────────────────────────────────────
 function LendingPage({ user, adminMode, onAuth }) {
-  const [data, setData] = useState(AppData.lending);
+  const [data, setData] = useState([...window.getUserCreations('lending'), ...AppData.lending]);
   const [detail, setDetail] = useState(null);
   const [search, setSearch] = useState('');
   const [cat, sCat] = useState('Toutes');
   const [editItem, setEditItem] = useState(null);
   const [payOpen, setPayOpen] = useState(false);
   const [days, setDays] = useState(2);
+  const [createOpen, setCreateOpen] = useState(false);
   const cats = ['Toutes', ...new Set(data.map(i => i.category))];
   const filtered = data.filter(i => (cat === 'Toutes' || i.category === cat) && (!search || i.name.toLowerCase().includes(search.toLowerCase())));
   return (
     <PageContainer>
-      <SectionTitle label="Entraide" title="Ki Prête Tout" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? alert('Proposer') : onAuth()}>Proposer un objet</Btn>} />
+      <SectionTitle label="Entraide" title="Ki Prête Tout" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Proposer un objet</Btn>} />
+      <CreateModal open={createOpen} onClose={() => setCreateOpen(false)} title="Proposer un objet à prêter"
+        subtitle="Perceuse, raclette, jeux, instruments... prête ce que tu n'utilises pas tout le temps."
+        domain="lending" color="#A21CAF"
+        defaultPhoto="https://images.unsplash.com/photo-1530124566582-a618bc2615dc?w=600&q=70"
+        fields={[
+          { id:'name',         label:'Nom de l\'objet', required:true, placeholder:"Perceuse Bosch sans-fil 18V" },
+          { id:'category',     label:'Catégorie', type:'select', required:true, options:['Bricolage','Jardinage','Cuisine','Loisirs','Multimédia','Sport','Famille','Autre'] },
+          { id:'price_per_day', label:'Prix par jour (en T99CP)', type:'number', required:true, placeholder:'5' },
+          { id:'deposit_t99cp', label:'Caution (en T99CP)', type:'number', required:true, placeholder:'50', hint:'Restituée à la fin du prêt' },
+          { id:'location',     label:'Lieu de récupération', required:true, placeholder:"Marseille 6e" },
+          { id:'description',  label:'Description', type:'textarea', rows:3, placeholder:"État, accessoires fournis, conditions d'utilisation..." },
+        ]}
+        onSubmit={item => { const enriched = { ...item, owner: user?.name || 'Vous', available: true, price_per_day: +item.price_per_day, deposit_t99cp: +item.deposit_t99cp }; setData(d => [enriched, ...d]); }}
+      />
       <SearchInput value={search} onChange={setSearch} placeholder="Perceuse, raclette, vélo, piano..." />
       <FilterTabs options={cats} active={cat} onChange={sCat} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
@@ -376,12 +449,14 @@ window.LendingPage = LendingPage;
 // ── CARPOOLING v2 ──────────────────────────────────────────
 function CarpoolingPage({ user, adminMode, onAuth }) {
   const [tab, setTab] = useState('offers');
-  const [offers, setOffers] = useState(AppData.carpooling_offers);
-  const [requests] = useState(AppData.carpooling_requests);
+  const [offers, setOffers] = useState([...window.getUserCreations('carpool_offers'), ...AppData.carpooling_offers]);
+  const [requests, setRequests] = useState([...window.getUserCreations('carpool_requests'), ...AppData.carpooling_requests]);
   const [detail, setDetail] = useState(null);
   const [search, setSearch] = useState('');
   const [payOpen, setPayOpen] = useState(false);
   const [editItem, setEditItem] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
 
   const filterTrips = arr => !search ? arr : arr.filter(t => t.from.toLowerCase().includes(search.toLowerCase()) || t.to.toLowerCase().includes(search.toLowerCase()));
 
@@ -426,7 +501,33 @@ function CarpoolingPage({ user, adminMode, onAuth }) {
 
   return (
     <PageContainer>
-      <SectionTitle label="Mobilité" title="Covoiturage Solidaire" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? alert('Proposer') : onAuth()}>Proposer un trajet</Btn>} />
+      <SectionTitle label="Mobilité" title="Covoiturage Solidaire" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? (tab === 'offers' ? setCreateOpen(true) : setRequestOpen(true)) : onAuth()}>{tab === 'offers' ? 'Proposer un trajet' : 'Demander un trajet'}</Btn>} />
+      <CreateModal open={createOpen} onClose={() => setCreateOpen(false)} title="Proposer un trajet"
+        subtitle="Tu pars en voiture ? Propose les places libres aux militant·es du réseau."
+        domain="carpool_offers" color={T.hub.carpooling}
+        fields={[
+          { id:'from',         label:'Départ', required:true, placeholder:"Lyon" },
+          { id:'to',           label:'Arrivée', required:true, placeholder:"Marseille" },
+          { id:'date',         label:'Date du trajet', type:'date', required:true },
+          { id:'time',         label:'Heure de départ', required:true, placeholder:"08:30" },
+          { id:'seats',        label:'Places disponibles', type:'number', required:true, placeholder:'3' },
+          { id:'price_t99cp',  label:'Prix par personne (en T99CP)', type:'number', required:true, placeholder:'15' },
+          { id:'description',  label:'Précisions (optionnel)', type:'textarea', rows:2, placeholder:"Bagages OK · Animal accepté · Non-fumeur" },
+        ]}
+        onSubmit={item => { const enriched = { ...item, driver: user?.name || 'Vous', rating: 0, seats: +item.seats, price_t99cp: +item.price_t99cp }; setOffers(d => [enriched, ...d]); }}
+      />
+      <CreateModal open={requestOpen} onClose={() => setRequestOpen(false)} title="Demander un trajet"
+        subtitle="Tu cherches à te déplacer ? Poste ta demande, des conducteur·rices te répondront."
+        domain="carpool_requests" color={T.hub.carpooling}
+        fields={[
+          { id:'from',         label:'Départ', required:true, placeholder:"Bordeaux" },
+          { id:'to',           label:'Arrivée', required:true, placeholder:"Toulouse" },
+          { id:'date',         label:'Date souhaitée', type:'date', required:true },
+          { id:'flexibility',  label:'Flexibilité', type:'select', options:['Date fixe','+/- 1 jour','+/- 3 jours','Cette semaine'] },
+          { id:'description',  label:'Précisions', type:'textarea', rows:2, placeholder:"Avec un sac de randonnée. Pour aller à la mobilisation du 15." },
+        ]}
+        onSubmit={item => { const enriched = { ...item, requester: user?.name || 'Vous' }; setRequests(d => [enriched, ...d]); }}
+      />
       <SearchInput value={search} onChange={setSearch} placeholder="De... vers... (ex: Paris, Lyon)" />
       <div style={{ display: 'flex', gap: 0, background: T.surface2, borderRadius: 14, padding: 4, marginBottom: 24 }}>
         {[['offers', 'Offres de trajet'], ['requests', 'Demandes de trajet']].map(([id, label]) => (
@@ -454,7 +555,7 @@ function CarpoolingPage({ user, adminMode, onAuth }) {
             {detail.isOffer ? (
               <Btn full variant="gradient" size="lg" onClick={() => { if (!user) { onAuth(); } else { setPayOpen(true); } }} icon={ICONS.wallet}>Réserver · {detail.price_t99cp} T99CP</Btn>
             ) : (
-              <Btn full variant="gradient" size="lg" onClick={() => user ? alert('Message envoyé !') : onAuth()} icon={ICONS.chat}>Proposer mon trajet</Btn>
+              <Btn full variant="gradient" size="lg" onClick={() => user ? window.showToast?.(`Message envoyé à ${detail.requester || 'la personne'} — réponse par messagerie`, { type:'success', icon:'✉️' }) : onAuth()} icon={ICONS.chat}>Proposer mon trajet</Btn>
             )}
           </div>
           <PayModal open={payOpen} onClose={() => setPayOpen(false)} amount={detail?.price_t99cp || 0} item={`${detail?.from} → ${detail?.to}`} description={`Covoiturage avec ${detail?.driver}`} seller={detail?.driver} />

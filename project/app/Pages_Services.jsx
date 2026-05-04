@@ -259,8 +259,9 @@ function HousingCard({ h, onClick, adminMode, onEdit }) {
       onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 20px 60px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-5px)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
       {adminMode && <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 3 }} onClick={e => { e.stopPropagation(); onEdit(); }}><AdminBtn onEdit={onEdit} /></div>}
+      {h._userCreated && <div style={{ position:'absolute', top: 12, left: h.solidarity ? 110 : 12, zIndex: 3 }}><window.UserBadge /></div>}
       <div style={{ position: 'relative', height: 200, overflow: 'hidden' }}>
-        <img src={`https://images.unsplash.com/photo-${['1522708323590-d24dbb6b0267','1502672260266-1c1ef2d93688','1493809842364-78817add7ffb','1571939228382-b2f2b585ce15','1560448204-e02f11c3d0e2','1556909114-f6e7ad7d3136','1512917774080-9991f1c4c750','1574362848149-11496d93a7c7','1582063289852-62e3ba2747f8','1493556134231-aa8efa1b93ce'][h.id-1]}?w=600&q=70`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s' }} onMouseEnter={e => e.target.style.transform = 'scale(1.05)'} onMouseLeave={e => e.target.style.transform = 'scale(1)'} onError={e => { e.target.src = `https://picsum.photos/seed/house${h.id}/600/300`; }} />
+        <img src={h.images?.[0] || `https://images.unsplash.com/photo-${['1522708323590-d24dbb6b0267','1502672260266-1c1ef2d93688','1493809842364-78817add7ffb','1571939228382-b2f2b585ce15','1560448204-e02f11c3d0e2','1556909114-f6e7ad7d3136','1512917774080-9991f1c4c750','1574362848149-11496d93a7c7','1582063289852-62e3ba2747f8','1493556134231-aa8efa1b93ce'][(h.id-1)%10]}?w=600&q=70`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s' }} onMouseEnter={e => e.target.style.transform = 'scale(1.05)'} onMouseLeave={e => e.target.style.transform = 'scale(1)'} onError={e => { e.target.src = `https://picsum.photos/seed/house${h.id}/600/300`; }} />
         {h.solidarity && <div style={{ position: 'absolute', top: 12, left: 12, background: 'rgba(22,163,74,0.9)', backdropFilter: 'blur(4px)', color: '#fff', fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 8, letterSpacing: '0.03em' }}>SOLIDAIRE</div>}
         <button style={{ position: 'absolute', top: 12, right: adminMode ? 90 : 12, background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(4px)', border: 'none', borderRadius: '50%', width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.text3 }} onClick={e => e.stopPropagation()}>{ICONS.heart}</button>
       </div>
@@ -417,12 +418,14 @@ function HousingDetail({ h, onBack, user, onAuth, adminMode, onSave }) {
 }
 
 function HousingPage({ user, adminMode, onAuth, setPage }) {
-  const [data, setData] = useState(AppData.housing);
+  const [userItems, setUserItems] = useState(() => window.getUserCreations('housing'));
+  const [data, setData] = useState([...userItems, ...AppData.housing]);
   const [detail, setDetail] = useState(null);
   const [search, setSearch] = useState('');
   const [type, setType] = useState('Tous');
   const [solidarity, setSolidarity] = useState(false);
   const [editItem, setEditItem] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const types = ['Tous', 'Studio', 'Chambre', 'T2', 'T3', 'Maison', 'Loft', 'Gîte'];
   const filtered = data.filter(h => {
     const mt = type === 'Tous' || h.type === type;
@@ -435,7 +438,23 @@ function HousingPage({ user, adminMode, onAuth, setPage }) {
 
   return (
     <PageContainer>
-      <SectionTitle label="Service" title="Hébergements solidaires" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? alert('Proposer un logement') : onAuth()}>Proposer un logement</Btn>} />
+      <SectionTitle label="Service" title="Hébergements solidaires" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Proposer un logement</Btn>} />
+      <CreateModal open={createOpen} onClose={() => setCreateOpen(false)} title="Proposer un hébergement"
+        subtitle="Partage ton logement de manière temporaire, à prix solidaire. Tu peux demander une participation en T99CP par nuit."
+        domain="housing" color={T.hub.housing}
+        defaultPhoto="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600&q=70"
+        fields={[
+          { id:'title',         label:'Titre de l\'annonce', required:true, placeholder:"Studio cosy près du canal" },
+          { id:'type',          label:'Type de logement', type:'select', required:true, options:types.slice(1) },
+          { id:'location',      label:'Ville / quartier', required:true, placeholder:"Paris 11e" },
+          { id:'price_t99cp',   label:'Prix par nuit (en T99CP)', type:'number', required:true, hint:'Tu peux mettre 0 pour un hébergement gratuit', placeholder:'25' },
+          { id:'capacity',      label:'Nombre de personnes', type:'number', required:true, placeholder:'2' },
+          { id:'description',   label:'Description', type:'textarea', rows:3, required:true, placeholder:"Lumineux, calme, 5 min du métro..." },
+          { id:'image',         label:'URL de la photo (optionnel)', type:'photo', hint:'Colle un lien d\'image. Sinon une photo par défaut sera utilisée.' },
+          { id:'solidarity',    label:'Mode solidaire (gratuit pour militant·es)', type:'select', options:[{value:'',label:'Non'},{value:'true',label:'Oui'}] },
+        ]}
+        onSubmit={item => { const enriched = { ...item, host: user?.name || 'Vous', rating: 0, reviews_count: 0, solidarity: item.solidarity === 'true', images: [item.image].filter(Boolean) }; setData(d => [enriched, ...d]); setUserItems(u => [enriched, ...u]); }}
+      />
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ flex: 1, minWidth: 200 }}><SearchInput value={search} onChange={setSearch} placeholder="Destination, ville..." /></div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '10px 16px', background: solidarity ? T.successLight : T.surface, border: `1.5px solid ${solidarity ? T.success : T.border}`, borderRadius: 12, fontSize: 13, fontWeight: 600, color: solidarity ? T.success : T.text2 }}>

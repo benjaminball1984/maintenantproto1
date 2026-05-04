@@ -185,9 +185,11 @@ function PollsPage({ user, setUser, onAuth, setPage }) {
   const [activePoll, setActivePoll] = useState(null);
   const [votes, setVotes] = useState(loadVotes);
   const [viewMode, setViewMode] = useState(loadView);
+  const [proposeOpen, setProposeOpen] = useState(false);
+  const [userPolls, setUserPolls] = useState(() => window.getUserCreations('polls'));
   const setView = v => { setViewMode(v); saveView(v); };
 
-  const polls = window.AppData.polls;
+  const polls = [...userPolls, ...window.AppData.polls];
   const filtered = filter === 'all' ? polls : polls.filter(p => p.type === filter);
 
   const filterButtons = [
@@ -284,10 +286,51 @@ function PollsPage({ user, setUser, onAuth, setPage }) {
           <h3 style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, color:T.text1, margin:'0 0 6px' }}>Lancer un sondage ?</h3>
           <p style={{ fontSize:14, color:T.text3, margin:0, lineHeight:1.55 }}>Les modérateur·rices et adhérent·es de la Confédération peuvent proposer un sondage. Validation par le comité éditorial sous 48h.</p>
         </div>
-        <Btn variant="outline" size="md" onClick={()=>user ? alert('Formulaire de proposition de sondage à venir') : onAuth()}>
+        <Btn variant="outline" size="md" onClick={()=>user ? setProposeOpen(true) : onAuth()}>
           {user ? 'Proposer un sondage' : 'Se connecter pour proposer'}
         </Btn>
       </div>
+
+      <CreateModal open={proposeOpen} onClose={()=>setProposeOpen(false)} title="Proposer un sondage"
+        subtitle="Pour fiabiliser le résultat, prévois au moins 3 options. Les profils répondants seront utilisés pour la méthode des quotas."
+        color={T.brand}
+        fields={[
+          { id:'title',     label:'Question du sondage', required:true, placeholder:"Faut-il limiter les écrans à l'école ?" },
+          { id:'type',      label:'Type de sondage', type:'select', required:true, options:[{value:'electoral',label:'🗳️ Électoral'},{value:'societe',label:'⚡ Société'},{value:'pronostic',label:'🔮 Pronostic'}] },
+          { id:'category',  label:'Catégorie / sujet', required:true, placeholder:"Éducation, climat, justice..." },
+          { id:'desc',      label:'Présentation du sondage', type:'textarea', rows:3, required:true, placeholder:"Pourquoi cette question ? Contexte ?" },
+          { id:'options',   label:'Options de réponse (une par ligne)', type:'textarea', rows:6, required:true, placeholder:"Oui, fortement\nOui, modérément\nNon\nSans avis", hint:'Minimum 2 options · 1 par ligne' },
+          { id:'closes',    label:'Date de clôture', type:'date', required:true },
+          { id:'multi',     label:'Vote multiple ?', type:'select', options:[{value:'',label:'Non, vote unique'},{value:'true',label:'Oui, vote multiple'}] },
+        ]}
+        onSubmit={item => {
+          // Découpage des options en objets compatibles avec PollDetail
+          const colors = ['#DC2626','#7C3AED','#16A34A','#2563EB','#E11D74','#F59E0B','#0891B2','#6B7280'];
+          const optionsList = (item.options || '').split('\n').map(s => s.trim()).filter(Boolean);
+          if (optionsList.length < 2) { window.showToast?.('Il faut au moins 2 options', { type:'error' }); return; }
+          const enriched = {
+            id: `u_${Date.now()}`, _userCreated: true, _createdAt: Date.now(),
+            ...item,
+            slug: 'user-' + Date.now(),
+            author: user?.name || 'Vous',
+            created: new Date().toISOString().slice(0, 10),
+            votes_total: 0,
+            requires_account: true,
+            multi: item.multi === 'true',
+            options: optionsList.map((label, i) => ({
+              id: i + 1, label,
+              color: colors[i % colors.length],
+              img: { emoji: '🗳️', photo: `https://picsum.photos/seed/optu${Date.now()}_${i}/200/200` },
+              votes: 0,
+            })),
+          };
+          // Sauvegarde manuelle (avec la structure correcte) — domain non passé à CreateModal
+          const arr = [enriched, ...window.getUserCreations('polls')];
+          try { localStorage.setItem('mn_user_polls', JSON.stringify(arr)); } catch {}
+          setUserPolls(arr);
+          window.showToast?.('Sondage publié — il apparaîtra en haut de la liste', { type:'success', icon:'📊' });
+        }}
+      />
     </div>
   );
 }
@@ -349,6 +392,7 @@ function PollCard({ poll, voted, onClick, viewMode = 'photo' }) {
             <span style={{ fontSize:11, color:T.text4, fontWeight:600 }}>
               {poll.votes_total.toLocaleString('fr-FR')} votes
             </span>
+            {poll._userCreated && <window.UserBadge />}
             <ReliabilityBadge poll={poll} />
           </div>
           {voted ? (
