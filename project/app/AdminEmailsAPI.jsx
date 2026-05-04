@@ -40,8 +40,8 @@ function EmailingsPanel() {
     { id:'tx_sel_request',     name:'Demande de service SEL reçue',          trigger:'Réservation SEL',                     lastEdit:'2026-04-10', sent7d:78,   opened:'82%', status:'active'   },
     { id:'tx_donation_thanks', name:'Merci pour votre don',                  trigger:'Cagnotte abondée',                    lastEdit:'2026-02-15', sent7d:319,  opened:'76%', status:'active'   },
     { id:'tx_poll_result',     name:'Résultat sondage disponible',           trigger:'Clôture d\'un sondage',               lastEdit:'2026-04-25', sent7d:0,    opened:'—',   status:'draft'    },
-    { id:'tx_poll_confirm',    name:'🔬 Confirmation de vote sondage',        trigger:'Vote sur un sondage',                 lastEdit:'2026-05-03', sent7d:1284, opened:'92%', status:'active'   },
-    { id:'tx_poll_profile',    name:'🔬 Question de profil scientifique',     trigger:'Confirmation de vote (post-clic)',     lastEdit:'2026-05-03', sent7d:0,    opened:'—',   status:'active'   },
+    { id:'tx_poll_confirm',    name:'🔬 Confirmation de vote sondage',        trigger:'Vote sur un sondage',                 lastEdit:'2026-04-30', sent7d:1284, opened:'92%', status:'active'   },
+    { id:'tx_poll_profile',    name:'🔬 Question de profil scientifique',     trigger:'Confirmation de vote (post-clic)',    lastEdit:'2026-05-02', sent7d:847,  opened:'74%', status:'active'   },
   ];
 
   const segments = [
