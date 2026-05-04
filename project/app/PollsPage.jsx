@@ -821,7 +821,7 @@ function StepQuestion({ question, filledCount, onSubmit, onSkip }) {
   const submit = () => {
     if (!answer) return;
     if (isText && question.maxLength === 5 && !/^\d{5}$/.test(answer)) {
-      alert('Le code postal doit comporter 5 chiffres.');
+      window.showToast?.('Le code postal doit comporter 5 chiffres', { type:'error' });
       return;
     }
     onSubmit(answer);

@@ -172,6 +172,9 @@ window.NotificationsPage = NotificationsPage;
 function AdminDashboard({ user, setActivePage }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [editingItem, setEditingItem] = useState(null);
+  const [payoutOpen, setPayoutOpen] = useState(false);
+  const [payoutDone, setPayoutDone] = useState(false);
+  const [settingsDetail, setSettingsDetail] = useState(null);
 
   if (!user?.is_admin) return (
     <div style={{ minHeight:'60vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:32, textAlign:'center' }}>
@@ -388,7 +391,7 @@ function AdminDashboard({ user, setActivePage }) {
               <h2 style={{ fontFamily:"'Sora',sans-serif", fontWeight:700, fontSize:17, color:COLORS.gray900, margin:0 }}>Versements en attente · Janvier 2026</h2>
               <div style={{ display:'flex', gap:8 }}>
                 <Btn variant="outline" size="sm">📥 Exporter CSV</Btn>
-                <Btn variant="gradient" size="sm" onClick={()=>alert(`Versement collectif de ${totalPending} T99CP\n\n→ Confirmation conseil d'administration requise\n→ Multisig 3/5 signatures\n→ Transaction Polygon en lot`)}>⚡ Lancer le versement</Btn>
+                <Btn variant="gradient" size="sm" onClick={()=>setPayoutOpen(true)}>⚡ Lancer le versement</Btn>
               </div>
             </div>
             <div style={{ background:'#fff', borderRadius:16, border:`1px solid ${COLORS.gray200}`, overflow:'hidden', marginBottom:24 }}>
@@ -499,13 +502,89 @@ function AdminDashboard({ user, setActivePage }) {
             { icon:'📊', title:'Analytics', desc:'Statistiques avancées et exports CSV' },
             { icon:'🌐', title:'SEO & Réseaux sociaux', desc:'Méta-tags, Open Graph, sitemap' },
           ].map(s=>(
-            <Card key={s.title} style={{ padding:'14px 18px', display:'flex', alignItems:'center', gap:14, cursor:'pointer' }} onClick={()=>alert(`Paramètre : ${s.title}`)}>
+            <Card key={s.title} style={{ padding:'14px 18px', display:'flex', alignItems:'center', gap:14, cursor:'pointer' }} onClick={()=>setSettingsDetail(s)}>
               <div style={{ fontSize:24 }}>{s.icon}</div>
               <div style={{ flex:1 }}><div style={{ fontWeight:600, fontSize:14, color:COLORS.gray900 }}>{s.title}</div><div style={{ fontSize:12, color:COLORS.gray500 }}>{s.desc}</div></div>
               <span style={{ color:COLORS.gray300, fontSize:18 }}>›</span>
             </Card>
           ))}
         </div>
+      )}
+
+      {/* Modal de confirmation versement T99CP */}
+      <Modal open={payoutOpen} onClose={()=>{ setPayoutOpen(false); setPayoutDone(false); }} title="⚡ Versement collectif T99CP" width={560}>
+        {!payoutDone ? (
+          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            <div style={{ background:'linear-gradient(135deg,#FEF3C7 0%,#FDE68A 100%)', border:`1px solid #FCD34D`, borderRadius:12, padding:'14px 16px', color:'#78350F', fontSize:13, lineHeight:1.55 }}>
+              <strong style={{ display:'block', marginBottom:4 }}>⚠️ Action irréversible — Demande la signature multisig</strong>
+              Cette transaction sera soumise au conseil d'administration (3 signatures sur 5 requises). Une fois validée, les T99CP sont envoyés sur les wallets Polygon des contributeur·rices.
+            </div>
+            <div style={{ background:COLORS.gray50, borderRadius:12, padding:'14px 16px' }}>
+              <div style={{ fontSize:11, fontWeight:700, color:COLORS.gray500, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>Récapitulatif</div>
+              <div style={{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:`1px solid ${COLORS.gray200}` }}>
+                <span style={{ fontSize:13, color:COLORS.gray700 }}>Bénéficiaires</span>
+                <strong style={{ fontSize:13 }}>{PENDING_PAYOUTS.length} contributeur·rices</strong>
+              </div>
+              <div style={{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:`1px solid ${COLORS.gray200}` }}>
+                <span style={{ fontSize:13, color:COLORS.gray700 }}>Montant total</span>
+                <strong style={{ fontSize:14, color:COLORS.blue }}>{PENDING_PAYOUTS.reduce((a,p)=>a+p.amount,0).toLocaleString('fr-FR')} T99CP</strong>
+              </div>
+              <div style={{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:`1px solid ${COLORS.gray200}` }}>
+                <span style={{ fontSize:13, color:COLORS.gray700 }}>Réseau</span>
+                <strong style={{ fontSize:13 }}>Polygon (couche 2 Ethereum)</strong>
+              </div>
+              <div style={{ display:'flex', justifyContent:'space-between', padding:'6px 0' }}>
+                <span style={{ fontSize:13, color:COLORS.gray700 }}>Frais de gas estimés</span>
+                <strong style={{ fontSize:13 }}>≈ 0,12 €</strong>
+              </div>
+            </div>
+            <div style={{ background:'#fff', border:`1px solid ${COLORS.gray200}`, borderRadius:12, padding:'14px 16px' }}>
+              <div style={{ fontSize:11, fontWeight:700, color:COLORS.gray500, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>Multisig 3/5 — État actuel</div>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                {['Marie D.','Jules T.','Aïcha B.','Kevin M.','Soraya N.'].map((n,i)=>(
+                  <span key={n} style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'5px 10px', borderRadius:9999, fontSize:11, fontWeight:600, background: i<2 ? '#DCFCE7' : COLORS.gray100, color: i<2 ? '#16A34A' : COLORS.gray500 }}>
+                    {i<2 ? '✓' : '○'} {n}
+                  </span>
+                ))}
+              </div>
+              <div style={{ fontSize:11, color:COLORS.gray500, marginTop:8 }}>2 / 3 signatures réunies. La 3ème déclenchera la transaction.</div>
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <Btn full variant="gradient" size="lg" onClick={()=>setPayoutDone(true)}>✓ Apposer ma signature (3/3)</Btn>
+              <Btn variant="ghost" size="lg" onClick={()=>setPayoutOpen(false)}>Annuler</Btn>
+            </div>
+          </div>
+        ) : (
+          <div style={{ textAlign:'center', padding:'12px 8px' }}>
+            <div style={{ width:72, height:72, borderRadius:'50%', background:'#DCFCE7', margin:'0 auto 16px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:34 }}>✓</div>
+            <h3 style={{ fontFamily:"'Sora',sans-serif", fontSize:20, fontWeight:800, color:'#16A34A', margin:'0 0 8px' }}>Transaction soumise</h3>
+            <p style={{ fontSize:13, color:COLORS.gray500, margin:'0 0 18px', lineHeight:1.55 }}>
+              {PENDING_PAYOUTS.reduce((a,p)=>a+p.amount,0).toLocaleString('fr-FR')} T99CP en cours de transfert.<br/>
+              Hash : <code style={{ background:COLORS.gray100, padding:'2px 6px', borderRadius:4, fontSize:12 }}>0x{Math.random().toString(16).slice(2, 14)}…{Math.random().toString(16).slice(2, 8)}</code>
+            </p>
+            <Btn variant="outline" size="md" onClick={()=>window.open('https://polygonscan.com', '_blank')}>↗ Voir sur Polygonscan</Btn>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal détail d'un paramètre admin */}
+      {settingsDetail && (
+        <Modal open onClose={()=>setSettingsDetail(null)} title={`⚙ ${settingsDetail.title}`} width={500}>
+          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            <p style={{ fontSize:14, color:COLORS.gray700, margin:0, lineHeight:1.6 }}>{settingsDetail.desc}</p>
+            <div style={{ background:COLORS.gray50, borderRadius:12, padding:'14px 16px' }}>
+              <div style={{ fontSize:11, fontWeight:700, color:COLORS.gray500, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>État actuel</div>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <span style={{ fontSize:14, color:COLORS.gray900, fontWeight:600 }}>{settingsDetail.value || 'Configuration par défaut'}</span>
+                <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'4px 10px', borderRadius:9999, background:'#DCFCE7', color:'#16A34A', fontSize:11, fontWeight:700 }}>● Actif</span>
+              </div>
+            </div>
+            <div style={{ background:'#FEF3C7', border:`1px solid #FCD34D`, borderRadius:10, padding:'10px 14px', fontSize:12, color:'#78350F', lineHeight:1.55 }}>
+              <strong>Mode prototype :</strong> les paramètres techniques fins seront éditables depuis ce panneau dans la version production. Connecte-toi au backend pour les modifier en réel.
+            </div>
+            <Btn full variant="ghost" size="md" onClick={()=>setSettingsDetail(null)}>Fermer</Btn>
+          </div>
+        </Modal>
       )}
     </div>
   );

@@ -73,7 +73,7 @@ function EmailingsPanel() {
           <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:14, marginBottom:2 }}>Connecté à Resend</div>
           <div style={{ fontSize:12, opacity:0.75 }}>Domaine vérifié : <code style={{ background:'rgba(255,255,255,0.1)', padding:'1px 6px', borderRadius:4 }}>maintenant.org</code> · DKIM ✓ · SPF ✓ · DMARC ✓</div>
         </div>
-        <Btn variant="white" size="sm" onClick={()=>alert('Ouvrir le dashboard Resend\n→ resend.com/dashboard')}>↗ Resend</Btn>
+        <Btn variant="white" size="sm" onClick={()=>window.open('https://resend.com/dashboard','_blank','noopener,noreferrer')}>↗ Resend</Btn>
       </div>
 
       {/* Sub-tabs */}
@@ -377,7 +377,7 @@ function ComposeCampaign({ onClose, segments }) {
             <Btn variant="ghost" size="sm" onClick={()=>setStep(2)}>← Retour</Btn>
             <div style={{ display:'flex', gap:8 }}>
               <Btn variant="outline" size="sm">📤 Envoyer test (à moi)</Btn>
-              <Btn variant="success" size="sm" onClick={()=>{ alert(`Campagne "${data.name}" programmée\n→ Envoi via Resend dans 5 min\n→ ${segments.find(s=>s.name===data.segment)?.count.toLocaleString('fr-FR')} destinataires`); onClose(); }}>▶ Envoyer maintenant</Btn>
+              <Btn variant="success" size="sm" onClick={()=>{ const seg = segments.find(s=>s.name===data.segment); window.showToast?.(`Campagne « ${data.name} » programmée — ${seg ? seg.count.toLocaleString('fr-FR') : '?'} destinataires`, { type:'success', icon:'📨', duration:5000 }); onClose(); }}>▶ Envoyer maintenant</Btn>
             </div>
           </div>
         </div>

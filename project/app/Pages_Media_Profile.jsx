@@ -215,6 +215,17 @@ function MobilizationsPage({ user, adminMode, onAuth }) {
   const [detail, setDetail] = useState(null);
   const [filter, setFilter] = useState('Toutes');
   const [editItem, setEditItem] = useState(null);
+  // Re-render trigger pour reflet du toggle Participer
+  const [joinedTick, setJoinedTick] = useState(0);
+  const isJoined = id => window.isUserJoined?.('mobilizations', id);
+  const toggleJoin = (mob) => {
+    if (!user) { onAuth(); return; }
+    const nowJoined = window.toggleUserJoin?.('mobilizations', mob.id);
+    setJoinedTick(t => t + 1);
+    // Bump the participants count locally
+    setData(d => d.map(m => m.id === mob.id ? { ...m, participants: Math.max(0, m.participants + (nowJoined ? 1 : -1)) } : m));
+    window.showToast?.(nowJoined ? `Inscrit·e à : ${mob.title}` : `Désinscrit·e de : ${mob.title}`, { type: nowJoined ? 'success' : 'info', icon: nowJoined ? '✊' : '←' });
+  };
   const types = ['Toutes', ...new Set(data.map(m => m.type))];
   const filtered = filter === 'Toutes' ? data : data.filter(m => m.type === filter);
   const TYPE_COLOR = { 'Manifestation': T.brand, 'Assemblée': T.info, 'Grève': '#7C3AED', 'Veillée': T.warning, 'Rassemblement': T.success, 'Festival': T.accent, 'Forum': T.info, 'Action directe': T.brand, 'Camp': T.success };
@@ -246,7 +257,9 @@ function MobilizationsPage({ user, adminMode, onAuth }) {
               ))}
             </div>
             <p style={{ fontSize: 15, color: T.text2, lineHeight: 1.75, marginBottom: 24 }}>{detail.description}</p>
-            <Btn full variant="gradient" size="lg" onClick={() => user ? alert('Inscrit·e !') : onAuth()}>Participer à cette mobilisation</Btn>
+            <Btn full variant={isJoined(detail.id) ? 'success' : 'gradient'} size="lg" onClick={() => toggleJoin(detail)} icon={isJoined(detail.id) ? ICONS.check : null}>
+              {isJoined(detail.id) ? '✓ Inscrit·e — Cliquez pour annuler' : 'Participer à cette mobilisation'}
+            </Btn>
           </div>
         </div>
         {editItem && <EditModal open onClose={() => setEditItem(null)} title="Mobilisation" data={editItem} onSave={f => { setData(d => d.map(m => m.id === editItem.id ? { ...m, ...f } : m)); setDetail(f); setEditItem(null); }} fields={[{ key: 'title', label: 'Titre' }, { key: 'type', label: 'Type', type: 'select', options: ['Manifestation', 'Assemblée', 'Grève', 'Veillée', 'Rassemblement', 'Festival', 'Forum', 'Action directe', 'Camp'] }, { key: 'date', label: 'Date', type: 'date' }, { key: 'time', label: 'Heure' }, { key: 'location', label: 'Lieu' }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'organizer', label: 'Organisateur' }, { key: 'participants', label: 'Participants', type: 'number' }]} />}

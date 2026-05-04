@@ -144,6 +144,7 @@ function SELCard({ s, onClick, adminMode, onEdit }) {
       onMouseEnter={e => { e.currentTarget.style.borderColor = color; e.currentTarget.style.boxShadow = `0 8px 28px ${color}18`; e.currentTarget.style.transform = 'translateY(-2px)'; }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
       {adminMode && <div style={{ position: 'absolute', top: 10, right: 10 }} onClick={e => { e.stopPropagation(); onEdit(); }}><AdminBtn onEdit={onEdit} /></div>}
+      {s._userCreated && <div style={{ position:'absolute', top: 10, left: 10 }}><window.UserBadge /></div>}
       <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
         <div style={{ width: 48, height: 48, borderRadius: 14, background: `${color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <div style={{ width: 24, height: 24, borderRadius: '50%', background: color, opacity: 0.7 }}></div>
@@ -277,6 +278,7 @@ function CrowdfundingPage({ user, adminMode, onAuth }) {
             onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 16px 48px rgba(0,0,0,0.09)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
             onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
             {adminMode && <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 3 }} onClick={() => setEditItem(c)}><AdminBtn onEdit={() => setEditItem(c)} /></div>}
+            {c._userCreated && <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 3 }}><window.UserBadge /></div>}
             <div style={{ height: 180, position: 'relative', overflow: 'hidden' }}>
               <img src={`https://picsum.photos/seed/crowd${c.id}/600/300`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.6),transparent)' }}></div>
@@ -345,6 +347,7 @@ function GardenPage({ user, adminMode, onAuth }) {
             <div style={{ height: 130, position: 'relative', overflow: 'hidden' }}>
               <img src={`https://picsum.photos/seed/garden${i.id}/400/250`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; e.target.parentElement.style.background = 'linear-gradient(135deg,#14532d,#166534)'; }} />
               <Tag variant={i.free ? 'success' : 'info'} size="xs" style={{ position: 'absolute', top: 10, left: 10 }}>{i.free ? 'GRATUIT' : `${i.price_t99cp} T99CP`}</Tag>
+              {i._userCreated && <div style={{ position:'absolute', top: 10, right: 10 }}><window.UserBadge /></div>}
             </div>
             <div style={{ padding: '12px 14px 14px' }}>
               <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 14, fontWeight: 700, color: T.text1, margin: '0 0 4px', lineHeight: 1.3 }}>{i.item}</h3>
@@ -398,6 +401,7 @@ function LendingPage({ user, adminMode, onAuth }) {
             onMouseEnter={e => { if (i.available) { e.currentTarget.style.boxShadow = '0 10px 32px rgba(0,0,0,0.09)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}}
             onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
             {adminMode && <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 3 }} onClick={e => { e.stopPropagation(); setEditItem(i); }}><AdminBtn onEdit={() => setEditItem(i)} /></div>}
+            {i._userCreated && <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 3 }}><window.UserBadge /></div>}
             <div style={{ height: 140, position: 'relative', background: T.surface2 }}>
               <img src={`https://picsum.photos/seed/lend${i.id}/400/280`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
               {!i.available && <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Tag variant="dark">Indisponible</Tag></div>}
@@ -465,6 +469,7 @@ function CarpoolingPage({ user, adminMode, onAuth }) {
       onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 10px 30px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
       {adminMode && isOffer && <div style={{ position: 'absolute', top: 10, right: 10 }} onClick={e => { e.stopPropagation(); setEditItem(t); }}><AdminBtn onEdit={() => setEditItem(t)} /></div>}
+      {t._userCreated && <div style={{ position: 'absolute', top: 10, left: 10 }}><window.UserBadge /></div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>

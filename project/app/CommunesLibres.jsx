@@ -667,7 +667,8 @@ function EspaceAdherents({ user, onAuth, setPage }) {
   const [newCommune, setNewCommune] = useState({ name:'', type:'quartier', location:'', description:'' });
 
   const [communes, setCommunes] = useState(SAMPLE_COMMUNES);
-  const [federations] = useState(SAMPLE_FEDERATIONS);
+  const [federations, setFederations] = useState([...window.getUserCreations('federations'), ...SAMPLE_FEDERATIONS]);
+  const [createFedOpen, setCreateFedOpen] = useState(false);
 
   if (communeOpen) return <CommuneSpace c={communeOpen} onBack={()=>setCommuneOpen(null)} user={user} />;
   if (fedOpen) return <FederationSpace f={fedOpen} communes={communes} onBack={()=>setFedOpen(null)} onOpenCommune={c=>{ setFedOpen(null); setCommuneOpen(c); }} />;
@@ -789,8 +790,36 @@ function EspaceAdherents({ user, onAuth, setPage }) {
                 Les fédérations agrègent<br/>les communes alliées
               </h2>
             </div>
-            <button onClick={()=>alert('Créer une fédération nécessite l\'accord d\'au moins 2 communes libres voisines.')} style={{ background:T.text1, color:'#fff', border:'none', padding:'14px 22px', fontFamily:"'Sora',sans-serif", fontSize:13, fontWeight:800, cursor:'pointer', textTransform:'uppercase', letterSpacing:'0.06em', flexShrink:0 }}>+ Créer une fédération</button>
+            <button onClick={()=>setCreateFedOpen(true)} style={{ background:T.text1, color:'#fff', border:'none', padding:'14px 22px', fontFamily:"'Sora',sans-serif", fontSize:13, fontWeight:800, cursor:'pointer', textTransform:'uppercase', letterSpacing:'0.06em', flexShrink:0 }}>+ Créer une fédération</button>
           </div>
+
+          <window.CreateModal open={createFedOpen} onClose={()=>setCreateFedOpen(false)} title="Créer une fédération de communes"
+            subtitle="Une fédération naît de l'accord d'au moins 2 communes libres voisines. Elle a son propre espace et envoie 1 binôme représentatif à l'Assemblée Confédérale."
+            color={T.brand}
+            fields={[
+              { id:'name',         label:'Nom de la fédération', required:true, placeholder:"Fédération du Vallon" },
+              { id:'territoire',   label:'Territoire couvert', required:true, placeholder:"Vallée de la Dordogne" },
+              { id:'description',  label:'Présentation', type:'textarea', rows:3, required:true, placeholder:"Pourquoi cette fédération ? Quels sont ses combats communs ?" },
+              { id:'communesText', label:'Communes fondatrices (une par ligne)', type:'textarea', rows:3, required:true, placeholder:"Commune libre de Beynac\nCommune libre de La Roque-Gageac", hint:'Minimum 2 communes signataires' },
+              { id:'principles',   label:'Principes de la fédération', type:'textarea', rows:2, placeholder:"Démocratie directe, autonomie communale, mandats impératifs..." },
+            ]}
+            onSubmit={item => {
+              const list = (item.communesText||'').split('\n').map(s=>s.trim()).filter(Boolean);
+              if (list.length < 2) { window.showToast?.('Une fédération nécessite au moins 2 communes', { type:'error' }); return; }
+              const enriched = {
+                id: `u_fed_${Date.now()}`, _userCreated: true,
+                name: item.name, territoire: item.territoire, description: item.description,
+                principles: item.principles,
+                communesNames: list, communes: [], // ids vides — créations user
+                creation: new Date().toISOString().slice(0,10),
+                hasRepresentation: true,
+              };
+              const arr = [enriched, ...window.getUserCreations('federations')];
+              try { localStorage.setItem('mn_user_federations', JSON.stringify(arr)); } catch {}
+              setFederations(f => [enriched, ...f]);
+              window.showToast?.(`Fédération « ${enriched.name} » créée !`, { type:'success', icon:'★' });
+            }}
+          />
 
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))', gap:0, border:`2px solid ${T.text1}`, marginBottom:32 }}>
             {federations.map((f,i,arr)=>{

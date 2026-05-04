@@ -703,3 +703,21 @@ function UserBadge({ style = {} }) {
   );
 }
 window.UserBadge = UserBadge;
+
+// ── Toggle « rejoint / quitté » pour mobilisations, groupes, etc.
+//    Stocké dans localStorage sous mn_join_<domain> = [id1, id2, ...]
+window.toggleUserJoin = function(domain, id) {
+  const key = `mn_join_${domain}`;
+  let arr = [];
+  try { arr = JSON.parse(localStorage.getItem(key) || '[]'); } catch {}
+  const idx = arr.indexOf(id);
+  if (idx >= 0) arr.splice(idx, 1); else arr.push(id);
+  try { localStorage.setItem(key, JSON.stringify(arr)); } catch {}
+  return arr.includes(id);
+};
+window.isUserJoined = function(domain, id) {
+  try { return JSON.parse(localStorage.getItem(`mn_join_${domain}`) || '[]').includes(id); } catch { return false; }
+};
+window.getUserJoined = function(domain) {
+  try { return JSON.parse(localStorage.getItem(`mn_join_${domain}`) || '[]'); } catch { return []; }
+};

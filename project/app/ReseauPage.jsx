@@ -82,7 +82,7 @@ function PostCard({ post, user, onLike }) {
           {[
             { icon: liked?'❤️':'🤍', label: liked?'Aimé':'J\'aime', action: handleLike, active: liked },
             { icon:'💬', label:'Commenter', action:()=>setShowComments(!showComments) },
-            { icon:'↗️', label:'Partager', action:()=>alert('Partagé !') },
+            { icon:'↗️', label:'Partager', action:()=>{ const url = `${location.origin}${location.pathname}#post-${post.id}`; if (navigator.clipboard) navigator.clipboard.writeText(url).then(()=>window.showToast?.('Lien copié dans le presse-papiers', { type:'success', icon:'🔗' })); else window.showToast?.('Lien : ' + url, { type:'info' }); } },
           ].map(a=>(
             <button key={a.label} onClick={a.action} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:5, padding:'8px', border:'none', background:'transparent', cursor:'pointer', fontSize:13, fontWeight:600, color:a.active?COLORS.red:COLORS.gray500, borderRadius:8, fontFamily:'Inter,sans-serif', transition:'background 0.15s' }} onMouseEnter={e=>e.currentTarget.style.background=COLORS.gray50} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
               {a.icon} <span className="mn-desktop-nav" style={{ display:'inline' }}>{a.label}</span>
@@ -124,6 +124,14 @@ function ReseauPage({ user, onOpenAuth, setActivePage, adminMode }) {
   const [newPost, setNewPost] = useState('');
   const [newPostImg, setNewPostImg] = useState('');
   const [search, setSearch] = useState('');
+  const [groupDetail, setGroupDetail] = useState(null);
+  const [joinedTick, setJoinedTick] = useState(0);
+  const isGroupJoined = id => window.isUserJoined?.('groups', id);
+  const toggleGroupJoin = (g) => {
+    const nowJoined = window.toggleUserJoin?.('groups', g.id);
+    setJoinedTick(t => t + 1);
+    window.showToast?.(nowJoined ? `Tu as rejoint « ${g.name} »` : `Tu as quitté « ${g.name} »`, { type: nowJoined ? 'success' : 'info', icon: nowJoined ? '👋' : '←' });
+  };
 
   if (!user) return (
     <div style={{ minHeight:'60vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:32, textAlign:'center' }}>
@@ -178,15 +186,17 @@ function ReseauPage({ user, onOpenAuth, setActivePage, adminMode }) {
           {tab==='groupes' && (
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))', gap:12 }}>
               {SAMPLE_GROUPS.map(g=>(
-                <Card key={g.id} style={{ padding:'16px', cursor:'pointer' }} onClick={()=>alert(`Groupe : ${g.name}`)}>
+                <Card key={g.id} style={{ padding:'16px', cursor:'pointer' }} onClick={()=>setGroupDetail(g)}>
                   <div style={{ display:'flex', gap:12, alignItems:'flex-start' }}>
                     <div style={{ width:48, height:48, borderRadius:14, background:`${g.color}20`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, flexShrink:0 }}>{g.icon}</div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:700, fontSize:14, color:COLORS.gray900, marginBottom:3 }}>{g.name}</div>
                       <div style={{ fontSize:12, color:COLORS.gray500, marginBottom:8, lineHeight:1.4 }}>{g.desc}</div>
-                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                        <span style={{ fontSize:12, color:COLORS.gray400 }}>👥 {g.members.toLocaleString('fr-FR')} membres</span>
-                        <Btn variant="outline" size="sm" onClick={e=>{e.stopPropagation();alert('Rejoint !');}}>Rejoindre</Btn>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                        <span style={{ fontSize:12, color:COLORS.gray400 }}>👥 {(g.members + (isGroupJoined(g.id) ? 1 : 0)).toLocaleString('fr-FR')} membres</span>
+                        <Btn variant={isGroupJoined(g.id) ? 'success' : 'outline'} size="sm" onClick={e=>{e.stopPropagation();toggleGroupJoin(g);}}>
+                          {isGroupJoined(g.id) ? '✓ Membre' : 'Rejoindre'}
+                        </Btn>
                       </div>
                     </div>
                   </div>
@@ -280,6 +290,42 @@ function ReseauPage({ user, onOpenAuth, setActivePage, adminMode }) {
           </div>
         </div>
       </div>
+
+      {/* Modal détail du groupe */}
+      {groupDetail && (
+        <Modal open onClose={()=>setGroupDetail(null)} title={`${groupDetail.icon} ${groupDetail.name}`} width={520}>
+          <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+            <div style={{ height:140, borderRadius:14, background:`linear-gradient(135deg, ${groupDetail.color}, ${groupDetail.color}AA)`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:64 }}>
+              {groupDetail.icon}
+            </div>
+            <p style={{ fontSize:14, color:COLORS.gray700, lineHeight:1.6, margin:0 }}>{groupDetail.desc}</p>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
+              <div style={{ background:COLORS.gray50, borderRadius:10, padding:'12px', textAlign:'center' }}>
+                <div style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, color:COLORS.gray900 }}>{(groupDetail.members + (isGroupJoined(groupDetail.id) ? 1 : 0)).toLocaleString('fr-FR')}</div>
+                <div style={{ fontSize:11, color:COLORS.gray500, marginTop:2 }}>Membres</div>
+              </div>
+              <div style={{ background:COLORS.gray50, borderRadius:10, padding:'12px', textAlign:'center' }}>
+                <div style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, color:COLORS.gray900 }}>{Math.floor(groupDetail.members / 50)}</div>
+                <div style={{ fontSize:11, color:COLORS.gray500, marginTop:2 }}>Posts/sem</div>
+              </div>
+              <div style={{ background:COLORS.gray50, borderRadius:10, padding:'12px', textAlign:'center' }}>
+                <div style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, color:COLORS.gray900 }}>Public</div>
+                <div style={{ fontSize:11, color:COLORS.gray500, marginTop:2 }}>Type</div>
+              </div>
+            </div>
+            <div style={{ background:`${groupDetail.color}15`, borderRadius:12, padding:'14px 16px', borderLeft:`3px solid ${groupDetail.color}` }}>
+              <div style={{ fontWeight:700, fontSize:13, color:groupDetail.color, marginBottom:4 }}>👋 Charte du groupe</div>
+              <div style={{ fontSize:12, color:COLORS.gray700, lineHeight:1.55 }}>Bienveillance, écoute, respect des positions divergentes. Pas de spam, pas de pub commerciale, modération par les pairs.</div>
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <Btn full variant={isGroupJoined(groupDetail.id) ? 'success' : 'gradient'} size="lg" onClick={()=>toggleGroupJoin(groupDetail)} icon={isGroupJoined(groupDetail.id) ? ICONS.check : ICONS.plus}>
+                {isGroupJoined(groupDetail.id) ? '✓ Membre — Quitter' : 'Rejoindre le groupe'}
+              </Btn>
+              <Btn variant="ghost" size="lg" onClick={()=>setGroupDetail(null)}>Fermer</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
