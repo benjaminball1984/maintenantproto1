@@ -430,9 +430,9 @@ function LendingPage({ user, adminMode, onAuth }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <span style={{ fontSize: 14, fontWeight: 600, color: T.text2 }}>Durée (jours) :</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <button onClick={() => setDays(n => Math.max(1, n - 1))} style={{ width: 32, height: 32, borderRadius: '50%', border: `1.5px solid ${T.border}`, background: 'transparent', cursor: 'pointer', fontSize: 16 }}>−</button>
+                  <button onClick={() => setDays(n => Math.max(1, n - 1))} style={{ width: 38, height: 38, borderRadius: '50%', border: `1.5px solid ${T.border}`, background: 'transparent', cursor: 'pointer', fontSize: 18 }}>−</button>
                   <span style={{ fontWeight: 800, fontSize: 18, minWidth: 24, textAlign: 'center' }}>{days}</span>
-                  <button onClick={() => setDays(n => n + 1)} style={{ width: 32, height: 32, borderRadius: '50%', border: `1.5px solid ${T.border}`, background: 'transparent', cursor: 'pointer', fontSize: 16 }}>+</button>
+                  <button onClick={() => setDays(n => n + 1)} style={{ width: 38, height: 38, borderRadius: '50%', border: `1.5px solid ${T.border}`, background: 'transparent', cursor: 'pointer', fontSize: 18 }}>+</button>
                 </div>
                 <span style={{ fontSize: 13, color: T.text3, marginLeft: 'auto' }}>Total : <strong>{detail.price_t99cp > 0 ? `${detail.price_t99cp * days} T99CP` : 'Gratuit'}</strong></span>
               </div>

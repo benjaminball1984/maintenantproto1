@@ -163,6 +163,44 @@
       [data-mn-card] { padding: 12px !important; }
     }
 
+    /* ===== Polish responsive supplémentaire ============== */
+    @media (max-width: 767px) {
+      /* SectionTitle (titre + bouton action) — empile sur mobile */
+      .mn-section-title { flex-direction: column !important; align-items: stretch !important; }
+      .mn-section-title > * { width: 100% !important; }
+
+      /* PageContainer — réduit le padding latéral */
+      [data-mn-page] { padding: 18px 14px 90px !important; }
+
+      /* Toast — pleine largeur en bas */
+      .mn-toast-wrap { left: 12px !important; right: 12px !important; transform: none !important; max-width: none !important; }
+
+      /* Profile cover : moins haute */
+      .mn-profile-cover { height: 130px !important; }
+      /* Profile header : repli vertical */
+      .mn-profile-header { flex-direction: column !important; align-items: stretch !important; gap: 16px !important; }
+
+      /* Wallet/CTA dark sections : grid auto → 1 colonne */
+      .mn-wallet-card { grid-template-columns: 1fr !important; gap: 14px !important; }
+
+      /* Buttons groupés : full width côte à côte si flex */
+      .mn-btn-row { flex-direction: column !important; }
+      .mn-btn-row > * { width: 100% !important; }
+    }
+
+    /* Tablette portrait spécifique */
+    @media (min-width: 600px) and (max-width: 850px) {
+      /* AppNav très compact */
+      [data-mn-nav-label] { font-size: 11px !important; }
+    }
+
+    /* Très petits écrans (galaxy fold etc.) */
+    @media (max-width: 340px) {
+      h1 { font-size: 22px !important; }
+      h2 { font-size: 18px !important; }
+      [data-mn-hero] { padding: 16px 0 !important; }
+    }
+
     /* ===== Mobile paysage (≤ 950px && hauteur ≤ 500) === */
     @media (max-height: 500px) and (orientation: landscape) {
       [data-mn-hero] { padding: 18px 0 !important; }

@@ -415,7 +415,7 @@ function ProfilePage({ user, setUser, onAuth, setPage }) {
   return (
     <div style={{ background: T.bg, minHeight: '100vh' }}>
       {/* Cover */}
-      <div style={{ height: 180, background: T.gradR, position: 'relative', overflow: 'hidden' }}>
+      <div className="mn-profile-cover" style={{ height: 180, background: T.gradR, position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', inset: 0 }}>
           <img src={`https://picsum.photos/seed/cover${user.name?.length || 5}/1200/400`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.2 }} onError={e => e.target.style.display = 'none'} />
         </div>
@@ -426,7 +426,7 @@ function ProfilePage({ user, setUser, onAuth, setPage }) {
 
       <div style={{ maxWidth: 1000, margin: '0 auto', padding: '0 20px 100px' }}>
         {/* Profile header */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 24, marginTop: -32, flexWrap: 'wrap', gap: 12 }}>
+        <div className="mn-profile-header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 24, marginTop: -32, flexWrap: 'wrap', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16 }}>
             <div style={{ width: 80, height: 80, borderRadius: '50%', background: T.gradR, border: `4px solid ${T.surface}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 30, boxShadow: '0 8px 24px rgba(225,29,116,0.3)', flexShrink: 0 }}>
               {profile.name?.charAt(0)?.toUpperCase() || 'U'}
@@ -469,7 +469,7 @@ function ProfilePage({ user, setUser, onAuth, setPage }) {
         </div>
 
         {/* Wallet */}
-        <div style={{ background: T.text1, borderRadius: 20, padding: '24px 28px', marginBottom: 28, display: 'grid', gridTemplateColumns: '1fr auto', gap: 20, alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
+        <div className="mn-wallet-card" style={{ background: T.text1, borderRadius: 20, padding: '24px 28px', marginBottom: 28, display: 'grid', gridTemplateColumns: '1fr auto', gap: 20, alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: -30, right: -30, width: 150, height: 150, borderRadius: '50%', background: 'rgba(244,114,30,0.1)', pointerEvents: 'none' }}></div>
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Wallet T99CP · Réseau Polygon</div>

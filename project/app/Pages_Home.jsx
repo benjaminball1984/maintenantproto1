@@ -343,7 +343,7 @@ function HomePage({ setPage, user, onAuth }) {
 
       {/* ── T99CP Section ──────────────────────────────────── */}
       <section style={{ maxWidth: 1200, margin: '60px auto 0', padding: '0 24px' }}>
-        <div style={{ background: 'linear-gradient(135deg, #1a0535 0%, #3b0a28 40%, #4a1408 100%)', borderRadius: 24, padding: 'clamp(32px,5vw,56px)', display: 'grid', gridTemplateColumns: '1fr auto', gap: 32, alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
+        <div className="mn-wallet-card" style={{ background: 'linear-gradient(135deg, #1a0535 0%, #3b0a28 40%, #4a1408 100%)', borderRadius: 24, padding: 'clamp(32px,5vw,56px)', display: 'grid', gridTemplateColumns: '1fr auto', gap: 32, alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', bottom: -120, right: -120, width: 480, height: 480, background: 'radial-gradient(circle, rgba(244,114,30,0.22) 0%, transparent 70%)', pointerEvents: 'none', filter: 'blur(8px)' }}></div>
           <div style={{ position: 'absolute', top: -100, left: -100, width: 360, height: 360, background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 70%)', pointerEvents: 'none', filter: 'blur(8px)' }}></div>
           <div>

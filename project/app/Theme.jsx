@@ -462,7 +462,7 @@ window.FilterTabs = FilterTabs;
 // Section Title
 function SectionTitle({ label, title, action, style={} }) {
   return (
-    <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:24, flexWrap:'wrap', gap:12, ...style }}>
+    <div className="mn-section-title" style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:24, flexWrap:'wrap', gap:12, ...style }}>
       <div>
         {label && <div style={{ fontSize:11, fontWeight:700, color:T.brand, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:6 }}>{label}</div>}
         <h2 style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(20px,3.5vw,28px)', fontWeight:800, color:T.text1, margin:0, letterSpacing:'-0.03em', lineHeight:1.1 }}>{title}</h2>
@@ -475,7 +475,7 @@ window.SectionTitle = SectionTitle;
 
 // Page Container
 function PageContainer({ children, maxWidth=1200 }) {
-  return <div style={{ maxWidth, margin:'0 auto', padding:'28px 20px 100px' }}>{children}</div>;
+  return <div data-mn-page style={{ maxWidth, margin:'0 auto', padding:'28px 20px 100px' }}>{children}</div>;
 }
 window.PageContainer = PageContainer;
 
@@ -555,7 +555,7 @@ function ToastProvider({ children }) {
   return (
     <>
       {children}
-      <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', zIndex:9999, display:'flex', flexDirection:'column', gap:8, pointerEvents:'none', maxWidth:'92vw' }}>
+      <div className="mn-toast-wrap" style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', zIndex:9999, display:'flex', flexDirection:'column', gap:8, pointerEvents:'none', maxWidth:'92vw' }}>
         {toasts.map(t => {
           const colors = {
             success: { bg:'#16A34A', icon:'✓' },

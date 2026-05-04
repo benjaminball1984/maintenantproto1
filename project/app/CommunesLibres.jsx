@@ -790,7 +790,7 @@ function EspaceAdherents({ user, onAuth, setPage }) {
                 Les fédérations agrègent<br/>les communes alliées
               </h2>
             </div>
-            <button onClick={()=>setCreateFedOpen(true)} style={{ background:T.text1, color:'#fff', border:'none', padding:'14px 22px', fontFamily:"'Sora',sans-serif", fontSize:13, fontWeight:800, cursor:'pointer', textTransform:'uppercase', letterSpacing:'0.06em', flexShrink:0 }}>+ Créer une fédération</button>
+            <button onClick={()=>setCreateFedOpen(true)} style={{ background:T.text1, color:'#fff', border:'none', padding:'14px 22px', fontFamily:"'Sora',sans-serif", fontSize:13, fontWeight:800, cursor:'pointer', textTransform:'uppercase', letterSpacing:'0.06em', flexShrink:0, whiteSpace:'nowrap' }}>+ Créer une fédération</button>
           </div>
 
           <window.CreateModal open={createFedOpen} onClose={()=>setCreateFedOpen(false)} title="Créer une fédération de communes"
