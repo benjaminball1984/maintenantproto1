@@ -2,8 +2,9 @@
 const { useState, useEffect, useRef } = React;
 
 // ── MEDIA v2 ──────────────────────────────────────────────
-function MediaArticle({ a, onBack, adminMode, onSave }) {
+function MediaArticle({ a, onBack, adminMode, onSave, onSelectArticle }) {
   const [editOpen, setEditOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [data, setData] = useState(a);
   const [scrollPct, setScrollPct] = useState(0);
 
@@ -20,7 +21,9 @@ function MediaArticle({ a, onBack, adminMode, onSave }) {
     return () => window.removeEventListener('scroll', h);
   }, []);
 
-  const related = AppData.media.filter(x => x.category === a.category && x.id !== a.id).slice(0, 3);
+  const related = AppData.media.filter(x => x.category === data.category && x.id !== data.id).slice(0, 3);
+  const permalink = (typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '') + '#media/' + data.id;
+  const bodyParagraphs = (data.body || '').split('\n').map(p => p.trim()).filter(Boolean);
 
   return (
     <div style={{ background: T.bg, minHeight: '100vh' }}>
@@ -31,10 +34,10 @@ function MediaArticle({ a, onBack, adminMode, onSave }) {
 
       <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 20px 100px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
-          <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, fontSize: 14, fontWeight: 600, fontFamily: 'Inter,sans-serif', padding: '8px 0' }}>{ICONS.arrow_l} Média</button>
+          <button onClick={onBack} aria-label="Retour à la liste des contenus" style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, fontSize: 14, fontWeight: 600, fontFamily: 'Inter,sans-serif', padding: '8px 0' }}>{ICONS.arrow_l} Média</button>
           <div style={{ display: 'flex', gap: 8 }}>
             {adminMode && <AdminBtn onEdit={() => setEditOpen(true)} />}
-            <Btn variant="surface" size="sm" icon={ICONS.share}>Partager</Btn>
+            <Btn variant="surface" size="sm" icon={ICONS.share} onClick={() => setShareOpen(true)}>Partager</Btn>
           </div>
         </div>
 
@@ -47,63 +50,65 @@ function MediaArticle({ a, onBack, adminMode, onSave }) {
               <Avatar name={data.author} size={40} />
               <div>
                 <div style={{ fontWeight: 700, fontSize: 14, color: T.text1 }}>{data.author}</div>
-                <div style={{ fontSize: 12, color: T.text4 }}>Journaliste militant·e</div>
+                <div style={{ fontSize: 12, color: T.text4 }}>Journaliste · Maintenant ! Média</div>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 14, fontSize: 13, color: T.text4, marginLeft: 'auto', flexWrap: 'wrap' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>{ICONS.calendar} {new Date(data.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>{ICONS.clock} {data.reading_time} min de lecture</span>
+              {data.reading_time && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>{ICONS.clock} {data.reading_time} min de lecture</span>}
             </div>
           </div>
         </div>
 
         {/* Hero image */}
-        <div style={{ borderRadius: 20, overflow: 'hidden', marginBottom: 36, height: 400 }}>
-          <img src={`https://picsum.photos/seed/article${a.id}hero/1200/600`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
+        <div style={{ borderRadius: 20, overflow: 'hidden', marginBottom: 36, height: 400, background: T.text1 }}>
+          {data.image && <img src={data.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />}
         </div>
 
         {/* Article body */}
         <div className="mn-article-body">
           {/* Lead */}
-          <p style={{ fontSize: 19, fontWeight: 500, color: T.text1, lineHeight: 1.7, margin: '0 0 28px', borderLeft: `4px solid ${T.brand}`, paddingLeft: 20 }}>{data.excerpt}</p>
+          {data.excerpt && <p style={{ fontSize: 19, fontWeight: 500, color: T.text1, lineHeight: 1.7, margin: '0 0 28px', borderLeft: `4px solid ${T.brand}`, paddingLeft: 20 }}>{data.excerpt}</p>}
 
-          {/* Body paragraphs */}
-          {[
-            'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Face aux oppressions systémiques, nos luttes doivent devenir systémiques. La situation actuelle exige une réponse collective et immédiate de notre part.',
-            'Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium. Les chiffres parlent d\'eux-mêmes : en dix ans, la fortune des 100 plus riches a triplé tandis que les services publics s\'effondraient.',
-            'Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit. Une enquête approfondie révèle les mécanismes de capture du pouvoir politique par les intérêts privés. Les données que nous avons récoltées montrent une corrélation directe entre contributions aux campagnes et décisions législatives.',
-          ].map((p, i) => (
-            <p key={i} style={{ fontSize: 16, color: T.text2, lineHeight: 1.8, margin: '0 0 24px' }}>{p}</p>
-          ))}
+          {/* Body paragraphs (data.body séparé par \n) ou fallback message */}
+          {bodyParagraphs.length > 0 ? (
+            bodyParagraphs.map((p, i) => (
+              <p key={i} style={{ fontSize: 16, color: T.text2, lineHeight: 1.8, margin: '0 0 24px' }}>{p}</p>
+            ))
+          ) : (
+            <div style={{ background: T.surface2, borderRadius: 14, padding: '20px 24px', margin: '0 0 24px', border: `1px dashed ${T.border}`, textAlign: 'center' }}>
+              <p style={{ fontSize: 14, color: T.text3, margin: '0 0 6px' }}>L'article complet est en cours de rédaction.</p>
+              <p style={{ fontSize: 12, color: T.text4, margin: 0 }}>Reviens bientôt — la rédaction publie au fil de l'eau.</p>
+            </div>
+          )}
 
           {/* Pull quote */}
-          <blockquote style={{ margin: '36px 0', padding: '24px 28px', background: T.brandLight, borderLeft: `5px solid ${T.brand}`, borderRadius: '0 16px 16px 0' }}>
-            <p style={{ fontSize: 18, fontWeight: 600, color: T.brand, lineHeight: 1.5, margin: 0, fontStyle: 'italic' }}>« Face aux oppressions systémiques, nos luttes doivent devenir systémiques. Ils ont des milliards, soyons des millions ! »</p>
-            <footer style={{ fontSize: 13, color: T.text3, marginTop: 12, fontStyle: 'normal' }}>— THE99COINPROJECT</footer>
-          </blockquote>
-
-          {[
-            'Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.',
-            'Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam. La mobilisation citoyenne reste le seul levier efficace face au pouvoir économique concentré entre quelques mains.',
-          ].map((p, i) => (
-            <p key={i} style={{ fontSize: 16, color: T.text2, lineHeight: 1.8, margin: '0 0 24px' }}>{p}</p>
-          ))}
+          {data.quote && (
+            <blockquote style={{ margin: '36px 0', padding: '24px 28px', background: T.brandLight, borderLeft: `5px solid ${T.brand}`, borderRadius: '0 16px 16px 0' }}>
+              <p style={{ fontSize: 18, fontWeight: 600, color: T.brand, lineHeight: 1.5, margin: 0, fontStyle: 'italic' }}>« {data.quote} »</p>
+              <footer style={{ fontSize: 13, color: T.text3, marginTop: 12, fontStyle: 'normal' }}>— {data.author}</footer>
+            </blockquote>
+          )}
 
           {/* Tags */}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 24, borderTop: `1px solid ${T.border}`, marginTop: 12 }}>
-            {(data.tags || ['militantisme', 'politique', 'société']).map(tag => (
-              <Tag key={tag}>#{tag}</Tag>
-            ))}
-          </div>
+          {data.tags?.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 24, borderTop: `1px solid ${T.border}`, marginTop: 12 }}>
+              {data.tags.map(tag => (
+                <Tag key={tag}>#{tag}</Tag>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Author card */}
         <div style={{ background: T.surface, borderRadius: 20, border: `1px solid ${T.border}`, padding: '24px', marginTop: 40, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
           <Avatar name={data.author} size={56} />
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: T.text4, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>À propos de l'auteur·e</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.text4, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>À propos de l'auteur·rice</div>
             <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: 17, color: T.text1, marginBottom: 8 }}>{data.author}</div>
-            <p style={{ fontSize: 14, color: T.text3, margin: 0, lineHeight: 1.6 }}>Journaliste militant·e au sein de Maintenant! Média. Spécialiste des questions politiques, sociales et économiques. Engagé·e dans la lutte pour une information libre et indépendante.</p>
+            <p style={{ fontSize: 14, color: T.text3, margin: 0, lineHeight: 1.6 }}>
+              {data.author_bio || 'Journaliste à Maintenant ! Média. Engagé·e dans la lutte pour une information libre et indépendante.'}
+            </p>
           </div>
         </div>
 
@@ -113,24 +118,27 @@ function MediaArticle({ a, onBack, adminMode, onSave }) {
             <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 20, fontWeight: 700, color: T.text1, margin: '0 0 20px', letterSpacing: '-0.02em' }}>À lire aussi</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
               {related.map(ra => (
-                <div key={ra.id} onClick={onBack} style={{ background: T.surface, borderRadius: 14, border: `1px solid ${T.border}`, overflow: 'hidden', cursor: 'pointer', transition: 'all 0.2s' }}
-                  onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-                  <div style={{ height: 120, overflow: 'hidden' }}><img src={`https://picsum.photos/seed/rel${ra.id}/400/240`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} /></div>
+                <a key={ra.id} href={`#media/${ra.id}`} onClick={e => { e.preventDefault(); onSelectArticle?.(ra); }} className="mn-card-hover"
+                  aria-label={`${ra.title} — ${ra.reading_time || ''} min`}
+                  style={{ background: T.surface, borderRadius: 14, border: `1px solid ${T.border}`, overflow: 'hidden', display: 'block', textDecoration: 'none', color: 'inherit', transition: 'all 0.22s' }}>
+                  <div style={{ height: 120, overflow: 'hidden', background: T.text1 }}>
+                    {ra.image && <img src={ra.image} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />}
+                  </div>
                   <div style={{ padding: '12px 14px' }}>
                     <Tag variant="brand" size="xs" style={{ marginBottom: 6 }}>{ra.category}</Tag>
                     <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 13, fontWeight: 700, color: T.text1, margin: '0 0 5px', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{ra.title}</h3>
-                    <div style={{ fontSize: 11, color: T.text4, display: 'flex', gap: 4, alignItems: 'center' }}>{ICONS.clock} {ra.reading_time} min</div>
+                    {ra.reading_time && <div style={{ fontSize: 11, color: T.text4, display: 'flex', gap: 4, alignItems: 'center' }}>{ICONS.clock} {ra.reading_time} min</div>}
                   </div>
-                </div>
+                </a>
               ))}
             </div>
           </div>
         )}
       </div>
 
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} title={data.title} url={permalink} text={`${data.title} — Maintenant ! Média`} />
       <EditModal open={editOpen} onClose={() => setEditOpen(false)} title="Article" data={data} onSave={f => { setData(d => ({ ...d, ...f })); onSave?.({ ...a, ...f }); }}
-        fields={[{ key: 'title', label: 'Titre' }, { key: 'category', label: 'Catégorie', type: 'select', options: ['Enquête', 'Politique', 'Environnement', 'Justice', 'Économie', 'Portrait', 'Innovation', 'Culture', 'Logement'] }, { key: 'excerpt', label: 'Chapeau', type: 'textarea' }, { key: 'author', label: 'Auteur·e' }, { key: 'reading_time', label: 'Temps de lecture (min)', type: 'number' }]} />
+        fields={[{ key: 'title', label: 'Titre' }, { key: 'category', label: 'Catégorie', type: 'select', options: ['Enquête', 'Politique', 'Environnement', 'Justice', 'Économie', 'Portrait', 'Innovation', 'Culture', 'Logement'] }, { key: 'excerpt', label: 'Chapeau', type: 'textarea' }, { key: 'body', label: 'Corps de l\'article (paragraphes séparés par retour ligne)', type: 'textarea' }, { key: 'quote', label: 'Citation pull-quote' }, { key: 'author_bio', label: 'Bio auteur·rice', type: 'textarea' }, { key: 'author', label: 'Auteur·rice' }, { key: 'image', label: 'URL photo' }, { key: 'reading_time', label: 'Temps de lecture (min)', type: 'number' }]} />
     </div>
   );
 }
@@ -175,29 +183,29 @@ function MediaCard({ item, onClick, adminMode, onEdit, size = 'md' }) {
   // Brève : layout texte uniquement
   if (item.format === 'breve') {
     return (
-      <div onClick={onClick} style={{ background: T.surface, borderRadius: 14, border: `1px solid ${T.border}`, borderLeft: `4px solid ${FORMAT_META.breve.color}`, padding: '16px 18px', cursor: 'pointer', transition: 'all 0.2s', position: 'relative' }}
-        onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.06)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-        onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-        {adminMode && <div style={{ position: 'absolute', top: 8, right: 8 }} onClick={e => { e.stopPropagation(); onEdit?.(item); }}><AdminBtn onEdit={() => onEdit?.(item)} /></div>}
+      <a href={`#media/${item.id}`} onClick={e => { e.preventDefault(); onClick?.(); }} className="mn-card-hover"
+        aria-label={`Brève : ${item.title}`}
+        style={{ background: T.surface, borderRadius: 14, border: `1px solid ${T.border}`, borderLeft: `4px solid ${FORMAT_META.breve.color}`, padding: '16px 18px', display: 'block', textDecoration: 'none', color: 'inherit', transition: 'all 0.22s', position: 'relative' }}>
+        {adminMode && <div style={{ position: 'absolute', top: 8, right: 8 }} onClick={e => { e.stopPropagation(); e.preventDefault(); onEdit?.(item); }}><AdminBtn onEdit={() => onEdit?.(item)} /></div>}
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
           <FormatBadge format="breve" />
           <span style={{ fontSize:11, color:T.text4, fontWeight:600 }}>{new Date(item.date).toLocaleDateString('fr-FR', { day:'numeric', month:'short' })}</span>
         </div>
         <h3 style={{ fontFamily:"'Sora',sans-serif", fontSize:15, fontWeight:700, color:T.text1, margin:'0 0 6px', lineHeight:1.35 }}>{item.title}</h3>
         <p style={{ fontSize:13, color:T.text3, margin:0, lineHeight:1.55, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{item.excerpt}</p>
-      </div>
+      </a>
     );
   }
 
   return (
-    <div onClick={onClick} style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden', cursor: 'pointer', transition: 'all 0.2s', position: 'relative' }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 12px 36px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-      {adminMode && <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 3 }} onClick={e => { e.stopPropagation(); onEdit?.(item); }}><AdminBtn onEdit={() => onEdit?.(item)} /></div>}
+    <a href={`#media/${item.id}`} onClick={e => { e.preventDefault(); onClick?.(); }} className="mn-card-hover"
+      aria-label={`${meta.label} : ${item.title}`}
+      style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden', display: 'block', textDecoration: 'none', color: 'inherit', transition: 'all 0.22s', position: 'relative' }}>
+      {adminMode && <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 3 }} onClick={e => { e.stopPropagation(); e.preventDefault(); onEdit?.(item); }}><AdminBtn onEdit={() => onEdit?.(item)} /></div>}
 
       {/* Visual */}
-      <div style={{ height: isCompact ? 150 : 200, overflow: 'hidden', position: 'relative', background: `${meta.color}10` }}>
-        <img src={item.image || `https://picsum.photos/seed/m${item.id}/600/360`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
+      <div style={{ height: isCompact ? 150 : 200, overflow: 'hidden', position: 'relative', background: T.text1 }}>
+        {item.image && <img src={item.image} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.92 }} onError={e => e.target.style.display = 'none'} />}
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.4),transparent 50%)' }}></div>
 
         {/* Format badge top-left */}
@@ -230,6 +238,171 @@ function MediaCard({ item, onClick, adminMode, onEdit, size = 'md' }) {
           {item.reading_time && <><span>·</span><span style={{ display:'flex', alignItems:'center', gap:3 }}>{ICONS.clock} {item.reading_time} min</span></>}
         </div>
       </div>
+    </a>
+  );
+}
+
+// MCreateModal — wizard 3 steps pour créer un nouveau contenu média
+function MCreateModal({ open, onClose, onSubmit }) {
+  const [step, setStep] = useState(1);
+  const [form, setForm] = useState({ format: 'article', title: '', category: '', author: '', excerpt: '', image: '', body: '', tags: '', reading_time: '', duration_sec: '' });
+  if (!open) return null;
+
+  const reset = () => { setStep(1); setForm({ format: 'article', title: '', category: '', author: '', excerpt: '', image: '', body: '', tags: '', reading_time: '', duration_sec: '' }); };
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const FORMAT_CHOICES = [
+    { id: 'article', icon: '📰', label: 'Article',  desc: 'Texte long avec corps éditorial' },
+    { id: 'video',   icon: '▶',  label: 'Vidéo',    desc: 'Reportage, tuto, court métrage' },
+    { id: 'podcast', icon: '🎙', label: 'Podcast',  desc: 'Audio long format, entretien' },
+    { id: 'breve',   icon: '⚡', label: 'Brève',    desc: 'Info rapide en 2 lignes' },
+    { id: 'dessin',  icon: '✏',  label: 'Dessin',   desc: 'Caricature, dessin de presse' },
+    { id: 'live',    icon: '●',  label: 'Live',     desc: 'Diffusion en direct' },
+  ];
+
+  const stepValid = () => {
+    if (step === 1) return !!form.format;
+    if (step === 2) return form.title && form.category && form.author && form.excerpt;
+    return true;
+  };
+
+  const submit = () => {
+    const enriched = {
+      id: `u_${Date.now()}`,
+      _userCreated: true,
+      format: form.format,
+      title: form.title.trim(),
+      category: form.category.trim(),
+      author: form.author.trim(),
+      excerpt: form.excerpt.trim(),
+      image: form.image.trim() || null,
+      body: form.body.trim() || '',
+      tags: form.tags.split(',').map(s => s.trim()).filter(Boolean),
+      reading_time: +form.reading_time || undefined,
+      duration_sec: +form.duration_sec || undefined,
+      date: new Date().toISOString().slice(0, 10),
+      premium: false,
+      featured: false,
+    };
+    onSubmit(enriched);
+    window.showToast?.('Contenu publié — il apparaîtra en haut de la liste', { type: 'success', icon: '📰' });
+    reset();
+    onClose();
+  };
+
+  const STEPS = [
+    { id: 1, title: 'Format', icon: '🎬' },
+    { id: 2, title: 'Métadonnées', icon: '📝' },
+    { id: 3, title: 'Contenu', icon: '✍️' },
+  ];
+
+  const inputCss = { width: '100%', height: 42, padding: '0 14px', border: `1.5px solid ${T.border}`, borderRadius: 10, fontSize: 14, color: T.text1, background: T.surface, outline: 'none', fontFamily: 'Inter,sans-serif', boxSizing: 'border-box' };
+  const labelCss = { fontSize: 12, fontWeight: 700, color: T.text2, marginBottom: 6, display: 'block' };
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 1500, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px', overflowY: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: 24, maxWidth: 720, width: '100%', overflow: 'hidden', boxShadow: '0 30px 80px rgba(0,0,0,0.3)' }}>
+        <div style={{ padding: '22px 28px', background: `linear-gradient(135deg, ${T.brand}15, ${T.brandLight})`, borderBottom: `1px solid ${T.border}`, position: 'relative' }}>
+          <button onClick={onClose} aria-label="Fermer" style={{ position: 'absolute', top: 14, right: 14, width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.9)', border: 'none', cursor: 'pointer', fontSize: 18, color: '#333', fontWeight: 700 }}>×</button>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.brand, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5 }}>Nouveau contenu média</div>
+          <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 22, fontWeight: 800, color: T.text1, margin: 0 }}>Publier un nouveau contenu</h2>
+        </div>
+
+        {/* Stepper */}
+        <div style={{ display: 'flex', padding: '18px 28px', background: T.surface2, borderBottom: `1px solid ${T.border}`, gap: 8, overflowX: 'auto' }}>
+          {STEPS.map(s => (
+            <div key={s.id} onClick={() => stepValid() && setStep(s.id)} style={{ flex: 1, minWidth: 140, padding: '10px 12px', borderRadius: 10, background: step === s.id ? T.brand : (s.id < step ? `${T.brand}20` : T.surface), color: step === s.id ? '#fff' : (s.id < step ? T.brand : T.text3), cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.18s', border: step === s.id ? 'none' : `1px solid ${T.border}` }}>
+              <div style={{ width: 26, height: 26, borderRadius: '50%', background: step === s.id ? 'rgba(255,255,255,0.2)' : (s.id < step ? T.brand : T.surface2), color: step === s.id || s.id < step ? '#fff' : T.text3, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{s.id < step ? '✓' : s.id}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, opacity: 0.85, marginBottom: 1 }}>Étape {s.id}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "'Sora',sans-serif", whiteSpace: 'nowrap' }}>{s.title}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Step content */}
+        <div style={{ padding: '24px 28px', maxHeight: 460, overflowY: 'auto' }}>
+          {step === 1 && (
+            <div>
+              <div style={{ marginBottom: 16, padding: '12px 14px', background: T.brandLight, borderRadius: 10, fontSize: 12, color: T.text2, lineHeight: 1.5 }}>
+                Choisis le format du contenu que tu veux publier. Chaque format a son layout et ses champs spécifiques.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                {FORMAT_CHOICES.map(f => (
+                  <button key={f.id} onClick={() => set('format', f.id)} style={{ padding: '16px 14px', borderRadius: 12, border: `2px solid ${form.format === f.id ? T.brand : T.border}`, background: form.format === f.id ? T.brandLight : T.surface, cursor: 'pointer', textAlign: 'left', fontFamily: 'Inter,sans-serif', transition: 'all 0.15s' }}>
+                    <div style={{ fontSize: 22, marginBottom: 6 }}>{f.icon}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: form.format === f.id ? T.brand : T.text1, marginBottom: 3 }}>{f.label}</div>
+                    <div style={{ fontSize: 11, color: T.text3, lineHeight: 1.4 }}>{f.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={labelCss}>Titre du contenu *</label>
+                <input value={form.title} onChange={e => set('title', e.target.value)} placeholder="Comment les milliardaires ont capturé la démocratie..." style={inputCss} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={labelCss}>Catégorie *</label>
+                  <input value={form.category} onChange={e => set('category', e.target.value)} placeholder="Enquête, Politique, Écologie..." style={inputCss} />
+                </div>
+                <div>
+                  <label style={labelCss}>Auteur·rice *</label>
+                  <input value={form.author} onChange={e => set('author', e.target.value)} placeholder="Sandrine Moreau" style={inputCss} />
+                </div>
+              </div>
+              <div>
+                <label style={labelCss}>Chapeau / accroche (1-2 phrases) *</label>
+                <textarea value={form.excerpt} onChange={e => set('excerpt', e.target.value)} rows={2} placeholder="Une phrase qui résume le contenu en restant accrocheuse." style={{ ...inputCss, height: 'auto', padding: '10px 14px', resize: 'vertical', lineHeight: 1.5 }} />
+              </div>
+              <div>
+                <label style={labelCss}>URL de l'image principale (optionnel)</label>
+                <input value={form.image} onChange={e => set('image', e.target.value)} placeholder="https://..." style={inputCss} />
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {form.format === 'article' && (
+                <div>
+                  <label style={labelCss}>Corps de l'article (paragraphes séparés par retour ligne)</label>
+                  <textarea value={form.body} onChange={e => set('body', e.target.value)} rows={10} placeholder="Premier paragraphe...&#10;&#10;Deuxième paragraphe..." style={{ ...inputCss, height: 'auto', padding: '12px 14px', resize: 'vertical', lineHeight: 1.6, fontSize: 13 }} />
+                </div>
+              )}
+              {(form.format === 'video' || form.format === 'podcast') && (
+                <div>
+                  <label style={labelCss}>Durée (en secondes)</label>
+                  <input type="number" value={form.duration_sec} onChange={e => set('duration_sec', e.target.value)} placeholder="312" style={inputCss} />
+                </div>
+              )}
+              {form.format === 'article' && (
+                <div>
+                  <label style={labelCss}>Temps de lecture estimé (en minutes)</label>
+                  <input type="number" value={form.reading_time} onChange={e => set('reading_time', e.target.value)} placeholder="8" style={inputCss} />
+                </div>
+              )}
+              <div>
+                <label style={labelCss}>Tags (séparés par virgule)</label>
+                <input value={form.tags} onChange={e => set('tags', e.target.value)} placeholder="démocratie, inégalités, oligarchie" style={inputCss} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer nav */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '18px 28px', borderTop: `1px solid ${T.border}`, background: T.surface2 }}>
+          <Btn variant="ghost" size="md" onClick={() => step > 1 ? setStep(step - 1) : (reset(), onClose())}>{step > 1 ? '← Précédent' : 'Annuler'}</Btn>
+          {step < 3
+            ? <Btn variant="gradient" size="md" disabled={!stepValid()} onClick={() => setStep(step + 1)}>Suivant →</Btn>
+            : <Btn variant="gradient" size="md" disabled={!stepValid()} onClick={submit} icon="📰">Publier le contenu</Btn>
+          }
+        </div>
+      </div>
     </div>
   );
 }
@@ -240,16 +413,20 @@ function MediaPage({ adminMode, onAuth }) {
   const [search, setSearch] = useState('');
   const [format, setFormat] = useState('Tous');
   const [editItem, setEditItem] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const [tipOpen, setTipOpen] = useState(false);
+  const [tipAmount, setTipAmount] = useState(10);
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [subscribed, setSubscribed] = useState(() => { try { return localStorage.getItem('mn_newsletter_sub') === '1'; } catch { return false; } });
 
   const formats = ['Tous', 'Articles', 'Vidéos', 'Podcasts', 'Lives', 'Dessins', 'Brèves'];
   const formatMap = { 'Articles':'article', 'Vidéos':'video', 'Podcasts':'podcast', 'Lives':'live', 'Dessins':'dessin', 'Brèves':'breve' };
 
+  const q = search.trim().toLowerCase();
   const filtered = data.filter(a => {
     const fok = format === 'Tous' || a.format === formatMap[format];
-    const sok = !search || a.title.toLowerCase().includes(search.toLowerCase()) || (a.author||'').toLowerCase().includes(search.toLowerCase()) || (a.category||'').toLowerCase().includes(search.toLowerCase());
+    const sok = !q || [a.title, a.excerpt, a.author, a.category, ...(a.tags || [])]
+      .some(s => typeof s === 'string' && s.toLowerCase().includes(q));
     return fok && sok;
   });
 
@@ -268,7 +445,7 @@ function MediaPage({ adminMode, onAuth }) {
     window.showToast?.(`Inscrit·e à la newsletter hebdomadaire !`, { type:'success', icon:'📬' });
   };
 
-  if (detail) return <MediaArticle a={detail} onBack={() => setDetail(null)} adminMode={adminMode} onSave={u => setData(d => d.map(a => a.id === u.id ? u : a))} />;
+  if (detail) return <MediaArticle a={detail} onBack={() => setDetail(null)} adminMode={adminMode} onSave={u => { setData(d => d.map(a => a.id === u.id ? u : a)); setDetail(u); }} onSelectArticle={art => { window.scrollTo({ top: 0, behavior: 'smooth' }); setDetail(art); }} />;
 
   return (
     <PageContainer maxWidth={1200}>
@@ -283,7 +460,7 @@ function MediaPage({ adminMode, onAuth }) {
             Articles, vidéos, podcasts, lives, dessins de presse. Journalisme militant indépendant, gratuit, financé par les adhérent·es.
           </p>
         </div>
-        {adminMode && <Btn variant="success" size="sm" icon={ICONS.plus}>Nouveau contenu</Btn>}
+        {adminMode && <Btn variant="success" size="sm" icon={ICONS.plus} onClick={() => setCreateOpen(true)}>Nouveau contenu</Btn>}
       </div>
 
       {/* Search + format chips */}
@@ -324,12 +501,13 @@ function MediaPage({ adminMode, onAuth }) {
         <div style={{ marginBottom: 32 }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: T.text4, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>━ À la une</div>
           {featured.slice(0, 1).map(a => (
-            <div key={a.id} onClick={() => setDetail(a)} className="mn-media-featured" style={{ background: T.surface, borderRadius: 20, border: `1px solid ${T.border}`, overflow: 'hidden', cursor: 'pointer', display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 0, transition: 'all 0.22s', position: 'relative', marginBottom: 16 }}
-              onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 20px 60px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
-              onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-              {adminMode && <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 3 }} onClick={e => { e.stopPropagation(); setEditItem(a); }}><AdminBtn onEdit={() => setEditItem(a)} /></div>}
-              <div style={{ position: 'relative', overflow: 'hidden', minHeight: 320, background: `${(FORMAT_META[a.format] || FORMAT_META.article).color}15` }}>
-                <img src={a.image || `https://picsum.photos/seed/feat${a.id}/800/600`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
+            <a key={a.id} href={`#media/${a.id}`} onClick={e => { e.preventDefault(); setDetail(a); }} className="mn-card-hover mn-media-featured"
+              aria-label={`À la une : ${a.title}`}
+              style={{ background: T.surface, borderRadius: 20, border: `1px solid ${T.border}`, overflow: 'hidden', display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 0, transition: 'all 0.22s', position: 'relative', marginBottom: 16, textDecoration: 'none', color: 'inherit' }}>
+              {adminMode && <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 3 }} onClick={e => { e.stopPropagation(); e.preventDefault(); setEditItem(a); }}><AdminBtn onEdit={() => setEditItem(a)} /></div>}
+              <div style={{ position: 'relative', overflow: 'hidden', minHeight: 320, background: T.text1 }}>
+                {a.image && <img src={a.image} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.92 }} onError={e => e.target.style.display = 'none'} />}
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.35), transparent 60%)' }}></div>
                 <div style={{ position: 'absolute', top: 16, left: 16 }}><FormatBadge format={a.format || 'article'} item={a} /></div>
               </div>
               <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -345,7 +523,7 @@ function MediaPage({ adminMode, onAuth }) {
                   </div>
                 </div>
               </div>
-            </div>
+            </a>
           ))}
           {featured.length > 1 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 16 }}>
@@ -409,11 +587,11 @@ function MediaPage({ adminMode, onAuth }) {
 
       {filtered.length === 0 && <EmptyState title="Aucun contenu trouvé" desc="Essayez d'autres filtres ou termes de recherche." />}
 
-      {/* SOUTENIR — tip jar T99CP / euros */}
+      {/* SOUTENIR — tip jar T99CP / euros avec presets */}
       <div style={{ background: T.text1, borderRadius: 24, padding: '36px 36px', marginTop: 40, position:'relative', overflow:'hidden', color:'#fff' }} className="mn-wallet-card">
         <div style={{ position:'absolute', top:-100, right:-100, width:360, height:360, borderRadius:'50%', background:'radial-gradient(circle, rgba(225,29,116,0.25) 0%, transparent 70%)', filter:'blur(8px)' }}></div>
         <div style={{ position:'absolute', bottom:-80, left:-80, width:280, height:280, borderRadius:'50%', background:'radial-gradient(circle, rgba(124,58,237,0.2) 0%, transparent 70%)', filter:'blur(8px)' }}></div>
-        <div style={{ position:'relative', display:'grid', gridTemplateColumns:'1fr auto', gap:24, alignItems:'center' }}>
+        <div style={{ position:'relative', display:'grid', gridTemplateColumns:'1fr auto', gap:24, alignItems:'center' }} className="mn-newsletter-block">
           <div>
             <div style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'5px 12px', background:'rgba(255,255,255,0.10)', borderRadius:9999, fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:14 }}>
               <span>♥</span> Soutenir le média
@@ -421,17 +599,27 @@ function MediaPage({ adminMode, onAuth }) {
             <h3 style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(20px,3vw,28px)', fontWeight:800, margin:'0 0 10px', letterSpacing:'-0.02em', lineHeight:1.2 }}>
               Notre indépendance dépend de toi.
             </h3>
-            <p style={{ fontSize:14, color:'rgba(255,255,255,0.7)', margin:'0 0 20px', lineHeight:1.6, maxWidth:540 }}>
+            <p style={{ fontSize:14, color:'rgba(255,255,255,0.7)', margin:'0 0 16px', lineHeight:1.6, maxWidth:540 }}>
               Sans pub, sans actionnaire, sans subvention publique. 100 % financé par les dons des lectrices et lecteurs. Paiement en T99CP avec alternative en euros.
             </p>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:8, maxWidth: 360 }}>
+              {[5, 10, 20, 50].map(v => (
+                <button key={v} onClick={() => setTipAmount(v)}
+                  style={{ padding:'10px 0', borderRadius:10, border:`1.5px solid ${tipAmount === v ? '#fff' : 'rgba(255,255,255,0.25)'}`, background: tipAmount === v ? 'rgba(255,255,255,0.18)' : 'transparent', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'Inter,sans-serif', transition:'all 0.18s' }}>
+                  {v} T99CP
+                </button>
+              ))}
+            </div>
           </div>
-          <Btn variant="white" size="lg" onClick={() => setTipOpen(true)} icon={ICONS.wallet}>Faire un don</Btn>
+          <Btn variant="white" size="lg" onClick={() => setTipOpen(true)} icon={ICONS.wallet}>Faire un don · {tipAmount} T99CP</Btn>
         </div>
       </div>
 
-      <PayModal open={tipOpen} onClose={() => setTipOpen(false)} amount={10} item="Don à Maintenant ! Média" description="Soutien au journalisme militant indépendant. Paiement en T99CP ou en euros, sans intermédiaire." seller="Maintenant ! Média" />
+      <PayModal open={tipOpen} onClose={() => setTipOpen(false)} amount={tipAmount} item="Don à Maintenant ! Média" description="Soutien au journalisme militant indépendant. Paiement en T99CP ou en euros, sans intermédiaire." seller="Maintenant ! Média" />
 
-      {editItem && <EditModal open onClose={() => setEditItem(null)} title="Contenu média" data={editItem} onSave={f => { setData(d => d.map(a => a.id === editItem.id ? { ...a, ...f } : a)); setEditItem(null); }} fields={[{ key: 'title', label: 'Titre' }, { key: 'category', label: 'Catégorie' }, { key: 'format', label: 'Format', type: 'select', options: ['article','video','podcast','live','dessin','breve'] }, { key: 'excerpt', label: 'Chapeau', type: 'textarea' }, { key: 'author', label: 'Auteur·rice' }, { key: 'image', label: 'URL photo' }]} />}
+      <MCreateModal open={createOpen} onClose={() => setCreateOpen(false)} onSubmit={item => setData(d => [item, ...d])} />
+
+      {editItem && <EditModal open onClose={() => setEditItem(null)} title="Contenu média" data={editItem} onSave={f => { setData(d => d.map(a => a.id === editItem.id ? { ...a, ...f } : a)); setEditItem(null); }} fields={[{ key: 'title', label: 'Titre' }, { key: 'category', label: 'Catégorie' }, { key: 'format', label: 'Format', type: 'select', options: ['article','video','podcast','live','dessin','breve'] }, { key: 'excerpt', label: 'Chapeau', type: 'textarea' }, { key: 'body', label: 'Corps de l\'article (paragraphes séparés par retour ligne)', type: 'textarea' }, { key: 'quote', label: 'Citation pull-quote' }, { key: 'author_bio', label: 'Bio auteur·rice', type: 'textarea' }, { key: 'author', label: 'Auteur·rice' }, { key: 'image', label: 'URL photo' }, { key: 'reading_time', label: 'Temps de lecture (min)', type: 'number' }]} />}
     </PageContainer>
   );
 }

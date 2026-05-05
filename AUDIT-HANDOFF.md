@@ -42,7 +42,8 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | `1121f7b` | Bloc 3 étapes 4-6 | Refonte PetitionCard + PetitionDetail + PetitionsPage selon Q1-Q12 — câblage helpers, signature anonyme, FAB mobile, search/tri étendus |
 | `ff30699` | Bloc 4 | AppData mobs enrichi (5 mobs) + helpers `exportICS`, `ParticipateAnonymousModal` + refonte MobilizationsPage (Card + Detail + List) selon Q1-Q10 |
 | `082ec5c` | Bloc 5 | Refonte Crowdfunding : CFCard + CFFeaturedCard + CFDetailPage (modal → page) + CrowdfundingPage selon Q1-Q4 — tags statut dynamiques, similaires, ShareModal, FAB mobile |
-| _(à venir)_ | Bloc 6 | Sondages : suppression dead code `StepEmail` (-105L) + PollCard `<a>` + PollDetail nettoyage wordings email + ShareModal + similaires + FAB + PollsPage search/tri |
+| `d7973b3` | Bloc 6 | Sondages : suppression dead code `StepEmail` (-105L) + PollCard `<a>` + PollDetail nettoyage wordings email + ShareModal + similaires + FAB + PollsPage search/tri |
+| _(à venir)_ | Bloc 7 | Médias : enrichissement 5 articles (body+quote+author_bio) + MediaArticle nettoyage Lorem + ShareModal + Related `<a>` + MediaCard `<a>` + MediaPage search étendue + tip jar presets + MCreateModal wizard |
 
 ---
 
@@ -56,7 +57,7 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | 4 | Mobilisations | `Pages_Media_Profile.jsx:441-...` (MobilizationsPage + extraction Card/Detail) | ✅ **Fait** (1 commit) |
 | 5 | Cagnottes (crowdfunding) | `Pages_Commerce.jsx:253-871` (CFCard + CFFeaturedCard + CFDetailPage + CFCreateModal + CrowdfundingPage) | ✅ **Fait** (1 commit) |
 | 6 | Sondages | `PollsPage.jsx` (1330 lignes après cleanup) | ✅ **Fait** (1 commit) |
-| 7 | Médias | `Pages_Media_Profile.jsx` | ⏳ |
+| 7 | Médias | `Pages_Media_Profile.jsx:5-435` (MediaArticle + MediaCard + MCreateModal + MediaPage) | ✅ **Fait** (1 commit) |
 | 8 | Réseau social | `ReseauPage.jsx` (635 lignes) | ⏳ |
 | 9 | Campagnes | `CampaignPage.jsx` (1224 lignes) | ⏳ |
 | 10 | Hub Services + CreerPage | `Pages_Home.jsx:442-...` | ⏳ |
@@ -575,6 +576,54 @@ PollsPage.jsx :
 - Le `onSelectPoll` callback permet de naviguer entre sondages depuis les similaires sans repasser par la liste
 - `setActivePoll` réutilisé directement (pas besoin d'état supplémentaire)
 - Le poll passé en `<a href>` n'a pas de hash routing actif : c'est un permalink visible mais le navigation passe par `setActivePoll` (préventDefault dans onClick) — cohérent avec Bloc 3-5
+
+---
+
+### 6.7 BLOC 7 — Médias ✅ FAIT
+
+**Audit** : 12 incohérences/bugs (Lorem ipsum sur tous articles, pull quote hardcodée mensongère, bio générique, hero img picsum, related cards bugguées, bouton Partager sans onClick, cards `<div>`), 4 décisions clés.
+
+#### Décisions Q-arbitrées (4 questions)
+
+| Q | Choix utilisateur | Implémentation | Statut |
+|---|---|---|---|
+| **Q1** | Enrichir 5 articles avec body + quote + author_bio (cohérence Bloc 3-4) | AppData.media id 1-5 enrichis (paragraphes éditoriaux multi-paragraphes, citations thématiques, bios journalistes). Articles 6+ : EmptyState « Article complet en cours de rédaction ». | ✅ |
+| **Q2** | Tip jar avec presets 5/10/20/50 T99CP (cohérence Bloc 4-5) | Boutons preset sur le bloc Soutenir + label dynamique « Faire un don · X T99CP » | ✅ |
+| **Q3** | CreateModal complet (wizard) | `MCreateModal` : 3 steps (Format / Métadonnées / Contenu), champs adaptés au format choisi (article : body+reading_time, video/podcast : duration_sec, etc.) | ✅ |
+| **Q4** | Tags non sur les cards (catégorie seulement) | Pas de modif aux cards, tags affichés seulement sur l'article détail | ✅ |
+
+#### Bonus / cohérence Bloc 3-6
+
+- MediaCard (3 layouts : standard / brève / featured) : `<div onClick>` + onMouseEnter/Leave → `<a href="#media/{id}">` + `mn-card-hover` + aria-label
+- Hero image MediaArticle : picsum hardcoded → `data.image` + fond `T.text1` fallback (cohérence Bloc 4-5)
+- Pull quote hardcodée mensongère (« — THE99COINPROJECT ») → `data.quote` + `data.author` réel
+- Lorem ipsum body → `data.body` (paragraphes split sur `\n`) + EmptyState éditorial si vide
+- Bio générique « Journaliste militant·e... » → `data.author_bio` || fallback simple
+- ShareModal câblé sur bouton Partager (avant : pas d'onClick, ne faisait rien) + permalink `#media/{id}`
+- Related cards bugguées (`onClick={onBack}`) → `<a>` avec callback `onSelectArticle` qui scrollTo(0) + setDetail
+- Cover image related : picsum hardcoded → `ra.image` + fond `T.text1`
+- Bouton admin « Nouveau contenu » : pas d'onClick → ouvre `MCreateModal`
+- Search étendue : title + author + category → title + excerpt + author + category + tags
+- EditModal : ajout des nouveaux champs body, quote, author_bio
+- aria-label sur bouton retour (« Retour à la liste des contenus »)
+- « Journaliste militant·e » → « Journaliste · Maintenant ! Média » (moins idéologique, plus factuel)
+
+#### Composants concernés
+
+```
+Pages_Media_Profile.jsx :
+- MediaArticle      (+ shareOpen, permalink, bodyParagraphs split, onSelectArticle prop)
+- MediaCard         (3 layouts → <a> + mn-card-hover + aria-label)
+- MCreateModal      (NOUVEAU — wizard 3 steps adaptatif au format)
+- MediaPage         (+ search étendue + tipAmount + createOpen + featured <a>)
+```
+
+#### Décisions techniques
+
+- Le `body` est stocké comme une string avec `\n` pour séparer les paragraphes (parsing simple via `.split('\n').filter(Boolean)`)
+- `MCreateModal` n'utilise pas la persistance `getUserCreations('media')` pour le moment (le contenu créé reste en state local de MediaPage). À terme, persistance via `addUserCreation('media', item)` pour cohérence.
+- Pas de FAB mobile pour Médias : pas de CTA primaire évident (lire un article = pas un bouton). Cohérent.
+- Articles featured : 2 sur 5 (id 1 et 2). Le hero featured affiche le 1er en grand, les autres dans la grille standard.
 
 ---
 
