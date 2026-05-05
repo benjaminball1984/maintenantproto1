@@ -1,18 +1,21 @@
 // Pages_Commerce.jsx — Marketplace v2, SEL v2, Covoiturage v2, Garden v2, Lending v2, Crowdfunding v2
-const { useState } = React;
+const { useState, useEffect } = React;
+
+// Helper image-or-gradient (cohérence Bloc 9-10)
+const imgFallbackGrad = 'linear-gradient(135deg,#7C3AED 0%,#E11D74 50%,#DC2654 100%)';
 
 // ── MARKETPLACE v2 ─────────────────────────────────────────
 function MPCard({ item, onClick, adminMode, onEdit }) {
   const [saved, setSaved] = useState(false);
+  const cover = item.images?.[0];
   return (
-    <div onClick={onClick} style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden', cursor: 'pointer', transition: 'all 0.2s', position: 'relative' }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 12px 36px rgba(0,0,0,0.09)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-      {adminMode && <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 3 }} onClick={e => { e.stopPropagation(); onEdit(); }}><AdminBtn onEdit={onEdit} /></div>}
+    <a href={`#marketplace/${item.id}`} onClick={e => { e.preventDefault(); onClick?.(); }} className="mn-card-hover"
+      style={{ display: 'block', background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden', textDecoration: 'none', color: 'inherit', position: 'relative', fontFamily: 'Inter,sans-serif' }}>
+      {adminMode && <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 3 }} onClick={e => { e.stopPropagation(); e.preventDefault(); onEdit(); }}><AdminBtn onEdit={onEdit} /></div>}
       {item._userCreated && <div style={{ position:'absolute', top: 8, left: adminMode ? 96 : 8, zIndex: 3 }}><window.UserBadge /></div>}
-      <div style={{ position: 'relative', height: 180, overflow: 'hidden', background: T.surface2 }}>
-        <img src={item.images?.[0] || `https://picsum.photos/seed/mp${item.id}/400/300`} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s' }} onMouseEnter={e => e.target.style.transform = 'scale(1.06)'} onMouseLeave={e => e.target.style.transform = 'scale(1)'} onError={e => e.target.style.display = 'none'} />
-        <button onClick={e => { e.stopPropagation(); setSaved(!saved); }} style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(4px)', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: saved ? T.brand : T.text3 }}>{saved ? ICONS.heartFill : ICONS.heart}</button>
+      <div style={{ position: 'relative', height: 180, overflow: 'hidden', background: T.surface2, backgroundImage: cover ? 'none' : imgFallbackGrad }}>
+        {cover && <img src={cover} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { e.target.style.display = 'none'; }} />}
+        <button onClick={e => { e.stopPropagation(); e.preventDefault(); setSaved(!saved); }} aria-label={saved ? 'Retirer des favoris' : 'Ajouter aux favoris'} style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(4px)', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: saved ? T.brand : T.text3 }}>{saved ? ICONS.heartFill : ICONS.heart}</button>
         <Tag variant={item.condition === 'Excellent' ? 'success' : item.condition === 'Très bon' ? 'info' : 'default'} size="xs" style={{ position: 'absolute', bottom: 10, left: 10 }}>{item.condition}</Tag>
       </div>
       <div style={{ padding: '12px 14px 14px' }}>
@@ -23,31 +26,41 @@ function MPCard({ item, onClick, adminMode, onEdit }) {
           <div style={{ fontSize: 11, color: T.text4 }}>📍 {item.location}</div>
         </div>
       </div>
-    </div>
+    </a>
   );
 }
 
-function MPDetail({ item, onBack, user, onAuth, adminMode, onSave }) {
+function MPDetail({ item, onBack, user, onAuth, adminMode, onSave, setPage }) {
   const [payOpen, setPayOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [data, setData] = useState(item);
   const similar = AppData.marketplace.filter(i => i.category === item.category && i.id !== item.id).slice(0, 4);
+  const permalink = (typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '') + '#marketplace/' + item.id;
+  const cover = data.images?.[0];
 
   return (
     <div style={{ background: T.bg, minHeight: '100vh' }}>
       <div style={{ maxWidth: 1000, margin: '0 auto', padding: '20px 20px 100px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, gap: 8, flexWrap: 'wrap' }}>
           <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, fontSize: 14, fontWeight: 600, fontFamily: 'Inter,sans-serif', padding: '8px 0' }}>{ICONS.arrow_l} Marketplace</button>
-          {adminMode && <AdminBtn onEdit={() => setEditOpen(true)} />}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Btn variant="outline" size="sm" onClick={() => setShareOpen(true)} icon={'↗'}>Partager</Btn>
+            {adminMode && <AdminBtn onEdit={() => setEditOpen(true)} />}
+          </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32, marginBottom: 40 }} className="mn-detail-grid">
           {/* Photos */}
           <div>
-            <div style={{ borderRadius: 18, overflow: 'hidden', marginBottom: 10, height: 380 }}>
-              <img src={`https://picsum.photos/seed/mp${item.id}main/800/700`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
+            <div style={{ borderRadius: 18, overflow: 'hidden', marginBottom: 10, height: 380, background: cover ? '#000' : '#1A1A18', backgroundImage: cover ? 'none' : imgFallbackGrad }}>
+              {cover && <img src={cover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { e.target.style.display = 'none'; }} />}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
-              {[1, 2, 3, 4].map(i => <div key={i} style={{ height: 70, borderRadius: 10, overflow: 'hidden', cursor: 'pointer', border: `2px solid ${i === 1 ? T.brand : T.border}` }}><img src={`https://picsum.photos/seed/mp${item.id}t${i}/200/150`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.background = T.surface2} /></div>)}
+              {(data.images || []).slice(0, 4).map((src, i) => (
+                <div key={i} style={{ height: 70, borderRadius: 10, overflow: 'hidden', cursor: 'pointer', border: `2px solid ${i === 0 ? T.brand : T.border}` }}>
+                  <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />
+                </div>
+              ))}
             </div>
           </div>
           {/* Info */}
@@ -69,7 +82,7 @@ function MPDetail({ item, onBack, user, onAuth, adminMode, onSave }) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <Btn full variant="gradient" size="lg" onClick={() => user ? setPayOpen(true) : onAuth()} icon={ICONS.wallet}>Acheter · <TokenDisplay amount={data.price_t99cp} size="sm" showLabel={false} /> T99CP</Btn>
-              <Btn full variant="outline" size="md" onClick={() => user ? window.showToast?.(`Message envoyé à ${item.seller} — réponse par messagerie`, { type:'success', icon:'✉️' }) : onAuth()} icon={ICONS.chat}>Contacter le vendeur</Btn>
+              <Btn full variant="outline" size="md" onClick={() => { if (!user) { onAuth(); return; } window.showToast?.(`Conversation ouverte avec ${data.seller}`, { type:'success', icon:'✉️' }); setPage?.('messages'); }} icon={ICONS.chat}>Contacter le vendeur</Btn>
               <p style={{ fontSize: 11, color: T.text4, textAlign: 'center', margin: 0 }}>+ frais de port Polygon (Gas fees) selon poids et destination</p>
             </div>
           </div>
@@ -77,17 +90,18 @@ function MPDetail({ item, onBack, user, onAuth, adminMode, onSave }) {
         {similar.length > 0 && <>
           <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 18, fontWeight: 700, color: T.text1, margin: '0 0 16px', letterSpacing: '-0.02em' }}>Articles similaires</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 14 }}>
-            {similar.map(i => <MPCard key={i.id} item={i} onClick={() => { window.scrollTo(0, 0); }} adminMode={adminMode} onEdit={() => {}} />)}
+            {similar.map(i => <MPCard key={i.id} item={i} onClick={() => { setData(i); window.scrollTo(0, 0); }} adminMode={adminMode} onEdit={() => {}} />)}
           </div>
         </>}
       </div>
       <PayModal open={payOpen} onClose={() => setPayOpen(false)} amount={data.price_t99cp} item={data.title} description={`Achat auprès de ${data.seller} · ${data.location}`} seller={data.seller} hasShipping={true} />
       <EditModal open={editOpen} onClose={() => setEditOpen(false)} title="Article" data={data} onSave={f => { setData(d => ({ ...d, ...f })); onSave?.({ ...data, ...f }); }} fields={[{ key: 'title', label: 'Titre' }, { key: 'category', label: 'Catégorie' }, { key: 'price_t99cp', label: 'Prix T99CP', type: 'number' }, { key: 'condition', label: 'État', type: 'select', options: ['Excellent', 'Très bon', 'Bon'] }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'location', label: 'Lieu' }]} />
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} title={data.title} url={permalink} text={`${data.title} — ${data.price_t99cp} T99CP sur la Marketplace Maintenant !`} />
     </div>
   );
 }
 
-function MarketplacePage({ user, adminMode, onAuth }) {
+function MarketplacePage({ user, adminMode, onAuth, setPage }) {
   const [data, setData] = useState([...window.getUserCreations('marketplace'), ...AppData.marketplace]);
   const [detail, setDetail] = useState(null);
   const [search, setSearch] = useState('');
@@ -96,10 +110,18 @@ function MarketplacePage({ user, adminMode, onAuth }) {
   const [editItem, setEditItem] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const cats = ['Toutes', ...new Set(data.map(i => i.category))];
-  let filtered = data.filter(i => (cat === 'Toutes' || i.category === cat) && (!search || i.title.toLowerCase().includes(search.toLowerCase())));
+  let filtered = data.filter(i => {
+    if (cat !== 'Toutes' && i.category !== cat) return false;
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (i.title || '').toLowerCase().includes(q)
+        || (i.description || '').toLowerCase().includes(q)
+        || (i.location || '').toLowerCase().includes(q)
+        || (i.seller || '').toLowerCase().includes(q);
+  });
   if (sort === 'asc') filtered = [...filtered].sort((a, b) => a.price_t99cp - b.price_t99cp);
   if (sort === 'desc') filtered = [...filtered].sort((a, b) => b.price_t99cp - a.price_t99cp);
-  if (detail) return <MPDetail item={detail} onBack={() => setDetail(null)} user={user} onAuth={onAuth} adminMode={adminMode} onSave={u => setData(d => d.map(i => i.id === u.id ? u : i))} />;
+  if (detail) return <MPDetail item={detail} onBack={() => setDetail(null)} user={user} onAuth={onAuth} adminMode={adminMode} setPage={setPage} onSave={u => setData(d => d.map(i => i.id === u.id ? u : i))} />;
   return (
     <PageContainer>
       <SectionTitle label="Économie du partage" title="Marketplace" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Vendre un article</Btn>} />
@@ -118,7 +140,7 @@ function MarketplacePage({ user, adminMode, onAuth }) {
         onSubmit={item => { const enriched = { ...item, seller: user?.name || 'Vous', location: user?.location || 'France', images: [item.image].filter(Boolean), price_t99cp: +item.price_t99cp }; setData(d => [enriched, ...d]); }}
       />
       <div style={{ display: 'flex', gap: 10, marginBottom: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <div style={{ flex: 1, minWidth: 220 }}><SearchInput value={search} onChange={setSearch} placeholder="Rechercher un article..." /></div>
+        <div style={{ flex: 1, minWidth: 220 }}><SearchInput value={search} onChange={setSearch} placeholder="Rechercher (titre, description, lieu, vendeur)..." /></div>
         <select value={sort} onChange={e => setSort(e.target.value)} style={{ height: 48, border: `1.5px solid ${T.border}`, borderRadius: 14, padding: '0 16px', fontSize: 14, fontFamily: 'Inter,sans-serif', color: T.text2, background: T.surface, outline: 'none', cursor: 'pointer' }}>
           <option value="recent">Plus récents</option><option value="asc">Prix croissant</option><option value="desc">Prix décroissant</option>
         </select>
@@ -129,6 +151,11 @@ function MarketplacePage({ user, adminMode, onAuth }) {
           {filtered.map(i => <MPCard key={i.id} item={i} onClick={() => setDetail(i)} adminMode={adminMode} onEdit={() => setEditItem(i)} />)}
         </div>}
       {editItem && <EditModal open onClose={() => setEditItem(null)} title="Article" data={editItem} onSave={f => { setData(d => d.map(i => i.id === editItem.id ? { ...i, ...f } : i)); setEditItem(null); }} fields={[{ key: 'title', label: 'Titre' }, { key: 'price_t99cp', label: 'Prix T99CP', type: 'number' }, { key: 'condition', label: 'État', type: 'select', options: ['Excellent', 'Très bon', 'Bon'] }, { key: 'description', label: 'Description', type: 'textarea' }]} />}
+
+      {/* FAB mobile */}
+      <div className="mn-detail-fab">
+        <Btn full variant="gradient" size="lg" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Vendre un article</Btn>
+      </div>
     </PageContainer>
   );
 }
@@ -140,10 +167,9 @@ const SEL_CATS = { 'Bien-être': '#7C3AED', 'Formation': '#2563EB', 'Artisanat':
 function SELCard({ s, onClick, adminMode, onEdit }) {
   const color = SEL_CATS[s.category] || T.brand;
   return (
-    <div onClick={onClick} style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: '18px 20px', cursor: 'pointer', transition: 'all 0.2s', position: 'relative' }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = color; e.currentTarget.style.boxShadow = `0 8px 28px ${color}18`; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-      {adminMode && <div style={{ position: 'absolute', top: 10, right: 10 }} onClick={e => { e.stopPropagation(); onEdit(); }}><AdminBtn onEdit={onEdit} /></div>}
+    <a href={`#sel/${s.id}`} onClick={e => { e.preventDefault(); onClick?.(); }} className="mn-card-hover"
+      style={{ display: 'block', background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: '18px 20px', textDecoration: 'none', color: 'inherit', position: 'relative', fontFamily: 'Inter,sans-serif' }}>
+      {adminMode && <div style={{ position: 'absolute', top: 10, right: 10 }} onClick={e => { e.stopPropagation(); e.preventDefault(); onEdit(); }}><AdminBtn onEdit={onEdit} /></div>}
       {s._userCreated && <div style={{ position:'absolute', top: 10, left: 10 }}><window.UserBadge /></div>}
       <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
         <div style={{ width: 48, height: 48, borderRadius: 14, background: `${color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -159,21 +185,26 @@ function SELCard({ s, onClick, adminMode, onEdit }) {
           </div>
         </div>
       </div>
-    </div>
+    </a>
   );
 }
 
-function SELDetail({ s, onBack, user, onAuth, adminMode, onSave }) {
+function SELDetail({ s, onBack, user, onAuth, adminMode, onSave, setPage }) {
   const [payOpen, setPayOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [data, setData] = useState(s);
   const color = SEL_CATS[s.category] || T.brand;
+  const permalink = (typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '') + '#sel/' + s.id;
   return (
     <div style={{ background: T.bg, minHeight: '100vh' }}>
       <div style={{ maxWidth: 760, margin: '0 auto', padding: '20px 20px 100px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, gap: 8, flexWrap: 'wrap' }}>
           <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, fontSize: 14, fontWeight: 600, fontFamily: 'Inter,sans-serif', padding: '8px 0' }}>{ICONS.arrow_l} SEL</button>
-          {adminMode && <AdminBtn onEdit={() => setEditOpen(true)} />}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Btn variant="outline" size="sm" onClick={() => setShareOpen(true)} icon={'↗'}>Partager</Btn>
+            {adminMode && <AdminBtn onEdit={() => setEditOpen(true)} />}
+          </div>
         </div>
         <div style={{ background: T.surface, borderRadius: 24, border: `1px solid ${T.border}`, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.07)' }}>
           <div style={{ background: `linear-gradient(135deg,${color},${color}bb)`, padding: '32px 28px', color: '#fff' }}>
@@ -183,7 +214,7 @@ function SELDetail({ s, onBack, user, onAuth, adminMode, onSave }) {
           </div>
           <div style={{ padding: '28px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
-              {[['Durée', `${data.duration_min} min`], ['Valeur SEL', `${data.duration_min} T99CP`], ['Disponible', data.available]].map(([l, v]) => (
+              {[['Durée', `${data.duration_min} min`], ['Valeur SEL', `${data.duration_min} T99CP`], ['Disponible', typeof data.available === 'string' ? data.available : (data.available ? 'Oui' : 'Non')]].map(([l, v]) => (
                 <div key={l} style={{ background: T.surface2, borderRadius: 14, padding: '14px', textAlign: 'center', border: `1px solid ${T.border}` }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: T.text4, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{l}</div>
                   <div style={{ fontWeight: 800, fontSize: 16, color: T.text1, fontFamily: "'Sora',sans-serif" }}>{v}</div>
@@ -195,30 +226,42 @@ function SELDetail({ s, onBack, user, onAuth, adminMode, onSave }) {
               <div style={{ fontWeight: 700, fontSize: 14, color, marginBottom: 6 }}>Principe du SEL</div>
               <div style={{ fontSize: 13, color: T.text2, lineHeight: 1.6 }}>1 minute de service = 1 T99CP. La valeur du temps est égale pour tous. 1 heure de yoga = 1 heure de plomberie = 60 T99CP.</div>
             </div>
-            <Btn full variant="gradient" size="lg" onClick={() => user ? setPayOpen(true) : onAuth()} icon={ICONS.wallet}>Échanger · {data.duration_min} T99CP</Btn>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <Btn full variant="gradient" size="lg" onClick={() => user ? setPayOpen(true) : onAuth()} icon={ICONS.wallet}>Échanger · {data.duration_min} T99CP</Btn>
+              <Btn full variant="outline" size="md" onClick={() => { if (!user) { onAuth(); return; } window.showToast?.(`Conversation ouverte avec ${data.provider}`, { type:'success', icon:'✉️' }); setPage?.('messages'); }} icon={ICONS.chat}>Contacter le prestataire</Btn>
+            </div>
           </div>
         </div>
       </div>
       <PayModal open={payOpen} onClose={() => setPayOpen(false)} amount={data.duration_min} item={data.service} description={`Service de ${data.provider} · Durée : ${data.duration_min} minutes`} seller={data.provider} />
       <EditModal open={editOpen} onClose={() => setEditOpen(false)} title="Service SEL" data={data} onSave={f => { setData(d => ({ ...d, ...f })); onSave?.({ ...data, ...f }); }} fields={[{ key: 'service', label: 'Nom du service' }, { key: 'category', label: 'Catégorie', type: 'select', options: Object.keys(SEL_CATS) }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'duration_min', label: 'Durée (min)', type: 'number' }, { key: 'location', label: 'Lieu' }, { key: 'available', label: 'Disponibilité' }]} />
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} title={data.service} url={permalink} text={`${data.service} — ${data.duration_min} T99CP · Service SEL sur Maintenant !`} />
     </div>
   );
 }
 
-function SELPage({ user, adminMode, onAuth }) {
+function SELPage({ user, adminMode, onAuth, setPage }) {
   const [data, setData] = useState([...window.getUserCreations('sel'), ...AppData.sel]);
   const [detail, setDetail] = useState(null);
   const [search, setSearch] = useState('');
   const [cat, sCat] = useState('Toutes');
   const [editItem, setEditItem] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const filtered = data.filter(s => (cat === 'Toutes' || s.category === cat) && (!search || s.service.toLowerCase().includes(search.toLowerCase()) || s.provider.toLowerCase().includes(search.toLowerCase())));
-  if (detail) return <SELDetail s={detail} onBack={() => setDetail(null)} user={user} onAuth={onAuth} adminMode={adminMode} onSave={u => setData(d => d.map(s => s.id === u.id ? u : s))} />;
+  const filtered = data.filter(s => {
+    if (cat !== 'Toutes' && s.category !== cat) return false;
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (s.service || '').toLowerCase().includes(q)
+        || (s.description || '').toLowerCase().includes(q)
+        || (s.provider || '').toLowerCase().includes(q)
+        || (s.location || '').toLowerCase().includes(q);
+  });
+  if (detail) return <SELDetail s={detail} onBack={() => setDetail(null)} user={user} onAuth={onAuth} adminMode={adminMode} setPage={setPage} onSave={u => setData(d => d.map(s => s.id === u.id ? u : s))} />;
   return (
     <PageContainer>
       <div style={{ background: T.text1, borderRadius: 20, padding: '24px 28px', marginBottom: 32, display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Système d'Échange Local</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Économie du partage · Système d'Échange Local</div>
           <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(18px,3vw,26px)', fontWeight: 800, color: '#fff', margin: '0 0 8px', letterSpacing: '-0.03em' }}>1 minute = 1 T99CP</h2>
           <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)', margin: 0 }}>Échangez vos compétences sans argent. Yoga, jardinage, plomberie, cours... chaque minute a la même valeur.</p>
         </div>
@@ -238,13 +281,18 @@ function SELPage({ user, adminMode, onAuth }) {
         ]}
         onSubmit={item => { const enriched = { ...item, provider: user?.name || 'Vous', rating: 0, reviews_count: 0, duration_min: +item.duration_min }; setData(d => [enriched, ...d]); }}
       />
-      <SearchInput value={search} onChange={setSearch} placeholder="Yoga, plomberie, anglais, guitare..." />
+      <SearchInput value={search} onChange={setSearch} placeholder="Service, description, prestataire, lieu..." />
       <FilterTabs options={['Toutes', ...Object.keys(SEL_CATS)]} active={cat} onChange={sCat} />
       {filtered.length === 0 ? <EmptyState title="Aucun service" desc="Essayez d'autres mots-clés." /> :
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 14 }}>
           {filtered.map(s => <SELCard key={s.id} s={s} onClick={() => setDetail(s)} adminMode={adminMode} onEdit={() => setEditItem(s)} />)}
         </div>}
       {editItem && <EditModal open onClose={() => setEditItem(null)} title="Service SEL" data={editItem} onSave={f => { setData(d => d.map(s => s.id === editItem.id ? { ...s, ...f } : s)); setEditItem(null); }} fields={[{ key: 'service', label: 'Nom' }, { key: 'category', label: 'Catégorie', type: 'select', options: Object.keys(SEL_CATS) }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'duration_min', label: 'Durée min', type: 'number' }, { key: 'location', label: 'Lieu' }]} />}
+
+      {/* FAB mobile */}
+      <div className="mn-detail-fab">
+        <Btn full variant="gradient" size="lg" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Proposer un service</Btn>
+      </div>
     </PageContainer>
   );
 }
@@ -886,18 +934,96 @@ function CrowdfundingPage({ user, adminMode, onAuth }) {
 window.CrowdfundingPage = CrowdfundingPage;
 
 // ── GARDEN v2 ─────────────────────────────────────────────
-function GardenPage({ user, adminMode, onAuth }) {
+function GardenCard({ i, onClick, adminMode, onEdit }) {
+  const cover = i.image || i.cover;
+  return (
+    <a href={`#garden/${i.id}`} onClick={e => { e.preventDefault(); onClick?.(); }} className="mn-card-hover"
+      style={{ display: 'block', background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden', position: 'relative', textDecoration: 'none', color: 'inherit', fontFamily: 'Inter,sans-serif' }}>
+      {adminMode && <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 3 }} onClick={e => { e.stopPropagation(); e.preventDefault(); onEdit(); }}><AdminBtn onEdit={onEdit} /></div>}
+      <div style={{ height: 130, position: 'relative', overflow: 'hidden', background: '#1A1A18', backgroundImage: cover ? 'none' : imgFallbackGrad }}>
+        {cover && <img src={cover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { e.target.style.display = 'none'; }} />}
+        <Tag variant={i.free ? 'success' : 'info'} size="xs" style={{ position: 'absolute', top: 10, left: 10 }}>{i.free ? 'GRATUIT' : `${i.price_t99cp} T99CP`}</Tag>
+        {i._userCreated && <div style={{ position:'absolute', top: 10, right: 10 }}><window.UserBadge /></div>}
+      </div>
+      <div style={{ padding: '12px 14px 14px' }}>
+        <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 14, fontWeight: 700, color: T.text1, margin: '0 0 4px', lineHeight: 1.3 }}>{i.item}</h3>
+        <div style={{ fontSize: 12, color: T.text3, marginBottom: 8 }}>{i.giver} · {i.location}</div>
+        <Tag size="xs">{i.quantity}</Tag>
+      </div>
+    </a>
+  );
+}
+
+function GardenDetail({ i, onBack, user, onAuth, adminMode, onSave, setPage }) {
+  const [payOpen, setPayOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [data, setData] = useState(i);
+  const cover = data.image || data.cover;
+  const permalink = (typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '') + '#garden/' + i.id;
+  return (
+    <div style={{ background: T.bg, minHeight: '100vh' }}>
+      <div style={{ maxWidth: 760, margin: '0 auto', padding: '20px 20px 100px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, gap: 8, flexWrap: 'wrap' }}>
+          <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, fontSize: 14, fontWeight: 600, fontFamily: 'Inter,sans-serif', padding: '8px 0' }}>{ICONS.arrow_l} Surplus de jardin</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Btn variant="outline" size="sm" onClick={() => setShareOpen(true)} icon={'↗'}>Partager</Btn>
+            {adminMode && <AdminBtn onEdit={() => setEditOpen(true)} />}
+          </div>
+        </div>
+        <div style={{ background: T.surface, borderRadius: 24, border: `1px solid ${T.border}`, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.07)' }}>
+          <div style={{ height: 240, position: 'relative', background: '#1A1A18', backgroundImage: cover ? 'none' : imgFallbackGrad }}>
+            {cover && <img src={cover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { e.target.style.display = 'none'; }} />}
+            <div style={{ position:'absolute', top:14, left:14, display:'flex', gap:6 }}>
+              <Tag variant={data.free ? 'success' : 'info'}>{data.free ? 'GRATUIT' : `${data.price_t99cp} T99CP`}</Tag>
+              <Tag variant="dark">{data.type}</Tag>
+            </div>
+          </div>
+          <div style={{ padding: '28px' }}>
+            <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(20px,3vw,28px)', fontWeight: 800, color: T.text1, margin: '0 0 10px', lineHeight: 1.2 }}>{data.item}</h1>
+            <div style={{ fontSize: 14, color: T.text3, marginBottom: 18 }}>{data.giver} · 📍 {data.location}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12, marginBottom: 20 }}>
+              <div style={{ background: T.surface2, borderRadius: 12, padding: '12px 14px' }}><div style={{ fontSize: 10, color: T.text4, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 4 }}>QUANTITÉ</div><div style={{ fontWeight: 700, fontSize: 14 }}>{data.quantity}</div></div>
+              <div style={{ background: T.surface2, borderRadius: 12, padding: '12px 14px' }}><div style={{ fontSize: 10, color: T.text4, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 4 }}>TYPE</div><div style={{ fontWeight: 700, fontSize: 14 }}>{data.type}</div></div>
+            </div>
+            {data.description && <p style={{ fontSize: 15, color: T.text2, lineHeight: 1.7, marginBottom: 20 }}>{data.description}</p>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {data.free
+                ? <Btn full variant="success" size="lg" onClick={() => { if (!user) { onAuth(); return; } window.showToast?.(`Demande envoyée à ${data.giver} pour : ${data.item}`, { type:'success', icon:'🌱' }); setPage?.('messages'); }} icon={ICONS.chat}>Demander à {data.giver}</Btn>
+                : <Btn full variant="gradient" size="lg" onClick={() => user ? setPayOpen(true) : onAuth()} icon={ICONS.wallet}>Acheter · {data.price_t99cp} T99CP</Btn>}
+              <Btn full variant="outline" size="md" onClick={() => { if (!user) { onAuth(); return; } window.showToast?.(`Conversation ouverte avec ${data.giver}`, { type:'success', icon:'✉️' }); setPage?.('messages'); }} icon={ICONS.chat}>Contacter {data.giver}</Btn>
+            </div>
+          </div>
+        </div>
+      </div>
+      <PayModal open={payOpen} onClose={() => setPayOpen(false)} amount={data.price_t99cp} item={data.item} description={`Surplus de jardin de ${data.giver} · ${data.location}`} seller={data.giver} />
+      <EditModal open={editOpen} onClose={() => setEditOpen(false)} title="Surplus" data={data} onSave={f => { setData(d => ({ ...d, ...f })); onSave?.({ ...data, ...f }); }} fields={[{ key: 'item', label: 'Nom' }, { key: 'quantity', label: 'Quantité' }, { key: 'location', label: 'Lieu' }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'price_t99cp', label: 'Prix T99CP (0=gratuit)', type: 'number' }]} />
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} title={data.item} url={permalink} text={`${data.item} — ${data.free ? 'gratuit' : data.price_t99cp + ' T99CP'} · Surplus de jardin sur Maintenant !`} />
+    </div>
+  );
+}
+
+function GardenPage({ user, adminMode, onAuth, setPage }) {
   const [data, setData] = useState([...window.getUserCreations('garden'), ...AppData.garden]);
+  const [detail, setDetail] = useState(null);
   const [search, setSearch] = useState('');
   const [type, setType] = useState('Tous');
   const [editItem, setEditItem] = useState(null);
-  const [payItem, setPayItem] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const types = ['Tous', 'Légume', 'Fruit', 'Plant', 'Herbe', 'Œufs', 'Autre'];
-  const filtered = data.filter(i => (type === 'Tous' || i.type === type) && (!search || i.item.toLowerCase().includes(search.toLowerCase())));
+  const filtered = data.filter(i => {
+    if (type !== 'Tous' && i.type !== type) return false;
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (i.item || '').toLowerCase().includes(q)
+        || (i.description || '').toLowerCase().includes(q)
+        || (i.location || '').toLowerCase().includes(q)
+        || (i.giver || '').toLowerCase().includes(q);
+  });
+  if (detail) return <GardenDetail i={detail} onBack={() => setDetail(null)} user={user} onAuth={onAuth} adminMode={adminMode} setPage={setPage} onSave={u => setData(d => d.map(i => i.id === u.id ? u : i))} />;
   return (
     <PageContainer>
-      <SectionTitle label="Partage" title="Surplus de Jardin" action={<Btn variant="success" size="sm" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Proposer un surplus</Btn>} />
+      <SectionTitle label="Économie du partage" title="Surplus de Jardin" action={<Btn variant="success" size="sm" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Proposer un surplus</Btn>} />
       <CreateModal open={createOpen} onClose={() => setCreateOpen(false)} title="Proposer un surplus de jardin"
         subtitle="Tomates, miel, plants, œufs... partage tes surplus avec ton voisinage. Gratuit ou en T99CP."
         domain="garden" color={T.hub.garden}
@@ -911,50 +1037,137 @@ function GardenPage({ user, adminMode, onAuth }) {
         ]}
         onSubmit={item => { const enriched = { ...item, giver: user?.name || 'Vous', free: +item.price_t99cp === 0, price_t99cp: +item.price_t99cp }; setData(d => [enriched, ...d]); }}
       />
-      <SearchInput value={search} onChange={setSearch} placeholder="Tomates, courgettes, miel..." />
+      <SearchInput value={search} onChange={setSearch} placeholder="Tomates, courgettes, miel, lieu, donateur..." />
       <FilterTabs options={types} active={type} onChange={setType} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
-        {filtered.map(i => (
-          <div key={i.id} style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden', position: 'relative', transition: 'all 0.2s', cursor: 'pointer' }}
-            onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 10px 30px rgba(22,163,74,0.1)'; e.currentTarget.style.borderColor = T.success; e.currentTarget.style.transform = 'translateY(-3px)'; }}
-            onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = 'none'; }}
-            onClick={() => { if (!i.free) { if (!user) { onAuth(); } else setPayItem(i); } else { window.showToast?.(`Demande envoyée à ${i.giver} pour : ${i.item}`, { type:'success', icon:'🌱' }); } }}>
-            {adminMode && <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 3 }} onClick={e => { e.stopPropagation(); setEditItem(i); }}><AdminBtn onEdit={() => setEditItem(i)} /></div>}
-            <div style={{ height: 130, position: 'relative', overflow: 'hidden' }}>
-              <img src={`https://picsum.photos/seed/garden${i.id}/400/250`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; e.target.parentElement.style.background = 'linear-gradient(135deg,#14532d,#166534)'; }} />
-              <Tag variant={i.free ? 'success' : 'info'} size="xs" style={{ position: 'absolute', top: 10, left: 10 }}>{i.free ? 'GRATUIT' : `${i.price_t99cp} T99CP`}</Tag>
-              {i._userCreated && <div style={{ position:'absolute', top: 10, right: 10 }}><window.UserBadge /></div>}
-            </div>
-            <div style={{ padding: '12px 14px 14px' }}>
-              <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 14, fontWeight: 700, color: T.text1, margin: '0 0 4px', lineHeight: 1.3 }}>{i.item}</h3>
-              <div style={{ fontSize: 12, color: T.text3, marginBottom: 8 }}>{i.giver} · {i.location}</div>
-              <Tag size="xs">{i.quantity}</Tag>
-            </div>
-          </div>
-        ))}
+        {filtered.map(i => <GardenCard key={i.id} i={i} onClick={() => setDetail(i)} adminMode={adminMode} onEdit={() => setEditItem(i)} />)}
       </div>
-      {payItem && <PayModal open onClose={() => setPayItem(null)} amount={payItem.price_t99cp} item={payItem.item} description={`Surplus de jardin de ${payItem.giver} · ${payItem.location}`} seller={payItem.giver} />}
       {editItem && <EditModal open onClose={() => setEditItem(null)} title="Surplus" data={editItem} onSave={f => { setData(d => d.map(i => i.id === editItem.id ? { ...i, ...f } : i)); setEditItem(null); }} fields={[{ key: 'item', label: 'Nom' }, { key: 'type', label: 'Type', type: 'select', options: types.slice(1) }, { key: 'quantity', label: 'Quantité' }, { key: 'location', label: 'Lieu' }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'price_t99cp', label: 'Prix T99CP (0=gratuit)', type: 'number' }]} />}
+
+      {/* FAB mobile */}
+      <div className="mn-detail-fab">
+        <Btn full variant="success" size="lg" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Proposer un surplus</Btn>
+      </div>
     </PageContainer>
   );
 }
 window.GardenPage = GardenPage;
 
 // ── LENDING v2 ────────────────────────────────────────────
-function LendingPage({ user, adminMode, onAuth }) {
+function LendingCard({ i, onClick, adminMode, onEdit }) {
+  const cover = i.image || i.cover;
+  return (
+    <a href={`#lending/${i.id}`} onClick={e => { e.preventDefault(); onClick?.(); }} className="mn-card-hover"
+      style={{ display: 'block', background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden', textDecoration: 'none', color: 'inherit', position: 'relative', opacity: i.available ? 1 : 0.7, fontFamily: 'Inter,sans-serif' }}>
+      {adminMode && <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 3 }} onClick={e => { e.stopPropagation(); e.preventDefault(); onEdit(); }}><AdminBtn onEdit={onEdit} /></div>}
+      {i._userCreated && <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 3 }}><window.UserBadge /></div>}
+      <div style={{ height: 140, position: 'relative', background: '#1A1A18', backgroundImage: cover ? 'none' : imgFallbackGrad }}>
+        {cover && <img src={cover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { e.target.style.display = 'none'; }} />}
+        {!i.available && <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Tag variant="dark">Indisponible</Tag></div>}
+        <Tag variant={i.condition === 'Excellent' ? 'success' : 'info'} size="xs" style={{ position: 'absolute', top: 10, left: 10 }}>{i.condition}</Tag>
+      </div>
+      <div style={{ padding: '12px 14px 14px' }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: T.text4, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{i.category}</div>
+        <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 13, fontWeight: 700, color: T.text1, margin: '0 0 8px', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{i.name}</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {i.price_t99cp > 0 ? <><TokenDisplay amount={i.price_t99cp} size="sm" /><span style={{ fontSize: 11, color: T.text4 }}>/jour</span></> : <Tag variant="success" size="xs">Gratuit</Tag>}
+          <div style={{ fontSize: 11, color: T.text4 }}>{i.owner}</div>
+        </div>
+      </div>
+    </a>
+  );
+}
+
+function LendingDetail({ i, onBack, user, onAuth, adminMode, onSave, setPage }) {
+  const [days, setDays] = useState(2);
+  const [payOpen, setPayOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [data, setData] = useState(i);
+  const cover = data.image || data.cover;
+  const permalink = (typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '') + '#lending/' + i.id;
+  const total = (data.price_t99cp || 0) * days + (data.deposit_t99cp || 0);
+  return (
+    <div style={{ background: T.bg, minHeight: '100vh' }}>
+      <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px 20px 100px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, gap: 8, flexWrap: 'wrap' }}>
+          <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, fontSize: 14, fontWeight: 600, fontFamily: 'Inter,sans-serif', padding: '8px 0' }}>{ICONS.arrow_l} Ki Prête Tout</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Btn variant="outline" size="sm" onClick={() => setShareOpen(true)} icon={'↗'}>Partager</Btn>
+            {adminMode && <AdminBtn onEdit={() => setEditOpen(true)} />}
+          </div>
+        </div>
+        <div style={{ background: T.surface, borderRadius: 24, border: `1px solid ${T.border}`, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.07)' }}>
+          <div style={{ height: 280, position: 'relative', background: '#1A1A18', backgroundImage: cover ? 'none' : imgFallbackGrad }}>
+            {cover && <img src={cover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { e.target.style.display = 'none'; }} />}
+            <div style={{ position: 'absolute', top: 16, left: 16, display: 'flex', gap: 6 }}>
+              <Tag variant={data.condition === 'Excellent' ? 'success' : 'info'}>{data.condition}</Tag>
+              {!data.available && <Tag variant="dark">Indisponible</Tag>}
+            </div>
+          </div>
+          <div style={{ padding: '28px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.text4, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{data.category}</div>
+            <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(20px,3vw,28px)', fontWeight: 800, color: T.text1, margin: '0 0 18px', lineHeight: 1.2 }}>{data.name}</h1>
+            <p style={{ fontSize: 15, color: T.text2, lineHeight: 1.7, marginBottom: 24 }}>{data.description}</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 24 }}>
+              {[['État', data.condition], ['Lieu', data.location], ['Propriétaire', data.owner]].map(([l, v]) => (
+                <div key={l} style={{ background: T.surface2, borderRadius: 12, padding: '12px 10px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, color: T.text4, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>{l}</div>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{v}</div>
+                </div>
+              ))}
+            </div>
+            {data.available && <>
+              <div style={{ background: T.surface2, borderRadius: 14, padding: '16px 18px', marginBottom: 18 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: T.text2 }}>Durée :</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button onClick={() => setDays(n => Math.max(1, n - 1))} aria-label="Réduire" style={{ width: 36, height: 36, borderRadius: '50%', border: `1.5px solid ${T.border}`, background: T.surface, cursor: 'pointer', fontSize: 18 }}>−</button>
+                    <span style={{ fontWeight: 800, fontSize: 18, minWidth: 56, textAlign: 'center' }}>{days} jour{days > 1 ? 's' : ''}</span>
+                    <button onClick={() => setDays(n => n + 1)} aria-label="Augmenter" style={{ width: 36, height: 36, borderRadius: '50%', border: `1.5px solid ${T.border}`, background: T.surface, cursor: 'pointer', fontSize: 18 }}>+</button>
+                  </div>
+                  <span style={{ fontSize: 13, color: T.text3, marginLeft: 'auto' }}>Total : <strong style={{ color: T.text1 }}>{(data.price_t99cp || 0) > 0 ? `${total} T99CP` : 'Gratuit'}</strong></span>
+                </div>
+                {(data.deposit_t99cp || 0) > 0 && <div style={{ marginTop: 8, fontSize: 11, color: T.text4 }}>Dont caution {data.deposit_t99cp} T99CP, restituée à la fin du prêt.</div>}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <Btn full variant="gradient" size="lg" onClick={() => { if (!user) { onAuth(); } else { setPayOpen(true); } }} icon={ICONS.wallet}>
+                  {(data.price_t99cp || 0) > 0 ? `Emprunter · ${total} T99CP` : 'Demander l\'emprunt'}
+                </Btn>
+                <Btn full variant="outline" size="md" onClick={() => { if (!user) { onAuth(); return; } window.showToast?.(`Conversation ouverte avec ${data.owner}`, { type:'success', icon:'✉️' }); setPage?.('messages'); }} icon={ICONS.chat}>Contacter {data.owner}</Btn>
+              </div>
+            </>}
+          </div>
+        </div>
+      </div>
+      <PayModal open={payOpen} onClose={() => setPayOpen(false)} amount={total} item={data.name} description={`${days} jour${days > 1 ? 's' : ''} + caution ${data.deposit_t99cp || 0} T99CP remboursable`} seller={data.owner} />
+      <EditModal open={editOpen} onClose={() => setEditOpen(false)} title="Objet" data={data} onSave={f => { setData(d => ({ ...d, ...f })); onSave?.({ ...data, ...f }); }} fields={[{ key: 'name', label: 'Nom' }, { key: 'category', label: 'Catégorie' }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'price_t99cp', label: 'Prix/jour T99CP', type: 'number' }, { key: 'location', label: 'Lieu' }]} />
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} title={data.name} url={permalink} text={`${data.name} — ${(data.price_t99cp || 0) > 0 ? data.price_t99cp + ' T99CP/jour' : 'Gratuit'} · Prêt sur Maintenant !`} />
+    </div>
+  );
+}
+
+function LendingPage({ user, adminMode, onAuth, setPage }) {
   const [data, setData] = useState([...window.getUserCreations('lending'), ...AppData.lending]);
   const [detail, setDetail] = useState(null);
   const [search, setSearch] = useState('');
   const [cat, sCat] = useState('Toutes');
   const [editItem, setEditItem] = useState(null);
-  const [payOpen, setPayOpen] = useState(false);
-  const [days, setDays] = useState(2);
   const [createOpen, setCreateOpen] = useState(false);
   const cats = ['Toutes', ...new Set(data.map(i => i.category))];
-  const filtered = data.filter(i => (cat === 'Toutes' || i.category === cat) && (!search || i.name.toLowerCase().includes(search.toLowerCase())));
+  const filtered = data.filter(i => {
+    if (cat !== 'Toutes' && i.category !== cat) return false;
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (i.name || '').toLowerCase().includes(q)
+        || (i.description || '').toLowerCase().includes(q)
+        || (i.location || '').toLowerCase().includes(q)
+        || (i.owner || '').toLowerCase().includes(q);
+  });
+  if (detail) return <LendingDetail i={detail} onBack={() => setDetail(null)} user={user} onAuth={onAuth} adminMode={adminMode} setPage={setPage} onSave={u => setData(d => d.map(x => x.id === u.id ? u : x))} />;
   return (
     <PageContainer>
-      <SectionTitle label="Entraide" title="Ki Prête Tout" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Proposer un objet</Btn>} />
+      <SectionTitle label="Économie du partage" title="Ki Prête Tout" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Proposer un objet</Btn>} />
       <CreateModal open={createOpen} onClose={() => setCreateOpen(false)} title="Proposer un objet à prêter"
         subtitle="Perceuse, raclette, jeux, instruments... prête ce que tu n'utilises pas tout le temps."
         domain="lending" color="#A21CAF"
@@ -962,89 +1175,36 @@ function LendingPage({ user, adminMode, onAuth }) {
         fields={[
           { id:'name',         label:'Nom de l\'objet', required:true, placeholder:"Perceuse Bosch sans-fil 18V" },
           { id:'category',     label:'Catégorie', type:'select', required:true, options:['Bricolage','Jardinage','Cuisine','Loisirs','Multimédia','Sport','Famille','Autre'] },
-          { id:'price_per_day', label:'Prix par jour (en T99CP)', type:'number', required:true, placeholder:'5' },
+          { id:'condition',    label:'État', type:'select', required:true, options:['Excellent','Très bon','Bon','Moyen'] },
+          { id:'price_t99cp',  label:'Prix par jour (en T99CP)', type:'number', required:true, placeholder:'5', hint:'0 = prêt gratuit' },
           { id:'deposit_t99cp', label:'Caution (en T99CP)', type:'number', required:true, placeholder:'50', hint:'Restituée à la fin du prêt' },
           { id:'location',     label:'Lieu de récupération', required:true, placeholder:"Marseille 6e" },
           { id:'description',  label:'Description', type:'textarea', rows:3, placeholder:"État, accessoires fournis, conditions d'utilisation..." },
         ]}
-        onSubmit={item => { const enriched = { ...item, owner: user?.name || 'Vous', available: true, price_per_day: +item.price_per_day, deposit_t99cp: +item.deposit_t99cp }; setData(d => [enriched, ...d]); }}
+        onSubmit={item => { const enriched = { ...item, owner: user?.name || 'Vous', available: true, price_t99cp: +item.price_t99cp, deposit_t99cp: +item.deposit_t99cp }; setData(d => [enriched, ...d]); }}
       />
-      <SearchInput value={search} onChange={setSearch} placeholder="Perceuse, raclette, vélo, piano..." />
+      <SearchInput value={search} onChange={setSearch} placeholder="Perceuse, raclette, vélo, lieu, propriétaire..." />
       <FilterTabs options={cats} active={cat} onChange={sCat} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
-        {filtered.map(i => (
-          <div key={i.id} onClick={() => setDetail(i)} style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden', cursor: 'pointer', transition: 'all 0.2s', position: 'relative', opacity: i.available ? 1 : 0.7 }}
-            onMouseEnter={e => { if (i.available) { e.currentTarget.style.boxShadow = '0 10px 32px rgba(0,0,0,0.09)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}}
-            onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-            {adminMode && <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 3 }} onClick={e => { e.stopPropagation(); setEditItem(i); }}><AdminBtn onEdit={() => setEditItem(i)} /></div>}
-            {i._userCreated && <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 3 }}><window.UserBadge /></div>}
-            <div style={{ height: 140, position: 'relative', background: T.surface2 }}>
-              <img src={`https://picsum.photos/seed/lend${i.id}/400/280`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
-              {!i.available && <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Tag variant="dark">Indisponible</Tag></div>}
-              <Tag variant={i.condition === 'Excellent' ? 'success' : 'info'} size="xs" style={{ position: 'absolute', top: 10, left: 10 }}>{i.condition}</Tag>
-            </div>
-            <div style={{ padding: '12px 14px 14px' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: T.text4, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{i.category}</div>
-              <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 13, fontWeight: 700, color: T.text1, margin: '0 0 8px', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{i.name}</h3>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                {i.price_t99cp > 0 ? <><TokenDisplay amount={i.price_t99cp} size="sm" /><span style={{ fontSize: 11, color: T.text4 }}>/jour</span></> : <Tag variant="success" size="xs">Gratuit</Tag>}
-                <div style={{ fontSize: 11, color: T.text4 }}>{i.owner}</div>
-              </div>
-            </div>
-          </div>
-        ))}
+        {filtered.map(i => <LendingCard key={i.id} i={i} onClick={() => setDetail(i)} adminMode={adminMode} onEdit={() => setEditItem(i)} />)}
       </div>
-      {detail && (
-        <Modal open onClose={() => setDetail(null)} title={detail.name} width={520}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <img src={`https://picsum.photos/seed/lend${detail.id}big/800/400`} alt="" style={{ width: '100%', height: 200, objectFit: 'cover', borderRadius: 14 }} onError={e => e.target.style.display = 'none'} />
-            <p style={{ fontSize: 14, color: T.text2, lineHeight: 1.65, margin: 0 }}>{detail.description}</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
-              {[['État', detail.condition], ['Lieu', detail.location], ['Propriétaire', detail.owner]].map(([l, v]) => (<div key={l} style={{ background: T.surface2, borderRadius: 10, padding: '10px', textAlign: 'center' }}><div style={{ fontSize: 10, color: T.text4, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{l}</div><div style={{ fontWeight: 700, fontSize: 13 }}>{v}</div></div>))}
-            </div>
-            {detail.available && <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: T.text2 }}>Durée (jours) :</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <button onClick={() => setDays(n => Math.max(1, n - 1))} style={{ width: 38, height: 38, borderRadius: '50%', border: `1.5px solid ${T.border}`, background: 'transparent', cursor: 'pointer', fontSize: 18 }}>−</button>
-                  <span style={{ fontWeight: 800, fontSize: 18, minWidth: 24, textAlign: 'center' }}>{days}</span>
-                  <button onClick={() => setDays(n => n + 1)} style={{ width: 38, height: 38, borderRadius: '50%', border: `1.5px solid ${T.border}`, background: 'transparent', cursor: 'pointer', fontSize: 18 }}>+</button>
-                </div>
-                <span style={{ fontSize: 13, color: T.text3, marginLeft: 'auto' }}>Total : <strong>{detail.price_t99cp > 0 ? `${detail.price_t99cp * days} T99CP` : 'Gratuit'}</strong></span>
-              </div>
-              <Btn full variant="gradient" size="lg" onClick={() => { if (!user) { onAuth(); } else { setPayOpen(true); } }} icon={ICONS.wallet}>
-                {detail.price_t99cp > 0 ? `Emprunter · ${detail.price_t99cp * days + detail.deposit_t99cp} T99CP` : 'Demander l\'emprunt'}
-              </Btn>
-            </>}
-          </div>
-          <PayModal open={payOpen} onClose={() => setPayOpen(false)} amount={detail.price_t99cp * days + detail.deposit_t99cp} item={detail.name} description={`${days} jour${days > 1 ? 's' : ''} + caution`} seller={detail.owner||detail.lender} />tion ${detail.deposit_t99cp} T99CP remboursable`} />
-        </Modal>
-      )}
       {editItem && <EditModal open onClose={() => setEditItem(null)} title="Objet" data={editItem} onSave={f => { setData(d => d.map(i => i.id === editItem.id ? { ...i, ...f } : i)); setEditItem(null); }} fields={[{ key: 'name', label: 'Nom' }, { key: 'category', label: 'Catégorie' }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'price_t99cp', label: 'Prix/jour T99CP', type: 'number' }, { key: 'location', label: 'Lieu' }]} />}
+
+      {/* FAB mobile */}
+      <div className="mn-detail-fab">
+        <Btn full variant="gradient" size="lg" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Proposer un objet</Btn>
+      </div>
     </PageContainer>
   );
 }
 window.LendingPage = LendingPage;
 
 // ── CARPOOLING v2 ──────────────────────────────────────────
-function CarpoolingPage({ user, adminMode, onAuth }) {
-  const [tab, setTab] = useState('offers');
-  const [offers, setOffers] = useState([...window.getUserCreations('carpool_offers'), ...AppData.carpooling_offers]);
-  const [requests, setRequests] = useState([...window.getUserCreations('carpool_requests'), ...AppData.carpooling_requests]);
-  const [detail, setDetail] = useState(null);
-  const [search, setSearch] = useState('');
-  const [payOpen, setPayOpen] = useState(false);
-  const [editItem, setEditItem] = useState(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [requestOpen, setRequestOpen] = useState(false);
-
-  const filterTrips = arr => !search ? arr : arr.filter(t => t.from.toLowerCase().includes(search.toLowerCase()) || t.to.toLowerCase().includes(search.toLowerCase()));
-
-  const TripCard = ({ t, isOffer }) => (
-    <div onClick={() => setDetail({ ...t, isOffer })} style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: '18px 20px', cursor: 'pointer', transition: 'all 0.2s', position: 'relative' }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 10px 30px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-      {adminMode && isOffer && <div style={{ position: 'absolute', top: 10, right: 10 }} onClick={e => { e.stopPropagation(); setEditItem(t); }}><AdminBtn onEdit={() => setEditItem(t)} /></div>}
+function TripCard({ t, isOffer, onClick, adminMode, onEdit }) {
+  return (
+    <a href={`#carpool/${t.id}`} onClick={e => { e.preventDefault(); onClick?.(); }} className="mn-card-hover"
+      style={{ display: 'block', background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: '18px 20px', textDecoration: 'none', color: 'inherit', position: 'relative', fontFamily: 'Inter,sans-serif' }}>
+      {adminMode && isOffer && <div style={{ position: 'absolute', top: 10, right: 10 }} onClick={e => { e.stopPropagation(); e.preventDefault(); onEdit(); }}><AdminBtn onEdit={onEdit} /></div>}
       {t._userCreated && <div style={{ position: 'absolute', top: 10, left: 10 }}><window.UserBadge /></div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
         <div style={{ flex: 1 }}>
@@ -1055,7 +1215,7 @@ function CarpoolingPage({ user, adminMode, onAuth }) {
           </div>
           <div style={{ display: 'flex', gap: 10, fontSize: 12, color: T.text3 }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{ICONS.calendar}{new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{ICONS.clock}{t.time}</span>
+            {t.time && <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{ICONS.clock}{t.time}</span>}
           </div>
         </div>
         {isOffer && <TokenDisplay amount={t.price_t99cp} size="lg" />}
@@ -1068,21 +1228,104 @@ function CarpoolingPage({ user, adminMode, onAuth }) {
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             <Tag variant={t.seats > 0 ? 'success' : 'brand'} size="xs">{t.seats > 0 ? `${t.seats} place${t.seats > 1 ? 's' : ''}` : 'Complet'}</Tag>
-            <Tag size="xs">{t.car.split(' ')[0]}</Tag>
+            {t.car && <Tag size="xs">{t.car.split(' ')[0]}</Tag>}
           </div>
         </div>
       ) : (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Avatar name={t.passenger} size={32} />
-          <div><div style={{ fontWeight: 600, fontSize: 13, color: T.text1 }}>{t.passenger}</div><div style={{ fontSize: 12, color: T.text3 }}>{t.note}</div></div>
+          <Avatar name={t.passenger || t.requester} size={32} />
+          <div><div style={{ fontWeight: 600, fontSize: 13, color: T.text1 }}>{t.passenger || t.requester}</div><div style={{ fontSize: 12, color: T.text3 }}>{t.note || t.description}</div></div>
         </div>
       )}
+    </a>
+  );
+}
+
+function CarpoolDetail({ t, onBack, user, onAuth, adminMode, onSave, setPage }) {
+  const [payOpen, setPayOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [data, setData] = useState(t);
+  const isOffer = !!t.isOffer;
+  const permalink = (typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '') + '#carpool/' + t.id;
+  const counterpart = isOffer ? data.driver : (data.passenger || data.requester);
+  return (
+    <div style={{ background: T.bg, minHeight: '100vh' }}>
+      <div style={{ maxWidth: 760, margin: '0 auto', padding: '20px 20px 100px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, gap: 8, flexWrap: 'wrap' }}>
+          <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, fontSize: 14, fontWeight: 600, fontFamily: 'Inter,sans-serif', padding: '8px 0' }}>{ICONS.arrow_l} Covoiturage</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Btn variant="outline" size="sm" onClick={() => setShareOpen(true)} icon={'↗'}>Partager</Btn>
+            {adminMode && isOffer && <AdminBtn onEdit={() => setEditOpen(true)} />}
+          </div>
+        </div>
+        <div style={{ background: T.text1, borderRadius: 18, padding: '28px 24px', color: '#fff', display: 'flex', alignItems: 'center', gap: 16, marginBottom: 18 }}>
+          <div style={{ textAlign: 'center', flex: 1 }}><div style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(18px,2.4vw,24px)', fontWeight: 800 }}>{data.from}</div><div style={{ fontSize: 11, opacity: 0.6 }}>Départ</div></div>
+          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 22 }}>→</div>
+          <div style={{ textAlign: 'center', flex: 1 }}><div style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(18px,2.4vw,24px)', fontWeight: 800 }}>{data.to}</div><div style={{ fontSize: 11, opacity: 0.6 }}>Arrivée</div></div>
+        </div>
+        <div style={{ background: T.surface, borderRadius: 18, border: `1px solid ${T.border}`, padding: '22px 24px', marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 18 }}>
+            <div style={{ background: T.surface2, borderRadius: 12, padding: '12px 14px' }}><div style={{ fontSize: 10, color: T.text4, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 4 }}>DATE</div><div style={{ fontWeight: 700, fontSize: 13 }}>{new Date(data.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'long' })}</div></div>
+            {data.time && <div style={{ background: T.surface2, borderRadius: 12, padding: '12px 14px' }}><div style={{ fontSize: 10, color: T.text4, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 4 }}>HEURE</div><div style={{ fontWeight: 700, fontSize: 13 }}>{data.time}</div></div>}
+            {isOffer && <div style={{ background: T.surface2, borderRadius: 12, padding: '12px 14px' }}><div style={{ fontSize: 10, color: T.text4, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 4 }}>PLACES</div><div style={{ fontWeight: 700, fontSize: 13 }}>{data.seats || 0}</div></div>}
+            {!isOffer && data.flexibility && <div style={{ background: T.surface2, borderRadius: 12, padding: '12px 14px' }}><div style={{ fontSize: 10, color: T.text4, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 4 }}>FLEXIBILITÉ</div><div style={{ fontWeight: 700, fontSize: 13 }}>{data.flexibility}</div></div>}
+          </div>
+          {isOffer ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <Avatar name={data.driver} size={52} />
+              <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 15, color: T.text1 }}>{data.driver}</div><Stars rating={data.rating} />{data.car && <div style={{ fontSize: 12, color: T.text3 }}>{data.car}</div>}</div>
+              <div style={{ textAlign: 'right' }}><TokenDisplay amount={data.price_t99cp} size="lg" /><div style={{ fontSize: 11, color: T.text4 }}>/ personne</div></div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <Avatar name={counterpart} size={52} />
+              <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 15, color: T.text1 }}>{counterpart}</div><div style={{ fontSize: 12, color: T.text3 }}>cherche un trajet</div></div>
+            </div>
+          )}
+        </div>
+        {(data.note || data.description) && <div style={{ background: T.surface2, borderRadius: 14, padding: '14px 18px', marginBottom: 18, fontSize: 14, color: T.text2, lineHeight: 1.6 }}>{data.note || data.description}</div>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {isOffer ? (
+            <Btn full variant="gradient" size="lg" onClick={() => { if (!user) { onAuth(); } else { setPayOpen(true); } }} icon={ICONS.wallet}>Réserver · {data.price_t99cp} T99CP</Btn>
+          ) : (
+            <Btn full variant="gradient" size="lg" onClick={() => { if (!user) { onAuth(); return; } window.showToast?.(`Message envoyé à ${counterpart}`, { type:'success', icon:'✉️' }); setPage?.('messages'); }} icon={ICONS.chat}>Proposer mon trajet</Btn>
+          )}
+          <Btn full variant="outline" size="md" onClick={() => { if (!user) { onAuth(); return; } window.showToast?.(`Conversation ouverte avec ${counterpart}`, { type:'success', icon:'✉️' }); setPage?.('messages'); }} icon={ICONS.chat}>Contacter {counterpart}</Btn>
+        </div>
+      </div>
+      <PayModal open={payOpen} onClose={() => setPayOpen(false)} amount={data.price_t99cp || 0} item={`${data.from} → ${data.to}`} description={`Covoiturage avec ${data.driver}`} seller={data.driver} />
+      <EditModal open={editOpen} onClose={() => setEditOpen(false)} title="Trajet" data={data} onSave={f => { setData(d => ({ ...d, ...f })); onSave?.({ ...data, ...f }); }} fields={[{ key: 'from', label: 'Départ' }, { key: 'to', label: 'Arrivée' }, { key: 'date', label: 'Date', type: 'date' }, { key: 'time', label: 'Heure' }, { key: 'price_t99cp', label: 'Prix T99CP', type: 'number' }, { key: 'seats', label: 'Places', type: 'number' }]} />
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} title={`${data.from} → ${data.to}`} url={permalink} text={`${data.from} → ${data.to} le ${new Date(data.date).toLocaleDateString('fr-FR')} · Covoiturage Maintenant !`} />
     </div>
   );
+}
+
+function CarpoolingPage({ user, adminMode, onAuth, setPage }) {
+  const [tab, setTab] = useState('offers');
+  const [offers, setOffers] = useState([...window.getUserCreations('carpool_offers'), ...AppData.carpooling_offers]);
+  const [requests, setRequests] = useState([...window.getUserCreations('carpool_requests'), ...AppData.carpooling_requests]);
+  const [detail, setDetail] = useState(null);
+  const [search, setSearch] = useState('');
+  const [editItem, setEditItem] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
+
+  const filterTrips = arr => {
+    if (!search) return arr;
+    const q = search.toLowerCase();
+    return arr.filter(t => (t.from || '').toLowerCase().includes(q)
+      || (t.to || '').toLowerCase().includes(q)
+      || (t.description || '').toLowerCase().includes(q)
+      || (t.note || '').toLowerCase().includes(q)
+      || (t.driver || t.passenger || t.requester || '').toLowerCase().includes(q));
+  };
+
+  if (detail) return <CarpoolDetail t={detail} onBack={() => setDetail(null)} user={user} onAuth={onAuth} adminMode={adminMode} setPage={setPage} onSave={u => setOffers(d => d.map(x => x.id === u.id ? u : x))} />;
 
   return (
     <PageContainer>
-      <SectionTitle label="Mobilité" title="Covoiturage Solidaire" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? (tab === 'offers' ? setCreateOpen(true) : setRequestOpen(true)) : onAuth()}>{tab === 'offers' ? 'Proposer un trajet' : 'Demander un trajet'}</Btn>} />
+      <SectionTitle label="Économie du partage" title="Covoiturage Solidaire" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? (tab === 'offers' ? setCreateOpen(true) : setRequestOpen(true)) : onAuth()}>{tab === 'offers' ? 'Proposer un trajet' : 'Demander un trajet'}</Btn>} />
       <CreateModal open={createOpen} onClose={() => setCreateOpen(false)} title="Proposer un trajet"
         subtitle="Tu pars en voiture ? Propose les places libres aux militant·es du réseau."
         domain="carpool_offers" color={T.hub.carpooling}
@@ -1093,6 +1336,7 @@ function CarpoolingPage({ user, adminMode, onAuth }) {
           { id:'time',         label:'Heure de départ', required:true, placeholder:"08:30" },
           { id:'seats',        label:'Places disponibles', type:'number', required:true, placeholder:'3' },
           { id:'price_t99cp',  label:'Prix par personne (en T99CP)', type:'number', required:true, placeholder:'15' },
+          { id:'car',          label:'Modèle de voiture (optionnel)', placeholder:"Renault Zoé · Vélo électrique" },
           { id:'description',  label:'Précisions (optionnel)', type:'textarea', rows:2, placeholder:"Bagages OK · Animal accepté · Non-fumeur" },
         ]}
         onSubmit={item => { const enriched = { ...item, driver: user?.name || 'Vous', rating: 0, seats: +item.seats, price_t99cp: +item.price_t99cp }; setOffers(d => [enriched, ...d]); }}
@@ -1109,40 +1353,21 @@ function CarpoolingPage({ user, adminMode, onAuth }) {
         ]}
         onSubmit={item => { const enriched = { ...item, requester: user?.name || 'Vous' }; setRequests(d => [enriched, ...d]); }}
       />
-      <SearchInput value={search} onChange={setSearch} placeholder="De... vers... (ex: Paris, Lyon)" />
+      <SearchInput value={search} onChange={setSearch} placeholder="Départ, arrivée, conducteur·rice, précisions..." />
       <div style={{ display: 'flex', gap: 0, background: T.surface2, borderRadius: 14, padding: 4, marginBottom: 24 }}>
         {[['offers', 'Offres de trajet'], ['requests', 'Demandes de trajet']].map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)} style={{ flex: 1, padding: '10px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 14, fontFamily: 'Inter,sans-serif', transition: 'all 0.15s', background: tab === id ? T.surface : 'transparent', color: tab === id ? T.brand : T.text3, boxShadow: tab === id ? '0 2px 8px rgba(0,0,0,0.08)' : 'none' }}>{label}</button>
         ))}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {(tab === 'offers' ? filterTrips(offers) : filterTrips(requests)).map(t => <TripCard key={t.id} t={t} isOffer={tab === 'offers'} />)}
+        {(tab === 'offers' ? filterTrips(offers) : filterTrips(requests)).map(t => <TripCard key={t.id} t={t} isOffer={tab === 'offers'} onClick={() => setDetail({ ...t, isOffer: tab === 'offers' })} adminMode={adminMode} onEdit={() => setEditItem(t)} />)}
       </div>
-
-      {detail && (
-        <Modal open onClose={() => setDetail(null)} title={`${detail.from} → ${detail.to}`} width={480}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ background: T.text1, borderRadius: 14, padding: '20px', color: '#fff', display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ textAlign: 'center' }}><div style={{ fontFamily: "'Sora',sans-serif", fontSize: 20, fontWeight: 800 }}>{detail.from}</div><div style={{ fontSize: 11, opacity: 0.6 }}>Départ</div></div>
-              <div style={{ flex: 1, textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: 20 }}>→</div>
-              <div style={{ textAlign: 'center' }}><div style={{ fontFamily: "'Sora',sans-serif", fontSize: 20, fontWeight: 800 }}>{detail.to}</div><div style={{ fontSize: 11, opacity: 0.6 }}>Arrivée</div></div>
-            </div>
-            {detail.isOffer && <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <Avatar name={detail.driver} size={48} />
-              <div><div style={{ fontWeight: 700, fontSize: 15, color: T.text1 }}>{detail.driver}</div><Stars rating={detail.rating} /><div style={{ fontSize: 12, color: T.text3 }}>{detail.car}</div></div>
-              <div style={{ marginLeft: 'auto' }}><TokenDisplay amount={detail.price_t99cp} size="lg" /><div style={{ fontSize: 11, color: T.text4, textAlign: 'right' }}>/ personne</div></div>
-            </div>}
-            {detail.note && <div style={{ background: T.surface2, borderRadius: 12, padding: '12px 14px', fontSize: 14, color: T.text2, lineHeight: 1.5 }}>{detail.note}</div>}
-            {detail.isOffer ? (
-              <Btn full variant="gradient" size="lg" onClick={() => { if (!user) { onAuth(); } else { setPayOpen(true); } }} icon={ICONS.wallet}>Réserver · {detail.price_t99cp} T99CP</Btn>
-            ) : (
-              <Btn full variant="gradient" size="lg" onClick={() => user ? window.showToast?.(`Message envoyé à ${detail.requester || 'la personne'} — réponse par messagerie`, { type:'success', icon:'✉️' }) : onAuth()} icon={ICONS.chat}>Proposer mon trajet</Btn>
-            )}
-          </div>
-          <PayModal open={payOpen} onClose={() => setPayOpen(false)} amount={detail?.price_t99cp || 0} item={`${detail?.from} → ${detail?.to}`} description={`Covoiturage avec ${detail?.driver}`} seller={detail?.driver} />
-        </Modal>
-      )}
       {editItem && <EditModal open onClose={() => setEditItem(null)} title="Trajet" data={editItem} onSave={f => { setOffers(d => d.map(t => t.id === editItem.id ? { ...t, ...f } : t)); setEditItem(null); }} fields={[{ key: 'from', label: 'Départ' }, { key: 'to', label: 'Arrivée' }, { key: 'date', label: 'Date', type: 'date' }, { key: 'time', label: 'Heure' }, { key: 'price_t99cp', label: 'Prix T99CP', type: 'number' }, { key: 'seats', label: 'Places', type: 'number' }]} />}
+
+      {/* FAB mobile */}
+      <div className="mn-detail-fab">
+        <Btn full variant="gradient" size="lg" icon={ICONS.plus} onClick={() => user ? (tab === 'offers' ? setCreateOpen(true) : setRequestOpen(true)) : onAuth()}>{tab === 'offers' ? 'Proposer un trajet' : 'Demander un trajet'}</Btn>
+      </div>
     </PageContainer>
   );
 }
