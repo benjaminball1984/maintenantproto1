@@ -41,7 +41,8 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | `ec23c94` | Bloc 3 étapes 1-3 | AppData enrichi (3 pétitions featured) + helpers Theme (`generateMockNames`, `getStatusTag`, `ShareModal`, `SignAnonymousModal`) + ce HANDOFF |
 | `1121f7b` | Bloc 3 étapes 4-6 | Refonte PetitionCard + PetitionDetail + PetitionsPage selon Q1-Q12 — câblage helpers, signature anonyme, FAB mobile, search/tri étendus |
 | `ff30699` | Bloc 4 | AppData mobs enrichi (5 mobs) + helpers `exportICS`, `ParticipateAnonymousModal` + refonte MobilizationsPage (Card + Detail + List) selon Q1-Q10 |
-| _(à venir)_ | Bloc 5 | Refonte Crowdfunding : CFCard + CFFeaturedCard + CFDetailPage (modal → page) + CrowdfundingPage selon Q1-Q4 — tags statut dynamiques, similaires, ShareModal, FAB mobile |
+| `082ec5c` | Bloc 5 | Refonte Crowdfunding : CFCard + CFFeaturedCard + CFDetailPage (modal → page) + CrowdfundingPage selon Q1-Q4 — tags statut dynamiques, similaires, ShareModal, FAB mobile |
+| _(à venir)_ | Bloc 6 | Sondages : suppression dead code `StepEmail` (-105L) + PollCard `<a>` + PollDetail nettoyage wordings email + ShareModal + similaires + FAB + PollsPage search/tri |
 
 ---
 
@@ -54,7 +55,7 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | 3 | Pétitions (List + Card + Detail) | `Pages_Services.jsx:5-389` | ✅ **Fait** (2 commits — étapes 1-3 puis 4-6) |
 | 4 | Mobilisations | `Pages_Media_Profile.jsx:441-...` (MobilizationsPage + extraction Card/Detail) | ✅ **Fait** (1 commit) |
 | 5 | Cagnottes (crowdfunding) | `Pages_Commerce.jsx:253-871` (CFCard + CFFeaturedCard + CFDetailPage + CFCreateModal + CrowdfundingPage) | ✅ **Fait** (1 commit) |
-| 6 | Sondages | `PollsPage.jsx` (1367 lignes) | ⏳ |
+| 6 | Sondages | `PollsPage.jsx` (1330 lignes après cleanup) | ✅ **Fait** (1 commit) |
 | 7 | Médias | `Pages_Media_Profile.jsx` | ⏳ |
 | 8 | Réseau social | `ReseauPage.jsx` (635 lignes) | ⏳ |
 | 9 | Campagnes | `CampaignPage.jsx` (1224 lignes) | ⏳ |
@@ -522,6 +523,58 @@ Pages_Commerce.jsx (cagnottes) :
 - Le footer contribution n'est pas dans une sidebar sticky (différent de PetitionDetail) car le contenu cagnotte est moins long et la consultation linéaire (story → fonds → équipe → updates) se prête mieux à un footer accumulé en bas
 - Past est dérivé de `c.days_left <= 0` — pas de `Date` calc nécessaire
 - `cfStatus` non exposé sur `window` (utilisé localement à Pages_Commerce.jsx)
+
+---
+
+### 6.6 BLOC 6 — Sondages ✅ FAIT
+
+**Audit** : 12 incohérences/bugs (StepEmail dead code, wordings email mensongers, PollCard `<div>`, manque ShareModal/FAB/similaires/search/tri), 4 décisions clés.
+
+#### Décisions Q-arbitrées (4 questions)
+
+| Q | Choix utilisateur | Implémentation | Statut |
+|---|---|---|---|
+| **Q1** | Compte requis pour voter (fiabilité scientifique) | Statu quo : `if (!user) onAuth()` conservé. Pas de modal anonyme. | ✅ |
+| **Q2** | Supprimer le dead code `StepEmail` | Fonction (105L) + commentaires retirés. Wordings « email » mensongers nettoyés. | ✅ |
+| **Q3** | Search étendue + dropdown tri sur la liste | SearchInput + select `POLL_SORTS` (recent / closing / votes / relevance) | ✅ |
+| **Q4** | Bloc « Sondages similaires » en bas du détail | 3 sondages filtrés par même type ou même catégorie | ✅ |
+
+#### Bonus / cohérence Bloc 3-5
+
+- PollCard : `<div onClick>` + onMouseEnter/Leave JS → `<a href="#sondages/{id}">` + `mn-card-hover`
+- PollCard : suppression du state `hov` (devenu inutile avec CSS)
+- aria-label sur PollCard `<a>`
+- ShareModal câblé dans PollDetail (bouton « Partager » dans le header + permalink `#sondages/{id}`)
+- FAB mobile `.mn-detail-fab` : visible si stage='vote' + !hasVoted
+- Wordings « Confirmer par email » mensongers retirés :
+  - CTA bouton vote → « Voter (X choix) »
+  - Hint sous bouton → « Vote anonymisé · Profil scientifique optionnel · Aucune donnée tierce »
+  - Hint bas du détail → « réservé aux membres certifié·es et enrichi par les profils volontaires »
+- EmptyState quand search/filter ne matche rien (cohérence Bloc 3-5)
+- aria-label sur bouton retour
+
+#### Composants concernés
+
+```
+PollsPage.jsx :
+- PollCard         (<a> + mn-card-hover, suppression hov state)
+- PollDetail       (+ shareOpen + similar + permalink + onSelectPoll prop)
+- StepEmail        (SUPPRIMÉ — dead code, ~105 lignes)
+- StepConfirmed    (inchangé)
+- StepQuestion     (inchangé)
+- StepThanks       (inchangé)
+- ReliabilityPanel (inchangé)
+- PollResults      (inchangé)
+- PollsPage        (+ search + sort + EmptyState + POLL_SORTS constant)
+```
+
+#### Décisions techniques
+
+- Pas de `requires_account` toggle exposé : tous les sondages restent en compte requis (cohérent avec brief Q1)
+- Toute la machinerie `computeReliability`, `applyQuotaWeighting`, `optionLeans` reste intacte (aucune modif)
+- Le `onSelectPoll` callback permet de naviguer entre sondages depuis les similaires sans repasser par la liste
+- `setActivePoll` réutilisé directement (pas besoin d'état supplémentaire)
+- Le poll passé en `<a href>` n'a pas de hash routing actif : c'est un permalink visible mais le navigation passe par `setActivePoll` (préventDefault dans onClick) — cohérent avec Bloc 3-5
 
 ---
 

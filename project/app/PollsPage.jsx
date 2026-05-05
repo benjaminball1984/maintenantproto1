@@ -253,9 +253,18 @@ function ReliabilityBadge({ poll }) {
 // ════════════════════════════════════════════════════════════
 //   PollsPage — Liste des sondages
 // ════════════════════════════════════════════════════════════
+const POLL_SORTS = [
+  { id: 'recent',  label: 'Plus récents' },
+  { id: 'closing', label: 'Bientôt clos' },
+  { id: 'votes',   label: 'Plus de votes' },
+  { id: 'relevance', label: '✨ Plus pertinents' },
+];
+
 function PollsPage({ user, setUser, onAuth, setPage }) {
   const T = window.T;
   const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState('recent');
   const [activePoll, setActivePoll] = useState(null);
   const [votes, setVotes] = useState(loadVotes);
   const [viewMode, setViewMode] = useState(loadView);
@@ -264,7 +273,25 @@ function PollsPage({ user, setUser, onAuth, setPage }) {
   const setView = v => { setViewMode(v); saveView(v); };
 
   const polls = [...userPolls, ...window.AppData.polls];
-  const filtered = filter === 'all' ? polls : polls.filter(p => p.type === filter);
+
+  const q = search.trim().toLowerCase();
+  let filtered = polls.filter(p => {
+    const ms = !q || [p.title, p.desc, p.category, p.author]
+      .some(s => typeof s === 'string' && s.toLowerCase().includes(q));
+    const mt = filter === 'all' || p.type === filter;
+    return ms && mt;
+  });
+  const sorters = {
+    recent:    (a, b) => new Date(b.created) - new Date(a.created),
+    closing:   (a, b) => new Date(a.closes) - new Date(b.closes),
+    votes:     (a, b) => (b.votes_total || 0) - (a.votes_total || 0),
+    relevance: (a, b) => {
+      const aPast = new Date(a.closes) < new Date() ? 1 : 0;
+      const bPast = new Date(b.closes) < new Date() ? 1 : 0;
+      return aPast - bPast || (b.votes_total || 0) - (a.votes_total || 0);
+    },
+  };
+  filtered = [...filtered].sort(sorters[sort] || sorters.recent);
 
   const filterButtons = [
     ['all',       'Tous',                      polls.length],
@@ -281,6 +308,7 @@ function PollsPage({ user, setUser, onAuth, setPage }) {
       onBack={() => setActivePoll(null)}
       votes={votes} setVotes={setVotes}
       viewMode={viewMode} setViewMode={setView}
+      onSelectPoll={p => setActivePoll(p)}
     />;
   }
 
@@ -309,6 +337,15 @@ function PollsPage({ user, setUser, onAuth, setPage }) {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Search + tri */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 220px', gap:12, marginBottom:14 }} className="mn-detail-grid">
+        <SearchInput value={search} onChange={setSearch} placeholder="Titre, sujet, catégorie, auteur·rice..." />
+        <select value={sort} onChange={e => setSort(e.target.value)} aria-label="Trier les sondages"
+          style={{ height: 48, border: `1.5px solid ${T.border}`, borderRadius: 14, padding: '0 14px', fontSize: 14, fontFamily: 'Inter,sans-serif', color: T.text1, background: T.bg, outline: 'none', cursor: 'pointer', fontWeight: 600 }}>
+          {POLL_SORTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
       </div>
 
       {/* Filters + Toggle */}
@@ -349,11 +386,15 @@ function PollsPage({ user, setUser, onAuth, setPage }) {
         </div>
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(330px, 1fr))', gap:18 }}>
-        {filtered.map(poll => (
-          <PollCard key={poll.id} poll={poll} voted={!!votes[poll.id]} onClick={() => setActivePoll(poll)} viewMode={viewMode} />
-        ))}
-      </div>
+      {filtered.length === 0 ? (
+        <EmptyState title="Aucun sondage trouvé" desc="Essaie d'autres filtres ou élargis ta recherche." />
+      ) : (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(330px, 1fr))', gap:18 }}>
+          {filtered.map(poll => (
+            <PollCard key={poll.id} poll={poll} voted={!!votes[poll.id]} onClick={() => setActivePoll(poll)} viewMode={viewMode} />
+          ))}
+        </div>
+      )}
 
       <div style={{ marginTop:48, padding:'32px 28px', background:T.surface, borderRadius:20, border:`1px solid ${T.border}`, display:'flex', alignItems:'center', justifyContent:'space-between', gap:20, flexWrap:'wrap' }}>
         <div style={{ flex:1, minWidth:260 }}>
@@ -414,20 +455,19 @@ function PollsPage({ user, setUser, onAuth, setPage }) {
 // ════════════════════════════════════════════════════════════
 function PollCard({ poll, voted, onClick, viewMode = 'photo' }) {
   const T = window.T;
-  const [hov, setHov] = useState(false);
   const meta = TYPE_META[poll.type] || TYPE_META.societe;
   const dl = daysLeft(poll.closes);
   const top3 = [...poll.options].sort((a,b)=>b.votes-a.votes).slice(0, 3);
 
   return (
-    <div onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+    <a href={`#sondages/${poll.id}`} onClick={e => { e.preventDefault(); onClick?.(); }} className="mn-card-hover"
+      aria-label={`${poll.title} — ${poll.votes_total} votes, ${dl.txt}`}
       style={{
         background: T.surface,
-        border: `1px solid ${hov ? T.brand : T.border}`,
-        borderRadius: 16, overflow: 'hidden', cursor: 'pointer',
+        border: `1px solid ${T.border}`,
+        borderRadius: 16, overflow: 'hidden',
+        display: 'block', textDecoration: 'none', color: 'inherit',
         transition: 'all 0.22s cubic-bezier(0.4,0,0.2,1)',
-        transform: hov ? 'translateY(-3px)' : 'none',
-        boxShadow: hov ? `0 16px 36px rgba(225,29,116,0.12)` : '0 1px 3px rgba(0,0,0,0.04)',
       }}>
       <div style={{ background: meta.bg, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${T.border}` }}>
         <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:700, color:meta.color, textTransform:'uppercase', letterSpacing:'0.06em' }}>
@@ -478,14 +518,14 @@ function PollCard({ poll, voted, onClick, viewMode = 'photo' }) {
           )}
         </div>
       </div>
-    </div>
+    </a>
   );
 }
 
 // ════════════════════════════════════════════════════════════
 //   PollDetail — STATE MACHINE: vote → email → confirmed → question → thanks → done
 // ════════════════════════════════════════════════════════════
-function PollDetail({ poll, user, setUser, onAuth, onBack, votes, setVotes, viewMode, setViewMode }) {
+function PollDetail({ poll, user, setUser, onAuth, onBack, votes, setVotes, viewMode, setViewMode, onSelectPoll }) {
   const T = window.T;
   const meta = TYPE_META[poll.type] || TYPE_META.societe;
   const dl = daysLeft(poll.closes);
@@ -497,6 +537,7 @@ function PollDetail({ poll, user, setUser, onAuth, onBack, votes, setVotes, view
   const [hoverOpt, setHoverOpt] = useState(null);
   const [questionsAnswered, setQuestionsAnswered] = useState(0);
   const [currentQ, setCurrentQ] = useState(null);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const [localBump, setLocalBump] = useState({});
   const augmentedVotes = poll.options.map(o => ({ ...o, votes: o.votes + (localBump[o.id] || 0) }));
@@ -505,6 +546,11 @@ function PollDetail({ poll, user, setUser, onAuth, onBack, votes, setVotes, view
 
   const demographics = user?.demographics || {};
   const filledCount = Object.keys(demographics).length;
+
+  const permalink = (typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '') + '#sondages/' + poll.id;
+  const similar = (window.AppData?.polls || [])
+    .filter(o => o.id !== poll.id && (o.type === poll.type || o.category === poll.category))
+    .slice(0, 3);
 
   const toggleOption = id => {
     if (poll.multi) {
@@ -561,21 +607,27 @@ function PollDetail({ poll, user, setUser, onAuth, onBack, votes, setVotes, view
   return (
     <div style={{ maxWidth: 920, margin: '0 auto', padding: '24px 20px 100px' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20, gap:10, flexWrap:'wrap' }}>
-        <button onClick={onBack}
+        <button onClick={onBack} aria-label="Retour à la liste des sondages"
           style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 14px', background:T.surface, border:`1px solid ${T.border}`, borderRadius:9999, fontSize:13, color:T.text2, cursor:'pointer', fontFamily:'Inter,sans-serif', fontWeight:600 }}>
           ← Tous les sondages
         </button>
-        {stage !== 'email' && setViewMode && (
-          <div style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 6px 4px 10px', background:T.surface, border:`1px solid ${T.border}`, borderRadius:9999 }}>
-            <span style={{ fontSize:11, color:T.text3, fontWeight:600, letterSpacing:'0.04em', textTransform:'uppercase' }}>Affichage</span>
-            <div style={{ display:'flex', gap:2, padding:2, background:T.surface2, borderRadius:9999 }}>
-              {[['photo','📷 Photos'],['emoji','😀 Pictos']].map(([k,l]) => (
-                <button key={k} onClick={()=>setViewMode(k)}
-                  style={{ padding:'5px 12px', borderRadius:9999, border:'none', background: viewMode === k ? '#fff' : 'transparent', color: viewMode === k ? T.brand : T.text3, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Inter,sans-serif', boxShadow: viewMode === k ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}>{l}</button>
-              ))}
+        <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+          <button onClick={() => setShareOpen(true)} aria-label="Partager ce sondage"
+            style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 14px', background:T.surface, border:`1px solid ${T.border}`, borderRadius:9999, fontSize:13, color:T.text2, cursor:'pointer', fontFamily:'Inter,sans-serif', fontWeight:600 }}>
+            {ICONS.share} Partager
+          </button>
+          {setViewMode && (
+            <div style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 6px 4px 10px', background:T.surface, border:`1px solid ${T.border}`, borderRadius:9999 }}>
+              <span style={{ fontSize:11, color:T.text3, fontWeight:600, letterSpacing:'0.04em', textTransform:'uppercase' }}>Affichage</span>
+              <div style={{ display:'flex', gap:2, padding:2, background:T.surface2, borderRadius:9999 }}>
+                {[['photo','📷 Photos'],['emoji','😀 Pictos']].map(([k,l]) => (
+                  <button key={k} onClick={()=>setViewMode(k)}
+                    style={{ padding:'5px 12px', borderRadius:9999, border:'none', background: viewMode === k ? '#fff' : 'transparent', color: viewMode === k ? T.brand : T.text3, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Inter,sans-serif', boxShadow: viewMode === k ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}>{l}</button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* ÉTAPE CONFIRMED — directement après vote (pas d'email puisque compte requis) */}
@@ -662,10 +714,10 @@ function PollDetail({ poll, user, setUser, onAuth, onBack, votes, setVotes, view
             </div>
 
             <Btn variant="gradient" size="lg" disabled={selected.length === 0 || !user} onClick={submitVote} style={{ width:'100%' }}>
-              {!user ? '🔒 Se connecter pour voter' : selected.length === 0 ? 'Sélectionnez une option' : `✉️ Confirmer par email${selected.length > 1 ? ` (${selected.length} choix)` : ''}`}
+              {!user ? '🔒 Se connecter pour voter' : selected.length === 0 ? 'Sélectionnez une option' : `Voter${selected.length > 1 ? ` (${selected.length} choix)` : ''}`}
             </Btn>
             <div style={{ fontSize:11, color:T.text4, textAlign:'center', marginTop:10 }}>
-              Vote confirmé par email · Anonyme · Aucune donnée tierce
+              Vote anonymisé · Profil scientifique optionnel · Aucune donnée tierce
             </div>
           </div>
         </div>
@@ -694,118 +746,29 @@ function PollDetail({ poll, user, setUser, onAuth, onBack, votes, setVotes, view
       )}
 
       <div style={{ marginTop:18, padding:'14px 18px', background:T.surface2, borderRadius:12, fontSize:12, color:T.text3, lineHeight:1.55 }}>
-        <strong style={{ color:T.text2 }}>ℹ️ À propos de la fiabilité.</strong> Ce sondage est confirmé par email et enrichi par les profils volontaires des votant·es. Le mode pondéré apparaît dès que l'échantillon atteint un seuil scientifique minimal.
-      </div>
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════
-//   StepEmail — Faux email Resend
-// ════════════════════════════════════════════════════════════
-function StepEmail({ poll, user, selected, meta, onConfirm, onModify, viewMode }) {
-  const T = window.T;
-  const selectedOpts = selected.map(id => poll.options.find(o => o.id === id)).filter(Boolean);
-
-  return (
-    <div>
-      {/* Bandeau bleu en haut */}
-      <div style={{ background: 'linear-gradient(135deg, #1E3A8A 0%, #2563EB 50%, #3B82F6 100%)', borderRadius: 20, padding: '36px 28px', color: '#fff', marginBottom: 18, position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', top: -60, right: -60, width: 220, height: 220, borderRadius: '50%', background: 'rgba(255,255,255,0.10)', filter: 'blur(40px)' }}></div>
-        <div style={{ position: 'relative', textAlign: 'center' }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>📧</div>
-          <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(22px,3.5vw,32px)', fontWeight: 800, margin: '0 0 10px', letterSpacing: '-0.02em' }}>
-            Confirme ton vote par email
-          </h1>
-          <p style={{ fontSize: 15, opacity: 0.92, margin: 0, maxWidth: 540, marginInline: 'auto', lineHeight: 1.55 }}>
-            Pour garantir la sincérité du sondage, on t'a envoyé un email de confirmation. Clique sur le bouton à l'intérieur pour valider ton vote.
-          </p>
-        </div>
+        <strong style={{ color:T.text2 }}>ℹ️ À propos de la fiabilité.</strong> Ce sondage est réservé aux membres certifié·es et enrichi par les profils volontaires des votant·es. Le mode pondéré apparaît dès que l'échantillon atteint un seuil scientifique minimal.
       </div>
 
-      {/* Banner prototype */}
-      <div style={{ background:'linear-gradient(135deg,#FEF3C7 0%,#FDE68A 100%)', border:`1px solid #FCD34D`, borderRadius:14, padding:'12px 18px', marginBottom:18, display:'flex', alignItems:'flex-start', gap:12 }}>
-        <div style={{ fontSize:18, marginTop:1 }}>⚠️</div>
-        <div style={{ flex:1, fontSize:13, color:'#78350F', lineHeight:1.5 }}>
-          <strong>Mode prototype :</strong> ceci est une simulation de l'email Resend qui sera envoyé en production. Clique sur le bouton dans la carte ci-dessous pour confirmer.
-        </div>
-      </div>
-
-      {/* Carte email simulée */}
-      <div style={{ background: '#fff', border: `1px solid ${T.border}`, borderRadius: 16, overflow: 'hidden', boxShadow: '0 8px 28px rgba(0,0,0,0.08)' }}>
-        {/* Header email */}
-        <div style={{ padding: '18px 24px', borderBottom: `1px solid ${T.border}`, background: '#FAFAFA' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'linear-gradient(135deg, #E11D74, #F4721E)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontFamily: "'Sora',sans-serif", flexShrink: 0 }}>M!</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ fontWeight: 700, fontSize: 13, color: T.text1 }}>noreply@maintenant.org</span>
-                <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 7px', background: '#000', color: '#fff', borderRadius: 4, letterSpacing: '0.06em' }}>VIA RESEND</span>
-              </div>
-              <div style={{ fontSize: 11, color: T.text4, marginTop: 2 }}>à {user?.email || 'vous@example.com'}</div>
-            </div>
-            <div style={{ fontSize: 11, color: T.text4, flexShrink: 0 }}>maintenant</div>
-          </div>
-          <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: 17, color: T.text1, marginTop: 6 }}>
-            Confirme ton vote sur Maintenant !
+      {/* Bloc « Sondages similaires » */}
+      {similar.length > 0 && (
+        <div style={{ marginTop: 32 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.text4, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>D'autres sondages qui pourraient t'intéresser</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+            {similar.map(o => <PollCard key={o.id} poll={o} voted={!!votes[o.id]} onClick={() => onSelectPoll?.(o)} viewMode={viewMode} />)}
           </div>
         </div>
+      )}
 
-        {/* Body email */}
-        <div style={{ padding: '28px 24px' }}>
-          <p style={{ fontSize: 14, color: T.text2, lineHeight: 1.65, margin: '0 0 18px' }}>
-            Bonjour {user?.name?.split(' ')[0] || 'militant·e'},
-          </p>
-          <p style={{ fontSize: 14, color: T.text2, lineHeight: 1.65, margin: '0 0 22px' }}>
-            Tu viens de voter sur le sondage suivant. Pour finaliser ta participation, confirme ton choix en cliquant sur le bouton ci-dessous.
-          </p>
-
-          {/* Récap du vote */}
-          <div style={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 12, padding: '16px 18px', marginBottom: 22 }}>
-            <div style={{ fontSize: 11, color: T.text4, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-              {meta.icon} {meta.label}
-            </div>
-            <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: 15, color: T.text1, marginBottom: 14, lineHeight: 1.35 }}>
-              {poll.title}
-            </div>
-            <div style={{ fontSize: 11, color: T.text4, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-              Ton choix
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {selectedOpts.map(opt => (
-                <div key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#fff', borderRadius: 8, border: `1px solid ${T.border}` }}>
-                  <OptionAvatar img={opt.img} color={opt.color} size={32} mode={viewMode} ringWhenSelected={false} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: T.text1 }}>{opt.label}</div>
-                    {opt.party && <div style={{ fontSize: 11, color: opt.color, fontWeight: 600 }}>{opt.party}</div>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* CTA confirmation */}
-          <div style={{ textAlign: 'center', margin: '8px 0 22px' }}>
-            <button onClick={onConfirm}
-              style={{ background: 'linear-gradient(135deg, #E11D74 0%, #F4721E 100%)', color: '#fff', border: 'none', padding: '16px 32px', borderRadius: 12, fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 15, cursor: 'pointer', boxShadow: '0 8px 24px rgba(225,29,116,0.35)', letterSpacing: '-0.01em' }}>
-              ✓ Confirmer mon vote
-            </button>
-          </div>
-
-          <p style={{ fontSize: 12, color: T.text4, lineHeight: 1.55, margin: 0, textAlign: 'center' }}>
-            Si tu n'es pas à l'origine de ce vote, ignore cet email.<br />
-            Lien valable 24h · Maintenant ! · La voix des 99%
-          </p>
+      {/* FAB mobile : visible si on n'a pas encore voté et qu'on est en stage 'vote' */}
+      {stage === 'vote' && !hasVoted && (
+        <div className="mn-detail-fab">
+          <Btn variant="gradient" size="lg" disabled={selected.length === 0 || !user} onClick={submitVote} style={{ width:'100%' }}>
+            {!user ? '🔒 Se connecter' : selected.length === 0 ? 'Choisis une option' : `Voter (${selected.length})`}
+          </Btn>
         </div>
-      </div>
+      )}
 
-      {/* Modifier */}
-      <div style={{ textAlign: 'center', marginTop: 18 }}>
-        <button onClick={onModify}
-          style={{ background: 'transparent', border: `1px solid ${T.border}`, color: T.text2, padding: '10px 20px', borderRadius: 9999, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter,sans-serif' }}>
-          ← Modifier mon choix
-        </button>
-      </div>
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} title={poll.title} url={permalink} text={`${poll.title} — Sondage citoyen sur Maintenant !`} />
     </div>
   );
 }
