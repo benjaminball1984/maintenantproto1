@@ -33,16 +33,14 @@ function AppNav({ page, setPage, user, onAuth, onLogout, adminMode, setAdminMode
     { id: 'carpooling', label: 'Covoiturage' },
     { id: 'housing', label: 'Hébergement' },
   ];
-  const navLinks = [...navInfo, { id: 'communes', label: 'Communes Libres', highlight: true, locked: !user?.is_member }];
 
   const navLinkStyle = (id) => ({
-    display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: 9, border: 'none',
+    display: 'flex', alignItems: 'center', padding: '20px 12px', border: 'none',
     cursor: 'pointer', fontWeight: page === id ? 700 : 500, fontSize: 13, fontFamily: 'Inter,sans-serif',
     background: page === id ? T.brandLight : 'transparent',
     color: page === id ? T.brand : T.text2,
     transition: 'all 0.15s', letterSpacing: '-0.01em',
     borderBottom: page === id ? `2px solid ${T.brand}` : '2px solid transparent',
-    borderRadius: 0, padding: '20px 12px',
   });
 
   return (
@@ -73,10 +71,10 @@ function AppNav({ page, setPage, user, onAuth, onLogout, adminMode, setAdminMode
           <div style={{ width:1, background:T.border, margin:'10px 12px' }}></div>
           <div style={{ display:'flex', position:'relative', paddingLeft:6 }}>
             <span style={{ position:'absolute', top:6, left:8, fontSize:8, fontWeight:800, color:T.text4, letterSpacing:'0.12em' }}>COMMERCE</span>
-            <button onClick={() => go('services')} style={navLinkStyle('services')}>Services</button>
+            <button onClick={() => go(navCommerce[0].id)} style={navLinkStyle(navCommerce[0].id)}>{navCommerce[0].label}</button>
           </div>
           <div style={{ width:1, background:T.border, margin:'10px 12px' }}></div>
-          <button onClick={() => go('communes')} style={{ ...navLinkStyle('communes'), color: page==='communes'?T.brand:'#FFD93D'==='#FFD93D'?T.text1:T.text2, fontWeight:800, background:page==='communes'?'#FFD93D':'transparent', borderBottom:page==='communes'?`2px solid ${T.text1}`:'2px solid transparent' }}>
+          <button onClick={() => go('communes')} style={{ ...navLinkStyle('communes'), color: page==='communes' ? T.brand : T.text1, fontWeight:800, background: page==='communes' ? '#FFD93D' : 'transparent', borderBottom: page==='communes' ? `2px solid ${T.text1}` : '2px solid transparent' }}>
             ★ Communes Libres {!user?.is_member && <span style={{ marginLeft:6, fontSize:9, padding:'2px 5px', background:T.text1, color:'#FFD93D', letterSpacing:'0.06em' }}>ADHÉRENT·ES</span>}
           </button>
         </nav>
@@ -85,15 +83,15 @@ function AppNav({ page, setPage, user, onAuth, onLogout, adminMode, setAdminMode
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 16, borderLeft: `1px solid ${T.border}` }}>
           {user && (
             <>
-              <div onClick={() => go('profile')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 9, background: T.infoLight, cursor: 'pointer', border: `1px solid #BFDBFE` }}>
+              <a href="https://the99coinproject.org" target="_blank" rel="noopener noreferrer" aria-label={`Wallet T99CP — ${user.t99cp_balance} T99CP — ouvre dans un nouvel onglet`} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 9, background: T.infoLight, cursor: 'pointer', border: `1px solid #BFDBFE`, textDecoration: 'none' }}>
                 <span style={{ color: T.info, display: 'flex' }}>{ICONS.wallet}</span>
                 <span style={{ fontWeight: 700, fontSize: 13, color: T.info }}>{user.t99cp_balance} T99CP</span>
-              </div>
-              <button onClick={() => go('notifications')} style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 8, borderRadius: 10, color: T.text3, display: 'flex', alignItems: 'center' }}>
+              </a>
+              <button onClick={() => go('notifications')} aria-label="Notifications" style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 8, borderRadius: 10, color: T.text3, display: 'flex', alignItems: 'center' }}>
                 {ICONS.bell}
                 <div style={{ position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: '50%', background: T.brand, border: `2px solid ${T.bg}` }}></div>
               </button>
-              <button onClick={() => go('messaging')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 8, borderRadius: 10, color: T.text3, display: 'flex', alignItems: 'center' }}>
+              <button onClick={() => go('messaging')} aria-label="Messagerie" style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 8, borderRadius: 10, color: T.text3, display: 'flex', alignItems: 'center' }}>
                 {ICONS.chat}
               </button>
             </>
@@ -115,24 +113,24 @@ function AppNav({ page, setPage, user, onAuth, onLogout, adminMode, setAdminMode
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.text4} strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
               </div>
               {prof && (
-                <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 8px)', width: 220, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, boxShadow: '0 16px 48px rgba(0,0,0,0.12)', overflow: 'hidden', zIndex: 300 }}>
+                <div role="menu" style={{ position: 'absolute', right: 0, top: 'calc(100% + 8px)', width: 220, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, boxShadow: '0 16px 48px rgba(0,0,0,0.12)', overflow: 'hidden', zIndex: 300 }}>
                   <div style={{ padding: '14px 16px', borderBottom: `1px solid ${T.border}` }}>
                     <div style={{ fontWeight: 700, fontSize: 14, color: T.text1 }}>{user.name}</div>
                     <div style={{ fontSize: 12, color: T.text4 }}>{user.email}</div>
                     <TokenDisplay amount={user.t99cp_balance} size="sm" style={{ marginTop: 4 }} />
                   </div>
-                  {[['Profil', 'profile'], ['Campagnes', 'campaigns'], ['Messages', 'messaging'], ['Notifications', 'notifications'], ['Admin', 'admin']].map(([label, pg]) => (
-                    <div key={pg} onClick={() => go(pg)} style={{ padding: '11px 16px', fontSize: 14, color: T.text2, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, transition: 'background 0.1s' }}
+                  {[
+                    ['Profil', 'profile'],
+                    ['Messagerie', 'messaging'],
+                    ...(user.is_admin ? [['Admin', 'admin']] : []),
+                  ].map(([label, pg]) => (
+                    <div key={pg} role="menuitem" onClick={() => go(pg)} style={{ padding: '11px 16px', fontSize: 14, color: T.text2, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, transition: 'background 0.1s' }}
                       onMouseEnter={e => e.currentTarget.style.background = T.surface2} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                       {label}
                     </div>
                   ))}
                   <div style={{ borderTop: `1px solid ${T.border}`, padding: '8px 0' }}>
-                    <div onClick={() => setAdminMode(!adminMode)} style={{ padding: '9px 16px', fontSize: 13, color: adminMode ? T.warning : T.text3, cursor: 'pointer', fontWeight: adminMode ? 700 : 400 }}
-                      onMouseEnter={e => e.currentTarget.style.background = T.surface2} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                      {adminMode ? '⚙ Désactiver mode admin' : '⚙ Mode admin'}
-                    </div>
-                    <div onClick={() => { onLogout(); setProf(false); }} style={{ padding: '9px 16px', fontSize: 13, color: '#EF4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                    <div role="menuitem" onClick={() => { onLogout(); setProf(false); }} style={{ padding: '9px 16px', fontSize: 13, color: '#EF4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
                       onMouseEnter={e => e.currentTarget.style.background = '#FEF2F2'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                       {ICONS.logout} Se déconnecter
                     </div>
@@ -144,33 +142,38 @@ function AppNav({ page, setPage, user, onAuth, onLogout, adminMode, setAdminMode
             <Btn variant="gradient" size="sm" onClick={onAuth}>Se connecter</Btn>
           )}
 
-          <button onClick={() => setMob(!mob)} className="mn-mob-btn" style={{ display: 'none', border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, padding: 8, borderRadius: 10 }}>
+          <button onClick={() => setMob(!mob)} className="mn-mob-btn" aria-label={mob ? 'Fermer le menu' : 'Ouvrir le menu'} aria-expanded={mob} style={{ display: 'none', border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, padding: 8, borderRadius: 10 }}>
             {mob ? ICONS.close : ICONS.menu}
           </button>
         </div>
       </div>
 
+      {/* Mobile nav backdrop (click outside to close) */}
+      {mob && (
+        <div onClick={() => setMob(false)} style={{ position: 'fixed', inset: 0, top: 64, background: 'rgba(0,0,0,0.25)', zIndex: -1 }} aria-hidden="true"></div>
+      )}
+
       {/* Mobile nav */}
       {mob && (
-        <div style={{ borderTop: `1px solid ${T.border}`, background: T.surface, padding: '12px 20px 20px' }}>
+        <div role="menu" style={{ borderTop: `1px solid ${T.border}`, background: T.surface, padding: '12px 20px 20px' }}>
           <div style={{ fontSize:9, fontWeight:800, color:T.text4, letterSpacing:'0.14em', padding:'8px 4px 4px', textTransform:'uppercase' }}>━ Information & Mobilisation</div>
           {navInfo.map(l => (
-            <button key={l.id} onClick={() => go(l.id)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '12px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 15, fontFamily: 'Inter,sans-serif', marginBottom: 4, background: page === l.id ? T.brandLight : 'transparent', color: page === l.id ? T.brand : T.text2 }}>
+            <button key={l.id} role="menuitem" onClick={() => go(l.id)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '12px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 15, fontFamily: 'Inter,sans-serif', marginBottom: 4, background: page === l.id ? T.brandLight : 'transparent', color: page === l.id ? T.brand : T.text2 }}>
               {l.label}
             </button>
           ))}
           <div style={{ fontSize:9, fontWeight:800, color:T.text4, letterSpacing:'0.14em', padding:'14px 4px 4px', textTransform:'uppercase' }}>━ Commerce & Entraide</div>
           {navCommerce.map(l => (
-            <button key={l.id} onClick={() => go(l.id)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '12px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 15, fontFamily: 'Inter,sans-serif', marginBottom: 4, background: page === l.id ? T.brandLight : 'transparent', color: page === l.id ? T.brand : T.text2 }}>
+            <button key={l.id} role="menuitem" onClick={() => go(l.id)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '12px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 15, fontFamily: 'Inter,sans-serif', marginBottom: 4, background: page === l.id ? T.brandLight : 'transparent', color: page === l.id ? T.brand : T.text2 }}>
               {l.label}
             </button>
           ))}
           <div style={{ fontSize:9, fontWeight:800, color:T.text4, letterSpacing:'0.14em', padding:'14px 4px 4px', textTransform:'uppercase' }}>━ Espace adhérent·es</div>
-          <button onClick={() => go('communes')} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '12px 14px', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 15, fontFamily: 'Inter,sans-serif', marginBottom: 4, background:'#FFD93D', color: T.text1 }}>
-            ★ Communes Libres {!user?.is_member && <span style={{ marginLeft:'auto', fontSize:10, padding:'2px 6px', background:T.text1, color:'#FFD93D' }}>VERROUILLÉ</span>}
+          <button role="menuitem" onClick={() => go('communes')} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '12px 14px', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 15, fontFamily: 'Inter,sans-serif', marginBottom: 4, background:'#FFD93D', color: T.text1 }}>
+            ★ Communes Libres {!user?.is_member && <span style={{ marginLeft:'auto', fontSize:10, padding:'2px 6px', background:T.text1, color:'#FFD93D', letterSpacing:'0.06em' }}>ADHÉRENT·ES</span>}
           </button>
-          {user && [['Messages', 'messaging'], ['Notifications', 'notifications'], ['Profil', 'profile']].map(([label, pg]) => (
-            <button key={pg} onClick={() => go(pg)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '12px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', fontWeight: 500, fontSize: 15, fontFamily: 'Inter,sans-serif', marginBottom: 4, background: 'transparent', color: T.text3 }}>
+          {user && [['Messagerie', 'messaging'], ['Notifications', 'notifications'], ['Profil', 'profile']].map(([label, pg]) => (
+            <button key={pg} role="menuitem" onClick={() => go(pg)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '12px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', fontWeight: 500, fontSize: 15, fontFamily: 'Inter,sans-serif', marginBottom: 4, background: 'transparent', color: T.text3 }}>
               {label}
             </button>
           ))}
@@ -195,14 +198,14 @@ function BottomNav({ page, setPage }) {
       {tabs.map((t, i) => {
         if (!t) return (
           <div key="fab" style={{ flex: 1, display: 'flex', justifyContent: 'center', position: 'relative', top: -16 }}>
-            <button onClick={() => setPage('creer')} style={{ width: 52, height: 52, borderRadius: '50%', background: T.gradR, border: `3px solid ${T.bg}`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 24px rgba(225,29,116,0.4)', cursor: 'pointer' }}>
+            <button onClick={() => setPage('creer')} aria-label="Créer une action" style={{ width: 52, height: 52, borderRadius: '50%', background: T.gradR, border: `3px solid ${T.bg}`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 24px rgba(225,29,116,0.4)', cursor: 'pointer' }}>
               {ICONS.plus}
             </button>
           </div>
         );
         const active = page === t.id;
         return (
-          <button key={t.id} onClick={() => setPage(t.id)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '6px 4px', border: 'none', background: 'transparent', cursor: 'pointer', color: active ? T.brand : T.text4, fontFamily: 'Inter,sans-serif', position: 'relative' }}>
+          <button key={t.id} onClick={() => setPage(t.id)} aria-current={active ? 'page' : undefined} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '6px 4px', border: 'none', background: 'transparent', cursor: 'pointer', color: active ? T.brand : T.text4, fontFamily: 'Inter,sans-serif', position: 'relative' }}>
             {active && <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: 24, height: 3, background: T.gradR, borderRadius: 9999 }}></div>}
             <span style={{ display: 'flex', color: active ? T.brand : T.text4 }}>{t.icon}</span>
             <span style={{ fontSize: 10, fontWeight: active ? 700 : 500 }}>{t.label}</span>

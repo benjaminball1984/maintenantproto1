@@ -8,7 +8,7 @@ const PLANS = [
   { id: 'stripe', label: 'Cotisation classique',  price: 12,  currency: '€',    desc: '12 € / an · Paiement sécurisé par carte via Stripe.', highlight: false },
 ];
 
-function JoinMovementPage({ user, onAuth, onJoin, setPage }) {
+function JoinMovementPage({ user, setUser, onAuth, onJoin, setPage }) {
   const [step, setStep] = useState(1); // 1: plan, 2: form, 3: payment, 4: success
   const [plan, setPlan] = useState(null);
   const [form, setForm] = useState({ email: user?.email || '', nom: user?.name || '', code_postal: '' });
@@ -31,6 +31,18 @@ function JoinMovementPage({ user, onAuth, onJoin, setPage }) {
     setTimeout(() => {
       setLoading(false);
       setStep(4);
+      // Propage l'adhésion sur le user courant (cohérent avec Pages_Services.jsx)
+      if (typeof setUser === 'function') {
+        setUser(u => ({
+          ...(u || {}),
+          name: form.nom || u?.name,
+          email: form.email || u?.email,
+          is_member: true,
+          member_tier: plan?.id || 'free',
+          member_since: new Date().toISOString(),
+          code_postal: form.code_postal,
+        }));
+      }
       onJoin && onJoin({ ...form, plan: plan.id, adhesion_date: new Date().toISOString() });
     }, 1000);
   };

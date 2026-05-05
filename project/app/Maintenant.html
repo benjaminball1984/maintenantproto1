@@ -368,14 +368,15 @@ function App() {
             </div>
             <div style={{ display: 'flex', gap: 20, fontSize: 13, color: T.text3, flexWrap: 'wrap', alignItems: 'center' }}>
               {[['Services', 'services'], ['Campagnes', 'campaigns'], ['Réseau', 'reseau'], ['Média', 'media']].map(([l, p]) => (
-                <span key={p} onClick={() => setPage(p)} style={{ cursor: 'pointer', transition: 'color 0.15s' }}
-                  onMouseEnter={e => e.target.style.color = T.brand} onMouseLeave={e => e.target.style.color = T.text3}>{l}</span>
+                <a key={p} href={`#${p}`} onClick={e => { e.preventDefault(); setPage(p); }} style={{ cursor: 'pointer', transition: 'color 0.15s', textDecoration: 'none', color: 'inherit' }}
+                  onMouseEnter={e => e.currentTarget.style.color = T.brand} onMouseLeave={e => e.currentTarget.style.color = T.text3}>{l}</a>
               ))}
               <a href="https://the99coinproject.org" target="_blank" rel="noopener noreferrer"
+                aria-label="T99CP Wallet — ouvre dans un nouvel onglet"
                 style={{ color: T.info, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
                 ₮ T99CP Wallet
               </a>
-              <span style={{ color: T.text4 }}>© 2026 THE99COINPROJECT</span>
+              <span style={{ color: T.text4 }}>© 2026 Maintenant ! — La voix des 99%</span>
             </div>
           </div>
         </footer>
@@ -419,12 +420,16 @@ function App() {
           <div className="tw-label">Utilisateur simulé</div>
           <div className="tw-row">
             <button className={`tw-btn${!user ? ' active' : ''}`} onClick={() => setUser(null)}>Déconnecté</button>
-            <button className={`tw-btn${user && !user.is_admin ? ' active' : ''}`}
-              onClick={() => setUser({ name: 'Marie Dupont', email: 'marie@maintenant.org', t99cp_balance: 247, is_admin: false, badges: ['Militante active'], joined: '2025-06-12', location: 'Paris', bio: 'Militante écologiste et féministe engagée depuis 10 ans.' })}>
+            <button className={`tw-btn${user && !user.is_admin && !user.is_member ? ' active' : ''}`}
+              onClick={() => setUser({ name: 'Marie Dupont', email: 'marie@maintenant.org', t99cp_balance: 247, is_admin: false, is_member: false, badges: ['Militante active'], joined: '2025-06-12', location: 'Paris', bio: 'Militante écologiste et féministe engagée depuis 10 ans.' })}>
               Connecté
             </button>
+            <button className={`tw-btn${user?.is_member && !user?.is_admin ? ' active' : ''}`}
+              onClick={() => setUser({ name: 'Marie Dupont', email: 'marie@maintenant.org', t99cp_balance: 247, is_admin: false, is_member: true, member_tier: 'gratuit', member_since: new Date().toISOString(), badges: ['Adhérent·e', 'Militante active'], joined: '2025-06-12', location: 'Paris', bio: 'Militante écologiste et féministe engagée depuis 10 ans.' })}>
+              Adhérent·e
+            </button>
             <button className={`tw-btn${user?.is_admin ? ' active' : ''}`}
-              onClick={() => { setUser({ name: 'Admin', email: 'admin@maintenant.org', t99cp_balance: 500, is_admin: true, badges: ['Admin', 'Fondateur'], joined: '2025-01-01', location: 'France' }); setAdminMode(true); }}>
+              onClick={() => { setUser({ name: 'Admin', email: 'admin@maintenant.org', t99cp_balance: 500, is_admin: true, is_member: true, member_tier: 'admin', member_since: new Date().toISOString(), badges: ['Admin', 'Fondateur'], joined: '2025-01-01', location: 'France' }); setAdminMode(true); }}>
               Admin
             </button>
           </div>
