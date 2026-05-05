@@ -5,15 +5,20 @@ const { useState, useEffect, useRef } = React;
 function AppNav({ page, setPage, user, onAuth, onLogout, adminMode, setAdminMode }) {
   const [mob, setMob] = useState(false);
   const [prof, setProf] = useState(false);
+  const [commerceOpen, setCommerceOpen] = useState(false);
   const profRef = useRef(null);
+  const commerceRef = useRef(null);
 
   useEffect(() => {
-    const h = e => { if (profRef.current && !profRef.current.contains(e.target)) setProf(false); };
+    const h = e => {
+      if (profRef.current && !profRef.current.contains(e.target)) setProf(false);
+      if (commerceRef.current && !commerceRef.current.contains(e.target)) setCommerceOpen(false);
+    };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, []);
 
-  const go = p => { setPage(p); setMob(false); setProf(false); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const go = p => { setPage(p); setMob(false); setProf(false); setCommerceOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
   // ── Nav séparée en 2 groupes : INFORMATION (mobilisation) / COMMERCE (entraide)
   const navInfo = [
@@ -26,12 +31,13 @@ function AppNav({ page, setPage, user, onAuth, onLogout, adminMode, setAdminMode
     { id: 'reseau', label: 'Réseau' },
   ];
   const navCommerce = [
-    { id: 'services', label: 'Tous les services' },
-    { id: 'sel', label: 'SEL' },
-    { id: 'marketplace', label: 'Marketplace' },
-    { id: 'lending', label: 'Ki Prête Tout' },
-    { id: 'carpooling', label: 'Covoiturage' },
-    { id: 'housing', label: 'Hébergement' },
+    { id: 'services', label: 'Tous les services', desc: 'Hub avec tous les services solidaires' },
+    { id: 'sel', label: 'SEL', desc: 'Système d\'échange local — temps & compétences' },
+    { id: 'marketplace', label: 'Marketplace', desc: 'Achats solidaires en T99CP' },
+    { id: 'lending', label: 'Ki Prête Tout', desc: 'Objets à emprunter entre voisins' },
+    { id: 'carpooling', label: 'Covoiturage', desc: 'Trajets partagés style BlaBlaCar' },
+    { id: 'housing', label: 'Hébergement', desc: 'Logement solidaire style Airbnb' },
+    { id: 'garden', label: 'Surplus Jardin', desc: 'Fruits, légumes, plants, miel' },
   ];
 
   const navLinkStyle = (id) => ({
@@ -43,14 +49,11 @@ function AppNav({ page, setPage, user, onAuth, onLogout, adminMode, setAdminMode
     borderBottom: page === id ? `2px solid ${T.brand}` : '2px solid transparent',
   });
 
+  const commerceActive = navCommerce.some(c => c.id === page);
+
   return (
     <header style={{ background: 'rgba(250,250,249,0.95)', backdropFilter: 'blur(16px)', borderBottom: `1px solid ${T.border}`, position: 'sticky', top: 0, zIndex: 200 }}>
-      {adminMode && (
-        <div style={{ background: T.warning, padding: '5px 0', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.06em' }}>
-          MODE ADMIN — Les contrôles d'édition sont visibles sur tous les contenus
-        </div>
-      )}
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'stretch', justifyContent: 'space-between', height: adminMode ? 'auto' : 64 }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'stretch', justifyContent: 'space-between', height: 64 }}>
         {/* Logo */}
         <div onClick={() => go('home')} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', flexShrink: 0, paddingRight: 24, borderRight: `1px solid ${T.border}` }}>
           <div style={{ width: 32, height: 32, borderRadius: 9, background: T.gradR, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 10px rgba(225,29,116,0.3)' }}>
@@ -62,47 +65,73 @@ function AppNav({ page, setPage, user, onAuth, onLogout, adminMode, setAdminMode
           </div>
         </div>
 
-        {/* Desktop Nav — INFORMATION | COMMERCE séparés */}
+        {/* Desktop Nav — INFORMATION | COMMERCE (mega-menu) | COMMUNES */}
         <nav className="mn-desk" style={{ display: 'flex', alignItems: 'stretch', gap: 0, flex: 1, paddingLeft: 8, overflowX: 'auto' }}>
           <div style={{ display:'flex', position:'relative', paddingLeft:6 }}>
             <span style={{ position:'absolute', top:6, left:8, fontSize:8, fontWeight:800, color:T.text4, letterSpacing:'0.12em' }}>INFORMATION</span>
             {navInfo.map(l => <button key={l.id} onClick={() => go(l.id)} style={navLinkStyle(l.id)}>{l.label}</button>)}
           </div>
           <div style={{ width:1, background:T.border, margin:'10px 12px' }}></div>
-          <div style={{ display:'flex', position:'relative', paddingLeft:6 }}>
+          <div ref={commerceRef} style={{ display:'flex', position:'relative', paddingLeft:6 }}>
             <span style={{ position:'absolute', top:6, left:8, fontSize:8, fontWeight:800, color:T.text4, letterSpacing:'0.12em' }}>COMMERCE</span>
-            <button onClick={() => go(navCommerce[0].id)} style={navLinkStyle(navCommerce[0].id)}>{navCommerce[0].label}</button>
+            <button onClick={() => setCommerceOpen(!commerceOpen)} aria-haspopup="menu" aria-expanded={commerceOpen} style={{ ...navLinkStyle(commerceActive ? page : 'services'), gap: 6 }}>
+              {navCommerce[0].label}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: commerceOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            {commerceOpen && (
+              <div role="menu" style={{ position: 'absolute', top: 'calc(100% - 1px)', left: 0, width: 540, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, boxShadow: '0 16px 48px rgba(0,0,0,0.12)', overflow: 'hidden', zIndex: 300, padding: 12 }}>
+                <button role="menuitem" onClick={() => go('services')} style={{ width:'100%', textAlign:'left', padding:'12px 14px', borderRadius:12, border:'none', background: T.brandLight, cursor:'pointer', marginBottom: 8, fontFamily:'Inter,sans-serif' }}>
+                  <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:14, color:T.brand }}>Tous les services →</div>
+                  <div style={{ fontSize:11, color:T.text3, marginTop:2 }}>Hub avec tous les services solidaires</div>
+                </button>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap: 6 }}>
+                  {navCommerce.slice(1).map(s => (
+                    <button key={s.id} role="menuitem" onClick={() => go(s.id)} style={{ textAlign:'left', padding:'10px 12px', borderRadius:10, border:'none', background: page === s.id ? T.brandLight : 'transparent', cursor:'pointer', fontFamily:'Inter,sans-serif', transition:'background 0.15s' }}
+                      onMouseEnter={e => page !== s.id && (e.currentTarget.style.background = T.surface2)} onMouseLeave={e => page !== s.id && (e.currentTarget.style.background = 'transparent')}>
+                      <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:700, fontSize:13, color: page === s.id ? T.brand : T.text1 }}>{s.label}</div>
+                      <div style={{ fontSize:11, color:T.text4, marginTop:2 }}>{s.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <div style={{ width:1, background:T.border, margin:'10px 12px' }}></div>
-          <button onClick={() => go('communes')} style={{ ...navLinkStyle('communes'), color: page==='communes' ? T.brand : T.text1, fontWeight:800, background: page==='communes' ? '#FFD93D' : 'transparent', borderBottom: page==='communes' ? `2px solid ${T.text1}` : '2px solid transparent' }}>
-            ★ Communes Libres {!user?.is_member && <span style={{ marginLeft:6, fontSize:9, padding:'2px 5px', background:T.text1, color:'#FFD93D', letterSpacing:'0.06em' }}>ADHÉRENT·ES</span>}
+          <button onClick={() => go('communes')} style={{ ...navLinkStyle('communes'), color: page==='communes' ? '#fff' : T.text1, fontWeight:800, background: page==='communes' ? T.gradR : 'transparent', borderBottom: page==='communes' ? '2px solid transparent' : '2px solid transparent', boxShadow: page==='communes' ? '0 4px 14px rgba(225,29,116,0.25)' : 'none', borderRadius: page==='communes' ? 9 : 0, margin: page==='communes' ? '12px 0' : 0 }}>
+            ★ Communes Libres {!user?.is_member && <span style={{ marginLeft:6, fontSize:9, padding:'2px 7px', background: page==='communes' ? 'rgba(255,255,255,0.25)' : T.gradR, color:'#fff', letterSpacing:'0.06em', borderRadius:9999, fontWeight:700 }}>ADHÉRENT·ES</span>}
           </button>
         </nav>
 
         {/* Right */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 16, borderLeft: `1px solid ${T.border}` }}>
+          {adminMode && (
+            <div aria-label="Mode admin actif" title="Mode admin actif — les contrôles d'édition sont visibles" style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:9999, background:T.warnLight, color:T.warning, border:`1px solid ${T.warning}`, fontSize:11, fontWeight:700, letterSpacing:'0.04em' }}>
+              <span style={{ width:6, height:6, borderRadius:'50%', background:T.warning, display:'inline-block' }}></span>
+              ADMIN
+            </div>
+          )}
           {user && (
             <>
-              <a href="https://the99coinproject.org" target="_blank" rel="noopener noreferrer" aria-label={`Wallet T99CP — ${user.t99cp_balance} T99CP — ouvre dans un nouvel onglet`} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 9, background: T.infoLight, cursor: 'pointer', border: `1px solid #BFDBFE`, textDecoration: 'none' }}>
+              <a href="https://the99coinproject.org" target="_blank" rel="noopener noreferrer" aria-label={`Wallet T99CP — ${user.t99cp_balance} T99CP — ouvre dans un nouvel onglet`} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 9, background: T.infoLight, cursor: 'pointer', border: `1px solid #BFDBFE`, textDecoration: 'none' }}>
                 <span style={{ color: T.info, display: 'flex' }}>{ICONS.wallet}</span>
                 <span style={{ fontWeight: 700, fontSize: 13, color: T.info }}>{user.t99cp_balance} T99CP</span>
               </a>
-              <button onClick={() => go('notifications')} aria-label="Notifications" style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 8, borderRadius: 10, color: T.text3, display: 'flex', alignItems: 'center' }}>
+              <button onClick={() => go('notifications')} aria-label="Notifications" style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 12, borderRadius: 10, color: T.text3, display: 'flex', alignItems: 'center' }}>
                 {ICONS.bell}
-                <div style={{ position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: '50%', background: T.brand, border: `2px solid ${T.bg}` }}></div>
+                <div style={{ position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: '50%', background: T.brand, border: `2px solid ${T.bg}` }}></div>
               </button>
-              <button onClick={() => go('messaging')} aria-label="Messagerie" style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 8, borderRadius: 10, color: T.text3, display: 'flex', alignItems: 'center' }}>
+              <button onClick={() => go('messaging')} aria-label="Messagerie" style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 12, borderRadius: 10, color: T.text3, display: 'flex', alignItems: 'center' }}>
                 {ICONS.chat}
               </button>
             </>
           )}
 
           {user && !user.is_member && (
-            <Btn variant="gradient" size="sm" onClick={() => go('join')} style={{ marginRight: 4 }}>Adhérer</Btn>
+            <Btn variant="outline" size="sm" onClick={() => go('join')} style={{ marginRight: 4, fontWeight: 700 }}>★ Adhérer au mouvement</Btn>
           )}
           {user?.is_member && (
-            <div onClick={() => go('communes')} style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:9, background:'#FEF3C7', border:'1px solid #FDE68A', cursor:'pointer' }}>
-              <span style={{ fontSize:11, fontWeight:800, color:'#B45309', letterSpacing:'0.04em' }}>★ ADHÉRENT·E</span>
+            <div onClick={() => go('communes')} aria-label="Vous êtes adhérent·e — accéder aux Communes Libres" style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 11px', borderRadius:9999, background:T.gradR, cursor:'pointer', boxShadow:'0 2px 8px rgba(225,29,116,0.25)' }}>
+              <span style={{ fontSize:11, fontWeight:800, color:'#fff', letterSpacing:'0.04em' }}>★ ADHÉRENT·E</span>
             </div>
           )}
           {user ? (
@@ -139,7 +168,7 @@ function AppNav({ page, setPage, user, onAuth, onLogout, adminMode, setAdminMode
               )}
             </div>
           ) : (
-            <Btn variant="gradient" size="sm" onClick={onAuth}>Se connecter</Btn>
+            <Btn variant="gradient" size="sm" onClick={onAuth}>Connexion / Inscription</Btn>
           )}
 
           <button onClick={() => setMob(!mob)} className="mn-mob-btn" aria-label={mob ? 'Fermer le menu' : 'Ouvrir le menu'} aria-expanded={mob} style={{ display: 'none', border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, padding: 8, borderRadius: 10 }}>
@@ -169,8 +198,8 @@ function AppNav({ page, setPage, user, onAuth, onLogout, adminMode, setAdminMode
             </button>
           ))}
           <div style={{ fontSize:9, fontWeight:800, color:T.text4, letterSpacing:'0.14em', padding:'14px 4px 4px', textTransform:'uppercase' }}>━ Espace adhérent·es</div>
-          <button role="menuitem" onClick={() => go('communes')} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '12px 14px', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 15, fontFamily: 'Inter,sans-serif', marginBottom: 4, background:'#FFD93D', color: T.text1 }}>
-            ★ Communes Libres {!user?.is_member && <span style={{ marginLeft:'auto', fontSize:10, padding:'2px 6px', background:T.text1, color:'#FFD93D', letterSpacing:'0.06em' }}>ADHÉRENT·ES</span>}
+          <button role="menuitem" onClick={() => go('communes')} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '12px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 15, fontFamily: 'Inter,sans-serif', marginBottom: 4, background: T.gradR, color: '#fff', boxShadow: '0 4px 14px rgba(225,29,116,0.25)' }}>
+            ★ Communes Libres {!user?.is_member && <span style={{ marginLeft:'auto', fontSize:10, padding:'2px 7px', background:'rgba(255,255,255,0.25)', color:'#fff', letterSpacing:'0.06em', borderRadius:9999, fontWeight:700 }}>ADHÉRENT·ES</span>}
           </button>
           {user && [['Messagerie', 'messaging'], ['Notifications', 'notifications'], ['Profil', 'profile']].map(([label, pg]) => (
             <button key={pg} role="menuitem" onClick={() => go(pg)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '12px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', fontWeight: 500, fontSize: 15, fontFamily: 'Inter,sans-serif', marginBottom: 4, background: 'transparent', color: T.text3 }}>
@@ -185,7 +214,7 @@ function AppNav({ page, setPage, user, onAuth, onLogout, adminMode, setAdminMode
 window.AppNav = AppNav;
 
 // ── BOTTOM NAV ─────────────────────────────────────────────
-function BottomNav({ page, setPage }) {
+function BottomNav({ page, setPage, user }) {
   const tabs = [
     { id: 'home', icon: ICONS.home, label: 'Accueil' },
     { id: 'petitions', icon: ICONS.trending, label: 'Pétitions' },
@@ -193,6 +222,8 @@ function BottomNav({ page, setPage }) {
     { id: 'reseau', icon: ICONS.users, label: 'Réseau' },
     { id: 'profile', icon: ICONS.user, label: 'Profil' },
   ];
+  // Mock notifs non-lues : pour le proto, on suppose qu'un user connecté en a
+  const hasUnread = !!user;
   return (
     <nav className="mn-bot" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(250,250,249,0.97)', backdropFilter: 'blur(16px)', borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', padding: `8px 8px calc(8px + env(safe-area-inset-bottom))`, zIndex: 200 }}>
       {tabs.map((t, i) => {
@@ -204,10 +235,14 @@ function BottomNav({ page, setPage }) {
           </div>
         );
         const active = page === t.id;
+        const showDot = t.id === 'profile' && hasUnread;
         return (
           <button key={t.id} onClick={() => setPage(t.id)} aria-current={active ? 'page' : undefined} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '6px 4px', border: 'none', background: 'transparent', cursor: 'pointer', color: active ? T.brand : T.text4, fontFamily: 'Inter,sans-serif', position: 'relative' }}>
             {active && <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: 24, height: 3, background: T.gradR, borderRadius: 9999 }}></div>}
-            <span style={{ display: 'flex', color: active ? T.brand : T.text4 }}>{t.icon}</span>
+            <span style={{ display: 'flex', color: active ? T.brand : T.text4, position: 'relative' }}>
+              {t.icon}
+              {showDot && <span aria-label="Notifications non lues" style={{ position: 'absolute', top: -3, right: -5, width: 8, height: 8, borderRadius: '50%', background: T.brand, border: `1.5px solid rgba(250,250,249,0.97)` }}></span>}
+            </span>
             <span style={{ fontSize: 10, fontWeight: active ? 700 : 500 }}>{t.label}</span>
           </button>
         );
