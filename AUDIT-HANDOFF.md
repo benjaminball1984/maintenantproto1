@@ -9,13 +9,13 @@
 ```bash
 cd /home/user/maintenantproto1
 git status                       # Doit être clean
-git log --oneline -15            # Doit afficher les 12 commits "audit bloc ..." (Blocs 1→9 = 12 commits)
+git log --oneline -15            # Doit afficher les 13 commits "audit bloc ..." (Blocs 1→10)
 git branch --show-current        # claude/review-audit-handoff-sAVU6
 ```
 
 **Première instruction à donner à Claude dans la nouvelle session** (copier-coller tel quel) :
 
-> Lis `/home/user/maintenantproto1/AUDIT-HANDOFF.md` en entier (en particulier la section 6.10 sur le Bloc 10 et la section 11 sur la reprise). On a fini le Bloc 9 (Campagnes, commit `a324e5c`). Tu dois maintenant **auditer le Bloc 10 (Hub Services + CreerPage)**. Conduis l'audit en suivant la méthodologie section 4.1 (5 sections : cartographie, incohérences, écart vs intention, UX/design, décisions). Une fois les Q identifiées, pose-les **avec l'outil AskUserQuestion** (système cliquable, comme au Bloc 8 — voir section 4.3), par batches de max 4. Une fois les décisions verrouillées, exécute, vérifie syntaxiquement (cf. section 4.4), commit + push sur `claude/review-audit-handoff-sAVU6`, mets à jour ce handoff.
+> Lis `/home/user/maintenantproto1/AUDIT-HANDOFF.md` en entier (en particulier la section 6.11 sur le Bloc 11 et la section 11 sur la reprise). On a fini le Bloc 10 (Hub Services + CreerPage, commit `f00c12a`). Tu dois maintenant **auditer le Bloc 11 (Commerce — SEL/Marketplace/Lending/Carpooling/Housing/Garden, fichier `Pages_Commerce.jsx` ~1066 lignes)**. Conduis l'audit en suivant la méthodologie section 4.1 (5 sections : cartographie, incohérences, écart vs intention, UX/design, décisions). Une fois les Q identifiées, pose-les **avec l'outil AskUserQuestion** (système cliquable, comme au Bloc 8 — voir section 4.3), par batches de max 4. Une fois les décisions verrouillées, exécute, vérifie syntaxiquement (cf. section 4.4), commit + push sur `claude/review-audit-handoff-sAVU6`, mets à jour ce handoff.
 
 **Modèle de prompts cliquables à utiliser** (cf. Bloc 8, fonctionne très bien) :
 - Charger l'outil : `ToolSearch` avec `select:AskUserQuestion`
@@ -52,6 +52,7 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | `80579c1` | Bloc 7+ | Médias : ajout rubrique **Tribune** (nouveau format) — FORMAT_META.tribune + 3 tribunes data + section dédiée « Tribunes libres » + MediaArticle (avertissement éditorial + author_role) + MCreateModal + EditModal |
 | `55c6a91` | Bloc 8 | Réseau social : SAMPLE_POSTS comments spécifiques + PostCard refactor (menu ⋯ + shares + EmptyState) + Composer riche (image/vidéo/lien interne+externe) + composeFeed self-injection + GroupDetailPage (modal → page) + sidebar stats vraies valeurs + Message → messages |
 | `a324e5c` | Bloc 9 | Campagnes : 6 SAMPLE_CAMPAIGNS + status:'active' + ModulePreview (picsum→data.image/cover ou fond gradient T99CP) + CTA scroll vers 1er module action + module stats agrégé (raised+sigs+participants) + ShareModal + permalink #campagnes/{slug} + CampaignCard `<a>`+mn-card-hover + FAB mobile + suppression admin + clôture organizer + bloc Campagnes proches (intersection modules) |
+| `f00c12a` | Bloc 10 | Hub Services + CreerPage : ServicesHub (cards services + parcours rapides + écosystème + chips Mes services tous en `<a>` + mn-card-hover) + jaune→magenta T.brand + members/t99cpCirc/communes/campaigns désormais live (auteurs distincts × 18 + somme T99CP réelle + window.SAMPLE_COMMUNES + window.SAMPLE_CAMPAIGNS) + CTA fin → creer + CreerPage refonte (13 tiles avec icônes/couleurs, +Sondage +Post réseau, tile Campagne via #campagnes/new + useEffect hashchange dans CampaignsPage) |
 
 ---
 
@@ -68,7 +69,7 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | 7 | Médias | `Pages_Media_Profile.jsx:5-435` (MediaArticle + MediaCard + MCreateModal + MediaPage) | ✅ **Fait** (1 commit) |
 | 8 | Réseau social | `ReseauPage.jsx` (635 → ~890 lignes) | ✅ **Fait** (1 commit) |
 | 9 | Campagnes | `CampaignPage.jsx` (1345 lignes après refonte) | ✅ **Fait** (1 commit `a324e5c`) |
-| 10 | Hub Services + CreerPage | `Pages_Home.jsx:442-...` | ⏳ |
+| 10 | Hub Services + CreerPage | `Pages_Home.jsx:547-933` | ✅ **Fait** (1 commit `f00c12a`) |
 | 11 | Commerce (SEL/Marketplace/Lending/Carpooling/Housing/Garden) | `Pages_Commerce.jsx` (1066 lignes) | ⏳ |
 | 12 | Adhérer | `JoinMovement.jsx` | ⏳ |
 | 13 | Communes Libres | `CommunesLibres.jsx` (1427 lignes) | ⏳ |
@@ -757,14 +758,94 @@ CampaignPage.jsx (1224 → 1345 lignes) :
 
 ---
 
-### 6.10 BLOC 10 — Hub Services + CreerPage ⏳ À AUDITER
+### 6.10 BLOC 10 — Hub Services + CreerPage ✅ FAIT
 
-**Fichier** : `project/app/Pages_Home.jsx` (lignes ~442 et suivantes pour ServicesHub + CreerPage)
+**Audit** : 12 incohérences (4 cards de navigation pas en `<a>` + 2 occurrences de jaune hors palette + 4 stats hardcodées + bouton fin de page UX douteux + CreerPage trop pauvre vs ServicesHub), 12 décisions arbitrées en 3 batches cliquables.
+
+#### Décisions Q-arbitrées (12 questions)
+
+| Q | Choix utilisateur | Implémentation | Statut |
+|---|---|---|---|
+| **Q1** | Cards services groupes en `<a href>` + mn-card-hover | Refonte du `<div onClick>` + suppression du `onMouseEnter/Leave` JS inline. Le hover passe par la classe CSS `mn-card-hover` (transition + box-shadow) | ✅ |
+| **Q2** | Parcours rapides en `<a href>` | 4 cards 'Je signe / Je donne / J'échange / J'organise' refondues ; conservation du halo couleur + chip durée | ✅ |
+| **Q3** | Écosystème en `<a href>` | 6 étapes du bandeau noir converties ; le hover JS reste car fond sombre incompatible avec mn-card-hover (qui force fond/border clairs) | ✅ |
+| **Q4** | Mes services chips en `<a href>` | Les chips conservent leur radius 9999 et leurs hover JS (pas mn-card-hover qui modifierait le rendu pill) | ✅ |
+| **Q5** | Jaune `#FFD93D` → `T.brand` (#E11D74) | Badge ADHÉRENT·ES (L792) + sur-titre 'L'écosystème en action' (L815) | ✅ |
+| **Q6** | members + t99cpCirc calculés depuis AppData | `members = Math.max(distinctAuthors.size × 18, 200)` (auteurs agrégés sur petitions/mobs/cf/media/sel/housing/garden/lending/marketplace/posts). `t99cpCirc = sum(cf.raised) + sum(sel.duration) + sum(marketplace.price) + sum(housing.price × 7) + sum(carpool.price)` | ✅ |
+| **Q7** | 238 communes / 6 campagnes lus depuis window | Exposition `window.SAMPLE_COMMUNES` (CommunesLibres.jsx:1430) et `window.SAMPLE_CAMPAIGNS` (CampaignPage.jsx:1346). `liveStats.communes` et `liveStats.campaigns` consommés dans `groups[].stat` | ✅ |
+| **Q8** | Bouton 'Proposer un service' → setPage('creer') | Plus cohérent : 'proposer' = créer, donc CreerPage. Plus de redirection bizarre vers Réseau social | ✅ |
+| **Q9** | CreerPage tiles avec icône + couleur | Chaque tile reçoit l'icône emoji et la couleur T.hub.* (ou couleur dérivée) du service correspondant. Border-top color de 3px + halo background sur l'icône | ✅ |
+| **Q10** | CreerPage 11 → 13 tiles | Ajout `polls` (Sondage 📊 #0891B2) + `reseau` (Post réseau 💬 T.hub.network). 12 services de ServicesHub + Campagne = 13 entrées | ✅ |
+| **Q11** | Tile Campagne via `#campagnes/new` | `tile.hashTarget = '#campagnes/new'`. Au clic : push hash + setPage('campaigns'). Côté CampaignPage : useEffect au mount + listener hashchange qui détecte `#campagnes/new`, ouvre `setTemplatePicker(true)` et `history.replaceState` pour reset | ✅ |
+| **Q12** | CreerPage tiles en `<a href>` + mn-card-hover | Grid `auto-fill, minmax(180px, 1fr)` (vs 3 colonnes fixes). Layout flex column : icône + title + desc. Suppression du state `hov` et du onMouseEnter/Leave | ✅ |
+
+#### Bugs corrigés
+
+- 12 cards services groupes : `<div onClick>` → `<a href>` + mn-card-hover
+- 4 cards parcours rapides : `<button>` → `<a href>` + mn-card-hover
+- 6 cards écosystème : `<div onClick>` → `<a href>` (hover JS conservé)
+- 6 chips Mes services : `<button>` → `<a href>`
+- 2 occurrences jaune `#FFD93D` → `T.brand`
+- members 946 hardcodé → calculé depuis distinctAuthors × 18
+- t99cpCirc 450 000 hardcodé → somme effective des valeurs T99CP visibles dans la data
+- '238 communes fondées' hardcodé → `liveStats.communes` (window.SAMPLE_COMMUNES.length)
+- '6 campagnes en cours' hardcodé → `liveStats.campaigns` (window.SAMPLE_CAMPAIGNS.length)
+- Bouton 'Proposer un service' → 'creer' au lieu de 'reseau'
+- CreerPage 11 tiles texte-seul → 13 tiles avec icônes/couleurs + post réseau + sondage
+- CreerPage tile Campagne ouvre directement le templatePicker
+
+#### Bonus / cohérence Bloc 3-9
+
+- aria-label sur le bouton retour de CreerPage
+- Les chips Mes services gardent style pill (border-radius 9999) mais deviennent des liens — focus-visible OK
+- CreerPage : couleurs T.hub.* alignées sur ServicesHub pour homogénéité visuelle
+- mn-card-hover apporte gratuitement focus-visible sur tous les liens convertis
+
+#### Composants concernés
+
+```
+Pages_Home.jsx (906 → 933 lignes) :
+- ServicesHub
+  - liveStats étendu (members + t99cpCirc + communes + campaigns désormais live)
+  - groups[] : stats live pour campagnes et communes
+  - Parcours rapides : <a href> + mn-card-hover
+  - Mes services : <a href>
+  - Cards groupes services : <a href> + mn-card-hover (suppression hover JS inline)
+  - Écosystème : <a href> + hover JS conservé
+  - Bandeau jaune → magenta T.brand x2
+  - CTA fin → setPage('creer')
+- CreerPage (35 → 56 lignes) : refonte complète (icônes/couleurs/13 tiles/<a>+mn-card-hover/handleClick avec hashTarget Campagne)
+
+CampaignPage.jsx :
+- import useEffect ajouté à la déstructuration React
+- useEffect dans CampaignsPage : listener hashchange + check au mount → setTemplatePicker si #campagnes/new
+- window.SAMPLE_CAMPAIGNS exposé
+
+CommunesLibres.jsx :
+- window.SAMPLE_COMMUNES exposé
+```
+
+#### Décisions techniques
+
+- **distinctAuthors × 18** : facteur d'extrapolation (chaque auteur représente ~18 lecteurs/membres adhérents). Plancher à 200 pour éviter membres=0 quand AppData vide. Honnête pour proto, à remplacer par un compteur réel quand backend dispo.
+- **t99cpCirc** : agrège uniquement les valeurs visibles dans la data exposée. Inclut housing × 7 (estimation 7 nuits par annonce). Carpooling, marketplace, SEL pris au prix unitaire.
+- **mn-card-hover** non-utilisé sur écosystème (fond sombre) ni sur chips Mes services (forme pill) — hover JS conservé là où mn-card-hover ne s'adapte pas.
+- **#campagnes/new** : pattern réutilisable pour deep-links futurs (#petitions/new, #cagnottes/new…).
+
+---
+
+### 6.11 BLOC 11 — Commerce ⏳ À AUDITER
+
+**Fichier** : `project/app/Pages_Commerce.jsx` (1066 lignes)
+
+**Périmètre** : SEL + Marketplace + Lending (Ki Prête Tout) + Carpooling + Housing + Garden — gros fichier, 6 services en un.
 
 **À regarder en priorité** :
-- Dette **D1** (section 7) : 2 occurrences `#FFD93D` jaune dans ServicesHub (`Pages_Home.jsx:688, 711`) à passer en gradient T99CP
-- Cohérence des cards de service (déjà migrées en `<a href="#${id}"> + mn-card-hover` au Bloc 2) → vérifier que CreerPage suit le même pattern
-- CreerPage : forme du parcours (8 actions probables) — reproduire le pattern des wizards Bloc 5/7
+- Cohérence des cards (déjà migrées en partie sur Lending/Garden ?)
+- Wizards de création (CFCreateModal multi-step pourrait inspirer)
+- Logique paiement T99CP avec fallback € (Polygon pour le port marketplace)
+- Search/tri uniformes vs Bloc 3-9
+- ShareModal / permalink hash sur chaque détail
 
 À conduire selon section 4.1 (5 sections d'audit) puis 4.3 (questions cliquables).
 
@@ -835,50 +916,46 @@ project/app/
 
 ---
 
-## 11. Reprise concrète de Bloc 10 (Hub Services + CreerPage)
+## 11. Reprise concrète de Bloc 11 (Commerce — Pages_Commerce.jsx)
 
-**Mode opératoire confirmé par l'utilisateur** (interruption Bloc 9) :
+**Mode opératoire verrouillé** :
 > *« il faudra me poser les questions cliquables on reste en mode audit puis modifications que j'ai choisi »*
 
-Donc à partir du Bloc 10 et pour tous les blocs suivants : **audit complet d'abord** (5 sections cf. 4.1), puis **questions cliquables** par batches de max 4 (cf. 4.3), puis **implémentation des décisions verrouillées** uniquement.
+→ **audit complet d'abord** (5 sections cf. 4.1), puis **questions cliquables** par batches de max 4 (cf. 4.3), puis **implémentation des décisions verrouillées** uniquement.
 
-**Première chose à faire** dans la nouvelle session après lecture de ce doc :
+**Première chose à faire** :
 
 1. `git status` (vérifier clean)
-2. `git log --oneline -15` (voir les 12 commits "audit bloc …" + handoff/MAJ doc)
+2. `git log --oneline -15` (voir les 13 commits + MAJ doc)
 3. `git branch --show-current` (doit être `claude/review-audit-handoff-sAVU6`)
-4. **Lire les fichiers concernés** :
-   - `project/app/Pages_Home.jsx` ciblé sur ServicesHub + CreerPage (lignes ~442 et suivantes)
-   - `project/app/Maintenant.html` pour la classe `.mn-card-hover` et la routing
-   - Référence : Bloc 2 a déjà migré les cards services en `<a href="#${id}">` (cf. `Pages_Home.jsx:456`), donc ServicesHub doit suivre le même pattern
-5. **Conduire l'audit complet** (section 4.1) :
-   - Cartographie des composants
-   - Incohérences (`[BUG]`, `[DATA]`, `[A11Y]`, `[RESPONSIVE]`) avec lignes précises
-   - Écart vs intention (`[BRIEF]`)
-   - UX/Design (`[UX]`, `[COPY]`)
-   - Décisions à prendre (Q numérotées)
+4. **Lire `Pages_Commerce.jsx`** (~1066 lignes) :
+   - Identifier les 6 sous-blocs : SEL, Marketplace, Lending, Carpooling, Housing, Garden
+   - Repérer les Cards / Detail / Create par service
+   - Bloc 5 (Cagnottes) déjà fait dans le même fichier — ne pas y retoucher
+5. **Conduire l'audit complet** (section 4.1) — la taille du fichier impose probablement plusieurs Q par service (max 4 par batch comme d'habitude)
 6. **Charger AskUserQuestion** : `ToolSearch` avec query `select:AskUserQuestion`
-7. **Poser les Q par batches de max 4** (cohérence Bloc 5-9)
+7. **Poser les Q par batches** (probablement 2 ou 3 batches selon le nombre de services touchés)
 8. **Implémenter** uniquement après réponses verrouillées
-9. **Vérif syntaxique** : `cd /tmp && node -e "const p=require('@babel/parser');const fs=require('fs');p.parse(fs.readFileSync('/home/user/maintenantproto1/project/app/Pages_Home.jsx','utf8'),{sourceType:'script',plugins:['jsx']});console.log('OK')"`
-10. **Commit + push** sur `claude/review-audit-handoff-sAVU6` (HEREDOC structuré comme les commits précédents)
+9. **Vérif syntaxique** : `cd /tmp && node -e "const p=require('@babel/parser');const fs=require('fs');p.parse(fs.readFileSync('/home/user/maintenantproto1/project/app/Pages_Commerce.jsx','utf8'),{sourceType:'script',plugins:['jsx']});console.log('OK')"`
+10. **Commit + push** sur `claude/review-audit-handoff-sAVU6`
 11. **MAJ AUDIT-HANDOFF.md** dans un commit séparé :
-    - Table commits section 2 : ajouter ligne Bloc 10 avec hash réel
+    - Table commits section 2 : ajouter ligne Bloc 11
     - Plan blocs section 3 : `⏳` → `✅ Fait`
-    - Section 6.10 : remplacer le contenu par bilan post-implémentation (cf. modèle Bloc 9 section 6.9)
-    - Section 0 : MAJ première instruction pour Bloc 11
-    - Section 11 : MAJ reprise concrète pour Bloc 11
-12. Demander à l'utilisateur s'il veut tester visuellement avant Bloc 11 ou enchaîner
+    - Section 6.11 : remplacer le contenu par bilan post-implémentation
+    - Section 0 : MAJ première instruction pour Bloc 12
+    - Section 11 : MAJ reprise concrète pour Bloc 12
+12. Demander à l'utilisateur s'il veut tester visuellement avant Bloc 12 ou enchaîner
 
-**Dette spécifique Bloc 10** (cf. section 7) :
-- **D1** : 2 occurrences `#FFD93D` jaune dans ServicesHub (`Pages_Home.jsx:688, 711`) → passer en gradient T99CP
-
-**Pattern à respecter (Bloc 9 vient de l'établir)** :
-- Cards `<a href="#${section}/${id}">` + `className="mn-card-hover"` + `e.preventDefault()`
-- ShareModal du Theme.jsx pour tout partage
+**Patterns à respecter (consolidés Blocs 3-10)** :
+- Cards en `<a href="#${section}/${id}">` + `className="mn-card-hover"` + `e.preventDefault()`
+- ShareModal du Theme.jsx pour tout partage (permalink `${origin}${pathname}#${section}/${id}`)
 - FAB mobile `.mn-detail-fab` pour les actions principales sur listing
 - `onError={e => { e.target.style.display='none'; }}` sur tous les `<img>`
 - Statut/clôture via `status: 'active'|'closed'` si applicable
+- Search étendue : title + subtitle/desc + organizer/auteur + tags
+- Stats live calculées depuis AppData (jamais hardcodées en `'247'` ou similaire)
+- Couleurs : T.brand / gradients T99CP, **pas** de jaune `#FFD93D` libre
+- Liens internes : préférer `#campagnes/new` ou équivalent pour deep-link à un wizard, plutôt que de la nav simple
 
 ---
 
