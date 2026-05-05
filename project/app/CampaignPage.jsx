@@ -197,7 +197,7 @@ const SAMPLE_CAMPAIGNS = [
   {
     id: 1, slug: 'urgences-ouvertes', title: 'Urgences Ouvertes 24h/24', subtitle: 'Une campagne pour le droit à la santé pour tous',
     cover: 'https://images.unsplash.com/photo-1538108149393-fbbd81895907?w=1200&q=70',
-    organizer: 'Collectif Santé Pour Tous', date: '2026-04-01', supporters: 3240,
+    organizer: 'Collectif Santé Pour Tous', date: '2026-04-01', supporters: 3240, status: 'active',
     modules: [
       { id:'petition',     items:[1] },
       { id:'crowdfunding', items:[1] },
@@ -211,7 +211,7 @@ const SAMPLE_CAMPAIGNS = [
   {
     id: 2, slug: 'transition-ecologique', title: 'Transition Écologique Maintenant', subtitle: 'Pour une loi climatique ambitieuse avant 2027',
     cover: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=1200&q=70',
-    organizer: 'Alliance Verte + THE99COINPROJECT', date: '2026-03-15', supporters: 8420,
+    organizer: 'Alliance Verte + THE99COINPROJECT', date: '2026-03-15', supporters: 8420, status: 'active',
     modules: [
       { id:'petition',     items:[2] },
       { id:'mobilizations',items:[] },
@@ -227,7 +227,7 @@ const SAMPLE_CAMPAIGNS = [
   {
     id: 3, slug: 'logement-pour-tous', title: 'Logement Pour Tous', subtitle: 'Contre les expulsions, pour le droit à un toit',
     cover: 'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=1200&q=70',
-    organizer: 'DAL + Réseau Solidarités', date: '2026-02-20', supporters: 1890,
+    organizer: 'DAL + Réseau Solidarités', date: '2026-02-20', supporters: 1890, status: 'active',
     modules: [
       { id:'petition',     items:[5] },
       { id:'housing',      items:[] },
@@ -242,7 +242,7 @@ const SAMPLE_CAMPAIGNS = [
   {
     id: 4, slug: 'ecoles-libres', title: 'Écoles Libres & Autogérées', subtitle: 'Pour une éducation émancipatrice et coopérative',
     cover: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=1200&q=70',
-    organizer: 'Collectif École Buissonnière', date: '2026-04-10', supporters: 740,
+    organizer: 'Collectif École Buissonnière', date: '2026-04-10', supporters: 740, status: 'active',
     modules: [
       { id:'petition',     items:[] },
       { id:'crowdfunding', items:[5] },
@@ -258,7 +258,7 @@ const SAMPLE_CAMPAIGNS = [
   {
     id: 5, slug: 'salaires-cheminots', title: 'Solidarité avec les cheminot·es en grève', subtitle: 'Caisse de grève, presse et coordination des piquets',
     cover: 'https://images.unsplash.com/photo-1545987796-200677ee1011?w=1200&q=70',
-    organizer: 'CGT Cheminots IDF', date: '2026-03-28', supporters: 2150,
+    organizer: 'CGT Cheminots IDF', date: '2026-03-28', supporters: 2150, status: 'active',
     modules: [
       { id:'crowdfunding', items:[1] },
       { id:'mobilizations',items:[] },
@@ -274,7 +274,7 @@ const SAMPLE_CAMPAIGNS = [
   {
     id: 6, slug: 'larzac-2026', title: 'Camp climat du Larzac 2026', subtitle: '8 000 militant·es, 5 jours, des centaines d\'ateliers',
     cover: 'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=1200&q=70',
-    organizer: 'Coordination Camp Larzac', date: '2026-03-05', supporters: 4380,
+    organizer: 'Coordination Camp Larzac', date: '2026-03-05', supporters: 4380, status: 'active',
     modules: [
       { id:'crowdfunding', items:[2] },
       { id:'mobilizations',items:[] },
@@ -632,11 +632,16 @@ function ModulePreview({ moduleId: modId, campaign, setActivePage, selectedItems
 
   const boxStyle = { background:'#fff', borderRadius:14, border:`1px solid ${COLORS.gray200}`, padding:'14px 16px', marginBottom:0 };
 
+  // Petit helper image-or-gradient (cohérence Bloc 4-7)
+  const ImgOrGrad = ({ src, w, h, br=10 }) => src
+    ? <img src={src} style={{ width:w, height:h, borderRadius:br, objectFit:'cover', flexShrink:0 }} alt="" onError={e => { e.target.style.display='none'; }} />
+    : <div style={{ width:w, height:h, borderRadius:br, flexShrink:0, background:'#1A1A18', backgroundImage:'linear-gradient(135deg,#7C3AED 0%,#E11D74 50%,#DC2654 100%)' }} />;
+
   switch(modId) {
     case 'petition': return (
       <div style={boxStyle}>
         <div style={{ display:'flex', gap:8, alignItems:'flex-start' }}>
-          <img src={`https://picsum.photos/seed/petition${petition.id}/80/60`} style={{ width:80, height:60, borderRadius:10, objectFit:'cover', flexShrink:0 }} alt="" />
+          <ImgOrGrad src={petition.image} w={80} h={60} />
           <div style={{ flex:1, minWidth:0 }}>
             <Badge color="red" style={{ marginBottom:4, fontSize:10 }}>{petition.category}</Badge>
             <h4 style={{ fontFamily:"'Sora',sans-serif", fontSize:13, fontWeight:700, color:COLORS.gray900, margin:'0 0 6px', lineHeight:1.3, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{petition.title}</h4>
@@ -663,7 +668,9 @@ function ModulePreview({ moduleId: modId, campaign, setActivePage, selectedItems
     );
     case 'crowdfunding': return (
       <div style={boxStyle}>
-        <img src={`https://picsum.photos/seed/fund${cf.id}/400/120`} style={{ width:'100%', height:90, objectFit:'cover', borderRadius:10, marginBottom:10 }} alt="" />
+        {cf.cover
+          ? <img src={cf.cover} style={{ width:'100%', height:90, objectFit:'cover', borderRadius:10, marginBottom:10 }} alt="" onError={e => { e.target.style.display='none'; }} />
+          : <div style={{ width:'100%', height:90, borderRadius:10, marginBottom:10, background:'#1A1A18', backgroundImage:'linear-gradient(135deg,#7C3AED 0%,#E11D74 50%,#DC2654 100%)' }} />}
         <h4 style={{ fontFamily:"'Sora',sans-serif", fontSize:13, fontWeight:700, color:COLORS.gray900, margin:'0 0 8px' }}>{cf.title}</h4>
         <Progress value={cf.raised_t99cp} max={cf.goal_t99cp} />
         <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:COLORS.gray500, margin:'6px 0 10px' }}>
@@ -676,7 +683,9 @@ function ModulePreview({ moduleId: modId, campaign, setActivePage, selectedItems
     case 'housing': return (
       <div style={{ ...boxStyle, display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
         {housing.map(h=><div key={h.id} style={{ borderRadius:10, overflow:'hidden', border:`1px solid ${COLORS.gray200}` }}>
-          <img src={`https://picsum.photos/seed/house${h.id}/200/100`} style={{ width:'100%', height:70, objectFit:'cover' }} alt="" />
+          {h.image || h.cover
+            ? <img src={h.image||h.cover} style={{ width:'100%', height:70, objectFit:'cover' }} alt="" onError={e => { e.target.style.display='none'; }} />
+            : <div style={{ width:'100%', height:70, background:'#1A1A18', backgroundImage:'linear-gradient(135deg,#7C3AED 0%,#E11D74 50%,#DC2654 100%)' }} />}
           <div style={{ padding:'6px 8px' }}>
             <div style={{ fontSize:11, fontWeight:600, color:COLORS.gray900, lineHeight:1.2, marginBottom:2 }}>{h.type} · {h.location}</div>
             <T99 value={h.price_t99cp} size={11} /><span style={{ fontSize:10, color:COLORS.gray400 }}>/nuit</span>
@@ -707,7 +716,9 @@ function ModulePreview({ moduleId: modId, campaign, setActivePage, selectedItems
     case 'marketplace': return (
       <div style={{ ...boxStyle, display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6 }}>
         {products.map(p=><div key={p.id} style={{ borderRadius:10, overflow:'hidden', border:`1px solid ${COLORS.gray200}` }}>
-          <img src={`https://picsum.photos/seed/product${p.id}/100/80`} style={{ width:'100%', height:60, objectFit:'cover' }} alt="" />
+          {p.images?.[0]
+            ? <img src={p.images[0]} style={{ width:'100%', height:60, objectFit:'cover' }} alt="" onError={e => { e.target.style.display='none'; }} />
+            : <div style={{ width:'100%', height:60, background:'#1A1A18', backgroundImage:'linear-gradient(135deg,#7C3AED 0%,#E11D74 50%,#DC2654 100%)' }} />}
           <div style={{ padding:'4px 6px' }}>
             <div style={{ fontSize:10, fontWeight:600, color:COLORS.gray900, lineHeight:1.2, display:'-webkit-box', WebkitLineClamp:1, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{p.title}</div>
             <T99 value={p.price_t99cp} size={10} />
@@ -741,7 +752,7 @@ function ModulePreview({ moduleId: modId, campaign, setActivePage, selectedItems
     case 'media': return (
       <div style={{ ...boxStyle, display:'flex', flexDirection:'column', gap:8 }}>
         {articles.map(a=><div key={a.id} style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
-          <img src={`https://picsum.photos/seed/article${a.id}/80/60`} style={{ width:70, height:55, borderRadius:8, objectFit:'cover', flexShrink:0 }} alt="" />
+          <ImgOrGrad src={a.image || a.cover} w={70} h={55} br={8} />
           <div>
             <Badge color="red" style={{ fontSize:9, marginBottom:3 }}>{a.category}</Badge>
             <div style={{ fontWeight:600, fontSize:12, color:COLORS.gray900, lineHeight:1.3, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{a.title}</div>
@@ -751,26 +762,51 @@ function ModulePreview({ moduleId: modId, campaign, setActivePage, selectedItems
         <Btn variant="outline" size="sm" full onClick={()=>setActivePage('media')}>Tous les articles →</Btn>
       </div>
     );
-    case 'cta': return (
-      <div style={{ background:GRAD, borderRadius:14, padding:'20px', textAlign:'center', color:'#fff' }}>
-        <div style={{ fontSize:32, marginBottom:8 }}>📣</div>
-        <p style={{ fontFamily:"'Sora',sans-serif", fontWeight:700, fontSize:15, margin:'0 0 14px', lineHeight:1.5 }}>{campaign.cta_text||'Rejoignez le mouvement !'}</p>
-        <Btn variant="white" size="md">{campaign.cta_btn||'Agir maintenant'}</Btn>
-      </div>
-    );
-    case 'stats': return (
-      <div style={{ ...boxStyle }}>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:8 }}>
-          {[['📜',AppData.petitions.reduce((a,p)=>a+p.signatures,0).toLocaleString('fr-FR'),'Signatures'],['👥',campaign.supporters?.toLocaleString('fr-FR')||'0','Supporters'],['₮','247','T99CP collectés'],['📅',AppData.mobilizations.length,'Mobilisations']].map(([icon,val,label])=>(
-            <div key={label} style={{ background:COLORS.gray50, borderRadius:10, padding:'10px', textAlign:'center' }}>
-              <div style={{ fontSize:20, marginBottom:3 }}>{icon}</div>
-              <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:18, color:COLORS.gray900 }}>{val}</div>
-              <div style={{ fontSize:10, color:COLORS.gray400 }}>{label}</div>
-            </div>
-          ))}
+    case 'cta': {
+      // Scroll vers le 1er module action (pétition ou cagnotte) de la campagne
+      const handleCtaClick = () => {
+        const actionMods = (campaign.modules || []).map(moduleId);
+        const target = actionMods.find(id => id === 'petition') || actionMods.find(id => id === 'crowdfunding') || actionMods.find(id => id === 'mobilizations');
+        if (target) {
+          const el = document.querySelector(`[data-mn-module="${target}"]`);
+          if (el) { el.scrollIntoView({ behavior:'smooth', block:'start' }); return; }
+        }
+        // Fallback : si aucun module action, on redirige vers la page service liée
+        if (actionMods.includes('petition')) setActivePage('petitions');
+        else if (actionMods.includes('crowdfunding')) setActivePage('crowdfunding');
+        else if (actionMods.includes('mobilizations')) setActivePage('mobilizations');
+      };
+      return (
+        <div style={{ background:GRAD, borderRadius:14, padding:'20px', textAlign:'center', color:'#fff' }}>
+          <div style={{ fontSize:32, marginBottom:8 }}>📣</div>
+          <p style={{ fontFamily:"'Sora',sans-serif", fontWeight:700, fontSize:15, margin:'0 0 14px', lineHeight:1.5 }}>{campaign.cta_text||'Rejoignez le mouvement !'}</p>
+          <Btn variant="white" size="md" onClick={handleCtaClick}>{campaign.cta_btn||'Agir maintenant'}</Btn>
         </div>
-      </div>
-    );
+      );
+    }
+    case 'stats': {
+      // Stats agrégées sur les items SÉLECTIONNÉS dans la campagne (pas globaux AppData)
+      const s = campaign._aggregateStats || { totalSignatures:0, totalRaised:0, totalParticipants:0, totalItems:0 };
+      const cells = [
+        ['📜', s.totalSignatures.toLocaleString('fr-FR'), 'Signatures'],
+        ['👥', (campaign.supporters || 0).toLocaleString('fr-FR'), 'Supporters'],
+        ['₮',  s.totalRaised.toLocaleString('fr-FR'), 'T99CP collectés'],
+        ['📅', s.totalParticipants.toLocaleString('fr-FR'), 'Participants mobs'],
+      ];
+      return (
+        <div style={{ ...boxStyle }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:8 }}>
+            {cells.map(([icon,val,label])=>(
+              <div key={label} style={{ background:COLORS.gray50, borderRadius:10, padding:'10px', textAlign:'center' }}>
+                <div style={{ fontSize:20, marginBottom:3 }}>{icon}</div>
+                <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:18, color:COLORS.gray900 }}>{val}</div>
+                <div style={{ fontSize:10, color:COLORS.gray400 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
     default: return <div style={boxStyle}><EmptyState icon="📦" title="Module" desc={moduleId} /></div>;
   }
 }
@@ -952,10 +988,12 @@ function CampaignBuilder({ campaign, onSave, onClose, setActivePage }) {
 }
 
 // ── Campaign View ─────────────────────────────────────────
-function CampaignView({ campaign, setActivePage, preview=false }) {
-  // Calcul de stats globales en agrégeant les items sélectionnés
+function CampaignView({ campaign, setActivePage, preview=false, allCampaigns=[], onSelectCampaign }) {
+  const [shareOpen, setShareOpen] = useState(false);
+
+  // Calcul de stats globales en agrégeant les items sélectionnés (étendu : participants mobs)
   const aggregateStats = () => {
-    let totalSignatures = 0, totalRaised = 0, totalGoal = 0, totalItems = 0;
+    let totalSignatures = 0, totalRaised = 0, totalGoal = 0, totalParticipants = 0, totalItems = 0;
     (campaign.modules || []).forEach(m => {
       const mid = moduleId(m);
       const mItems = moduleItems(m);
@@ -969,37 +1007,51 @@ function CampaignView({ campaign, setActivePage, preview=false }) {
       if (mid === 'crowdfunding') {
         selected.forEach(c => { totalRaised += c.raised_t99cp || 0; totalGoal += c.goal_t99cp || 0; });
       }
+      if (mid === 'mobilizations') {
+        selected.forEach(mb => { totalParticipants += mb.participants || 0; });
+      }
     });
-    return { totalSignatures, totalRaised, totalGoal, totalItems };
+    return { totalSignatures, totalRaised, totalGoal, totalParticipants, totalItems };
   };
   const stats = aggregateStats();
+  // Permalink stable pour le partage (cohérence Bloc 3-8 : slug)
+  const permalink = (typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '') + '#campagnes/' + (campaign.slug || campaign.id);
+  // Campagne enrichie avec stats agrégées (consommée par le module 'stats')
+  const campaignWithStats = { ...campaign, _aggregateStats: stats };
 
-  const handleShare = (e) => {
-    e?.stopPropagation();
-    const url = typeof window !== 'undefined' ? window.location.href : '';
-    if (navigator.share) {
-      navigator.share({ title: campaign.title, text: campaign.subtitle, url }).catch(() => {});
-    } else {
-      try {
-        navigator.clipboard?.writeText(`${campaign.title} — ${url}`);
-        window.showToast?.('Lien de la campagne copié dans le presse-papier', { type:'success', icon:'🔗' });
-      } catch {
-        window.showToast?.('Partage indisponible sur ce navigateur', { type:'info' });
-      }
-    }
-  };
+  // Campagnes similaires : intersection des modules (Q10B). Retire la campagne courante,
+  // garde celles qui partagent au moins 1 module, trie par taille d'intersection desc.
+  const currentModIds = new Set((campaign.modules || []).map(moduleId));
+  const similar = (allCampaigns || [])
+    .filter(c => c.id !== campaign.id && c.status !== 'closed')
+    .map(c => {
+      const inter = (c.modules || []).map(moduleId).filter(id => currentModIds.has(id)).length;
+      return { c, inter };
+    })
+    .filter(x => x.inter > 0)
+    .sort((a, b) => b.inter - a.inter)
+    .slice(0, 3)
+    .map(x => x.c);
 
   return (
     <div>
+      {/* Tag CLÔTURÉE en haut si campagne fermée */}
+      {campaign.status === 'closed' && (
+        <div style={{ background:'#FEF3C7', border:'1.5px solid #F59E0B', borderRadius:12, padding:'10px 14px', marginBottom:14, display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{ fontSize:18 }}>🔒</span>
+          <div style={{ flex:1, fontSize:12, color:'#78350F' }}><strong>Campagne clôturée par l'organisateur·ice</strong> — la page reste accessible mais n'est plus active.</div>
+        </div>
+      )}
+
       {/* HERO ENRICHI */}
-      <div style={{ position:'relative', borderRadius:preview?16:0, overflow:'hidden', marginBottom:20, background:'#1A1A18' }}>
-        <img src={campaign.cover||`https://picsum.photos/seed/${campaign.slug}/1200/400`} style={{ width:'100%', height: preview ? 240 : 320, objectFit:'cover', opacity:0.85 }} alt="" />
+      <div style={{ position:'relative', borderRadius:preview?16:0, overflow:'hidden', marginBottom:20, background:'#1A1A18', backgroundImage: campaign.cover ? 'none' : 'linear-gradient(135deg,#7C3AED 0%,#E11D74 50%,#DC2654 100%)', minHeight: preview ? 240 : 320, opacity: campaign.status === 'closed' ? 0.78 : 1 }}>
+        {campaign.cover && <img src={campaign.cover} style={{ width:'100%', height: preview ? 240 : 320, objectFit:'cover', opacity:0.85, display:'block' }} alt="" onError={e => { e.target.style.display='none'; }} />}
         <div style={{ position:'absolute', inset:0, background:`linear-gradient(to top, ${campaign.color||'#E11D74'}f0 0%, ${campaign.color||'#E11D74'}66 35%, transparent 75%)` }}></div>
 
         {/* Coin haut-droit : badges & bouton partage */}
         <div style={{ position:'absolute', top:14, right:14, display:'flex', gap:6 }}>
           {campaign._template && <span style={{ padding:'5px 11px', borderRadius:9999, background:'rgba(255,255,255,0.18)', backdropFilter:'blur(8px)', color:'#fff', fontSize:10, fontWeight:800, letterSpacing:'0.06em', textTransform:'uppercase' }}>★ NOUVELLE</span>}
-          <button onClick={handleShare} title="Partager la campagne" style={{ width:36, height:36, borderRadius:'50%', background:'rgba(255,255,255,0.18)', backdropFilter:'blur(8px)', border:'none', color:'#fff', cursor:'pointer', fontSize:14, fontWeight:700, transition:'all 0.18s' }}
+          <button onClick={(e) => { e.stopPropagation(); setShareOpen(true); }} title="Partager la campagne" aria-label="Partager la campagne" style={{ width:36, height:36, borderRadius:'50%', background:'rgba(255,255,255,0.18)', backdropFilter:'blur(8px)', border:'none', color:'#fff', cursor:'pointer', fontSize:14, fontWeight:700, transition:'all 0.18s' }}
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.35)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.18)'; }}>↗</button>
         </div>
@@ -1056,32 +1108,51 @@ function CampaignView({ campaign, setActivePage, preview=false }) {
           const mod = ALL_MODULES.find(am => am.id === mid);
           if(!mod) return null;
           return (
-            <div key={`${mid}-${i}`}>
+            <div key={`${mid}-${i}`} data-mn-module={mid}>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
                 <div style={{ width:28, height:28, borderRadius:8, background:`${mod.color}20`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:15 }}>{mod.icon}</div>
                 <h3 style={{ fontFamily:"'Sora',sans-serif", fontSize:14, fontWeight:700, color:COLORS.gray900, margin:0 }}>{mod.label}</h3>
                 {mItems.length > 0 && <span style={{ fontSize:10, color:mod.color, fontWeight:700, background:`${mod.color}15`, padding:'2px 7px', borderRadius:9999, letterSpacing:'0.04em' }}>{mItems.length} sélectionné{mItems.length>1?'s':''}</span>}
                 <div style={{ flex:1, height:1, background:COLORS.gray200 }}></div>
               </div>
-              <ModulePreview moduleId={mid} campaign={campaign} setActivePage={setActivePage} selectedItems={mItems} />
+              <ModulePreview moduleId={mid} campaign={campaignWithStats} setActivePage={setActivePage} selectedItems={mItems} />
             </div>
           );
         })}
       </div>
+
+      {/* Bloc Campagnes similaires (intersection modules — Q10B) */}
+      {!preview && similar.length > 0 && (
+        <div style={{ marginTop:36, paddingTop:24, borderTop:`1px solid ${COLORS.gray200}` }}>
+          <h3 style={{ fontFamily:"'Sora',sans-serif", fontSize:16, fontWeight:800, color:COLORS.gray900, margin:'0 0 14px' }}>🔗 Campagnes proches</h3>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))', gap:14 }}>
+            {similar.map(s => (
+              <CampaignCard key={s.id} campaign={s} onClick={() => onSelectCampaign?.(s)} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ShareModal (cohérence Bloc 3-8) */}
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} title={campaign.title} url={permalink} text={`${campaign.title} — Campagne sur Maintenant !`} />
     </div>
   );
 }
 
 // ── Campaign Card ─────────────────────────────────────────
 function CampaignCard({ campaign, onClick, adminMode, onEdit }) {
-  const [hov, setHov] = useState(false);
+  const closed = campaign.status === 'closed';
+  const href = `#campagnes/${campaign.slug || campaign.id}`;
   return (
-    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} onClick={onClick}
-      style={{ background:'#fff', borderRadius:16, border:`1px solid ${COLORS.gray200}`, overflow:'hidden', cursor:'pointer', transition:'all 0.2s', boxShadow:hov?'0 8px 28px rgba(0,0,0,0.10)':'0 1px 4px rgba(0,0,0,0.04)', transform:hov?'translateY(-2px)':'none', position:'relative' }}>
-      {adminMode && <div style={{ position:'absolute', top:8, right:8, zIndex:2 }} onClick={e=>{e.stopPropagation();onEdit();}}><AdminEdit /></div>}
-      <div style={{ position:'relative' }}>
-        <img src={campaign.cover||`https://picsum.photos/seed/${campaign.slug}/400/180`} style={{ width:'100%', height:160, objectFit:'cover' }} alt="" />
+    <a href={href} onClick={e => { e.preventDefault(); onClick?.(); }} className="mn-card-hover"
+      style={{ background:'#fff', borderRadius:16, border:`1px solid ${COLORS.gray200}`, overflow:'hidden', textDecoration:'none', color:'inherit', display:'block', position:'relative', opacity: closed ? 0.78 : 1 }}>
+      {adminMode && <div style={{ position:'absolute', top:8, right:8, zIndex:2 }} onClick={e=>{e.stopPropagation();e.preventDefault();onEdit();}}><AdminEdit /></div>}
+      <div style={{ position:'relative', height:160, background:'#1A1A18', backgroundImage: campaign.cover ? 'none' : 'linear-gradient(135deg,#7C3AED 0%,#E11D74 50%,#DC2654 100%)' }}>
+        {campaign.cover && <img src={campaign.cover} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} alt="" onError={e => { e.target.style.display='none'; }} />}
         <div style={{ position:'absolute', inset:0, background:`linear-gradient(to top,${campaign.color||'#E11D74'}cc 0%,transparent 60%)` }}></div>
+        {closed && (
+          <span style={{ position:'absolute', top:10, left:10, padding:'4px 10px', borderRadius:9999, background:'rgba(255,255,255,0.95)', color:'#92400E', fontSize:10, fontWeight:800, letterSpacing:'0.04em' }}>🔒 CLÔTURÉE</span>
+        )}
       </div>
       <div style={{ padding:'14px 16px' }}>
         <div style={{ display:'flex', gap:6, marginBottom:6, flexWrap:'wrap' }}>
@@ -1099,7 +1170,7 @@ function CampaignCard({ campaign, onClick, adminMode, onEdit }) {
           <span style={{ fontWeight:700, color:COLORS.red }}>👥 {campaign.supporters?.toLocaleString('fr-FR')}</span>
         </div>
       </div>
-    </div>
+    </a>
   );
 }
 
@@ -1111,11 +1182,48 @@ function CampaignsPage({ user, adminMode, onOpenAuth, setActivePage }) {
   const [search, setSearch] = useState('');
   const [templatePicker, setTemplatePicker] = useState(false);
 
-  const filtered = campaigns.filter(c => !search || c.title.toLowerCase().includes(search.toLowerCase()));
+  // Search étendue : title + subtitle + organizer + labels/icônes des modules (cohérence Bloc 3-8)
+  const filtered = campaigns.filter(c => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    const moduleLabels = (c.modules || []).map(m => {
+      const mod = ALL_MODULES.find(am => am.id === moduleId(m));
+      return mod ? `${mod.label} ${mod.icon}` : '';
+    }).join(' ').toLowerCase();
+    return c.title.toLowerCase().includes(q)
+      || (c.subtitle || '').toLowerCase().includes(q)
+      || (c.organizer || '').toLowerCase().includes(q)
+      || moduleLabels.includes(q);
+  });
 
   const handleCreateNew = () => {
     if (!user) { onOpenAuth(); return; }
     setTemplatePicker(true); // ouvre d'abord la sélection de template
+  };
+
+  // Suppression (admin only) — confirmation native, retire de l'array et ferme le détail
+  const handleDelete = (c) => {
+    if (!window.confirm(`Supprimer définitivement la campagne « ${c.title} » ?\n\nCette action est irréversible.`)) return;
+    setCampaigns(cs => cs.filter(x => x.id !== c.id));
+    setDetail(null);
+    window.showToast?.('Campagne supprimée', { type:'success', icon:'🗑' });
+  };
+
+  // Clôture (organizer) — passe status:'closed', la page reste accessible mais devient inactive
+  const handleClose = (c) => {
+    if (!window.confirm(`Clôturer la campagne « ${c.title} » ?\n\nElle restera accessible mais ne sera plus active. Cette action peut être annulée par toi-même.`)) return;
+    const updated = { ...c, status: 'closed' };
+    setCampaigns(cs => cs.map(x => x.id === c.id ? updated : x));
+    setDetail(updated);
+    window.showToast?.('Campagne clôturée', { type:'success', icon:'🔒' });
+  };
+
+  // Réouverture (organizer ou admin) — repasse en 'active'
+  const handleReopen = (c) => {
+    const updated = { ...c, status: 'active' };
+    setCampaigns(cs => cs.map(x => x.id === c.id ? updated : x));
+    setDetail(updated);
+    window.showToast?.('Campagne rouverte', { type:'success', icon:'✨' });
   };
 
   const startFromTemplate = (template) => {
@@ -1138,18 +1246,25 @@ function CampaignsPage({ user, adminMode, onOpenAuth, setActivePage }) {
     setBuilding(newCampaign);
   };
 
-  if (detail && !building) return (
-    <div style={{ maxWidth:800, margin:'0 auto', padding:'24px 16px 100px' }}>
-      <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
-        <button onClick={()=>setDetail(null)} style={{ display:'flex', alignItems:'center', gap:6, border:'none', background:'transparent', cursor:'pointer', color:COLORS.gray500, fontSize:13, fontWeight:600, padding:0 }}>← Retour aux campagnes</button>
-        {(adminMode || detail.organizer===user?.name) && <Btn variant="outline" size="sm" onClick={()=>setBuilding(detail)}>✏️ Modifier la campagne</Btn>}
+  if (detail && !building) {
+    const isOrganizer = !!user && detail.organizer === user.name;
+    const isClosed = detail.status === 'closed';
+    return (
+      <div style={{ maxWidth:800, margin:'0 auto', padding:'24px 16px 100px' }}>
+        <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap', alignItems:'center' }}>
+          <button onClick={()=>setDetail(null)} style={{ display:'flex', alignItems:'center', gap:6, border:'none', background:'transparent', cursor:'pointer', color:COLORS.gray500, fontSize:13, fontWeight:600, padding:0 }}>← Retour aux campagnes</button>
+          {(adminMode || isOrganizer) && !isClosed && <Btn variant="outline" size="sm" onClick={()=>setBuilding(detail)}>✏️ Modifier la campagne</Btn>}
+          {isOrganizer && !isClosed && <Btn variant="ghost" size="sm" onClick={() => handleClose(detail)}>🔒 Clôturer ma campagne</Btn>}
+          {(isOrganizer || adminMode) && isClosed && <Btn variant="ghost" size="sm" onClick={() => handleReopen(detail)}>✨ Rouvrir la campagne</Btn>}
+          {adminMode && <Btn variant="ghost" size="sm" onClick={() => handleDelete(detail)} style={{ color:'#EF4444' }}>🗑 Supprimer</Btn>}
+        </div>
+        <CampaignView campaign={detail} setActivePage={setActivePage} allCampaigns={campaigns} onSelectCampaign={setDetail} />
       </div>
-      <CampaignView campaign={detail} setActivePage={setActivePage} />
-    </div>
-  );
+    );
+  }
 
   return (
-    <PageWrap title="🚀 Campagnes" subtitle={`${filtered.length} campagnes actives`}
+    <PageWrap title="🚀 Campagnes" subtitle={`${filtered.length} campagne${filtered.length>1?'s':''} · ${campaigns.filter(c=>c.status!=='closed').length} active${campaigns.filter(c=>c.status!=='closed').length>1?'s':''}`}
       action={<Btn variant="gradient" size="sm" onClick={handleCreateNew}>🚀 Créer une campagne</Btn>}>
       <div style={{ background:'linear-gradient(to right,#4F46E5,#7C3AED)', borderRadius:14, padding:'14px 18px', marginBottom:24, color:'#fff', display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
         <div style={{ fontSize:32 }}>🧩</div>
@@ -1168,6 +1283,11 @@ function CampaignsPage({ user, adminMode, onOpenAuth, setActivePage }) {
         ))}
       </div>
       {filtered.length===0 && <EmptyState icon="🚀" title="Aucune campagne" desc="Créez la première campagne !" />}
+
+      {/* FAB mobile (cohérence Bloc 4-6) */}
+      <div className="mn-detail-fab">
+        <Btn full variant="gradient" size="lg" onClick={handleCreateNew}>🚀 Créer une campagne</Btn>
+      </div>
 
       {/* MODALE de sélection de template */}
       {templatePicker && (
