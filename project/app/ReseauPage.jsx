@@ -5,25 +5,43 @@ const { useState, useRef } = React;
 //  POSTS — données enrichies avec author_id, link sharing, date
 //  Le champ `link` permet l'affichage de cards "rich preview" type Facebook
 // ════════════════════════════════════════════════════════════
+// Helpers pour comments mock spécifiques par post
+const C = (author, text, time = 'il y a 1h') => ({ id: Math.random(), author, text, time });
+
 const SAMPLE_POSTS = [
-  { id:1,  author_id:1, author:'Marie Dupont',          time:'il y a 2h',  date:'2026-04-22T10:00', content:"Victoire ! La pétition contre la fermeture des urgences vient de dépasser 14 000 signatures 🎉 Continuons à partager !", likes:47, comments:12, shares:8, image:'https://picsum.photos/seed/post1/600/300', tags:['santé','urgences'] },
-  { id:2,  author_id:2, author:'Thomas Rivière',        time:'il y a 4h',  date:'2026-04-22T08:00', content:"Retour du camp militant du Larzac — 3 jours intenses, des rencontres inoubliables, et une énergie collective qui fait chaud au cœur. Merci à toutes et tous ! ✊", likes:134, comments:28, shares:19, tags:['larzac','militant'] },
-  { id:3,  author_id:3, author:'Aisha Rahman',          time:'il y a 6h',  date:'2026-04-22T06:00', content:"Je propose un cours de yoga gratuit ce samedi matin à Paris 10e pour les camarades stressés par le mouvement. 10h-11h30, 10 places max. Inscriptions en MP 🧘", likes:23, comments:17, shares:5, tags:['SEL','yoga','Paris'] },
-  { id:4,  author_id:7, author:'Collectif Santé Pour Tous', time:'hier', date:'2026-04-21T18:00', content:"📢 ALERTE : La préfecture vient de confirmer la fermeture définitive de 3 maternités rurales. Nous organisons une conférence de presse mardi 10h. Venez nombreux !", likes:89, comments:34, shares:56, image:'https://picsum.photos/seed/post4/600/250', tags:['santé','maternité','alerte'] },
-  { id:5,  author_id:4, author:'Omar Benzara',          time:'il y a 2 jours', date:'2026-04-20T14:00', content:"Thread sur la monnaie T99CP et pourquoi c'est une révolution pour les échanges solidaires 🧵\n\n1/ La T99CP est indexée à la fois sur l'euro et sur le temps de travail humain. 1 T99CP = 1€ = 1 minute de travail...", likes:201, comments:67, shares:88, tags:['T99CP','crypto','solidarité'] },
-  { id:6,  author_id:5, author:'Léa Martin',            time:'il y a 3 jours', date:'2026-04-19T11:00', content:"Surplus de mon jardin ! J'ai des kilos de courgettes et de tomates cerises. Passage possible à Lyon 7e ce week-end. DM pour organiser 🥬🍅", likes:31, comments:22, shares:3, image:'https://picsum.photos/seed/garden1/600/280', tags:['jardin','surplus','Lyon'] },
+  { id:1,  author_id:1, author:'Marie Dupont',          time:'il y a 2h',  date:'2026-04-22T10:00', content:"Victoire ! La pétition contre la fermeture des urgences vient de dépasser 14 000 signatures 🎉 Continuons à partager !", likes:47, shares:8, image:'https://images.unsplash.com/photo-1551601651-2a8555f1a136?w=900&q=70', tags:['santé','urgences'],
+    comments:[ C('Thomas R.','Bravo, on continue ✊','il y a 1h'), C('Aisha R.','Partagé sur tous mes réseaux !','il y a 30min') ] },
+  { id:2,  author_id:2, author:'Thomas Rivière',        time:'il y a 4h',  date:'2026-04-22T08:00', content:"Retour du camp militant du Larzac — 3 jours intenses, des rencontres inoubliables, et une énergie collective qui fait chaud au cœur. Merci à toutes et tous ! ✊", likes:134, shares:19, tags:['larzac','militant'],
+    comments:[ C('Léa M.','Hâte du prochain camp 🌄','il y a 2h'), C('Karim Z.','Quels ateliers tu retiens en priorité ?','il y a 1h') ] },
+  { id:3,  author_id:3, author:'Aisha Rahman',          time:'il y a 6h',  date:'2026-04-22T06:00', content:"Je propose un cours de yoga gratuit ce samedi matin à Paris 10e pour les camarades stressés par le mouvement. 10h-11h30, 10 places max. Inscriptions en MP 🧘", likes:23, shares:5, tags:['SEL','yoga','Paris'],
+    comments:[ C('Marie D.','Je prends une place, merci !','il y a 4h'), C('Omar B.','Topissime — exactement ce qu\'il nous faut','il y a 3h') ] },
+  { id:4,  author_id:7, author:'Collectif Santé Pour Tous', time:'hier', date:'2026-04-21T18:00', content:"📢 ALERTE : La préfecture vient de confirmer la fermeture définitive de 3 maternités rurales. Nous organisons une conférence de presse mardi 10h. Venez nombreux !", likes:89, shares:56, image:'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=900&q=70', tags:['santé','maternité','alerte'],
+    comments:[ C('Karim Z.','Inadmissible. Je relaie','hier'), C('Pauline B.','On se mobilise depuis Toulouse aussi','il y a 18h'), C('Marie D.','Je serai là mardi','il y a 12h') ] },
+  { id:5,  author_id:4, author:'Omar Benzara',          time:'il y a 2 jours', date:'2026-04-20T14:00', content:"Thread sur la monnaie T99CP et pourquoi c'est une révolution pour les échanges solidaires 🧵\n\n1/ La T99CP est indexée à la fois sur l'euro et sur le temps de travail humain. 1 T99CP = 1€ = 1 minute de travail...", likes:201, shares:88, tags:['T99CP','crypto','solidarité'],
+    comments:[ C('Thomas R.','Excellent thread, à épingler','il y a 2 jours'), C('Salomé G.','Question : que se passe-t-il si l\'euro s\'effondre ?','il y a 2 jours') ] },
+  { id:6,  author_id:5, author:'Léa Martin',            time:'il y a 3 jours', date:'2026-04-19T11:00', content:"Surplus de mon jardin ! J'ai des kilos de courgettes et de tomates cerises. Passage possible à Lyon 7e ce week-end. DM pour organiser 🥬🍅", likes:31, shares:3, image:'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=900&q=70', tags:['jardin','surplus','Lyon'],
+    comments:[ C('Aisha R.','Je passe samedi avec mon panier 🧺','il y a 2 jours') ] },
   // Posts avec partage de liens externes
-  { id:7,  author_id:2, author:'Thomas Rivière',        time:'il y a 5h',  date:'2026-04-22T07:00', content:"À lire absolument — l'enquête Reporterre sur l'accaparement de l'eau par les méga-bassines. Édifiant.", link:{ url:'https://reporterre.net/Mega-bassines-l-eau-confisquee', title:"Méga-bassines : l'eau confisquée", description:"Enquête approfondie sur le système opaque qui permet aux multinationales agro-industrielles de capter l'eau publique au détriment des paysans.", siteName:'Reporterre', thumbnail:'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=600&q=70' }, likes:312, comments:48, shares:127 },
-  { id:8,  author_id:4, author:'Omar Benzara',          time:'il y a 1 jour', date:'2026-04-21T10:00', content:"Vidéo très claire de Vert le Média sur la transition écologique — à partager sans modération 👇", link:{ url:'https://vert.eco/articles/comprendre-le-tournant-energetique', title:"Comprendre le tournant énergétique en 6 minutes", description:"Vert le média décrypte les enjeux du virage énergétique avec une vidéo pédagogique et accessible.", siteName:'Vert le média', thumbnail:'https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=600&q=70', type:'video' }, likes:178, comments:23, shares:67 },
-  { id:9,  author_id:6, author:'Karim Zidane',          time:'il y a 2 jours', date:'2026-04-20T16:00', content:"Mediapart vient de publier un papier important sur les paradis fiscaux européens. À lire et faire circuler.", link:{ url:'https://mediapart.fr/journal/economie/220425/paradis-fiscaux-europe-derobe-100-milliards', title:"Paradis fiscaux : 100 milliards d'euros qui échappent à l'Europe", description:"Une enquête de 6 mois révèle l'ampleur de la fuite des capitaux et la complicité des gouvernements.", siteName:'Mediapart', thumbnail:null }, likes:88, comments:34, shares:42 },
-  { id:10, author_id:8, author:'Sophie Leclercq',       time:'il y a 3 jours', date:'2026-04-19T15:00', content:"Petit live YouTube avec Hartmut Rosa sur l'accélération sociale, je recommande chaudement.", link:{ url:'https://youtube.com/watch?v=abcd1234', title:"Hartmut Rosa : sortir de la course folle", description:"Conférence de 1h15 du sociologue allemand sur sa théorie de la résonance et l'aliénation par l'urgence.", siteName:'YouTube', thumbnail:'https://images.unsplash.com/photo-1554189097-ffe88e998a2b?w=600&q=70', type:'video' }, likes:67, comments:19, shares:24 },
+  { id:7,  author_id:2, author:'Thomas Rivière',        time:'il y a 5h',  date:'2026-04-22T07:00', content:"À lire absolument — l'enquête Reporterre sur l'accaparement de l'eau par les méga-bassines. Édifiant.", link:{ url:'https://reporterre.net/Mega-bassines-l-eau-confisquee', title:"Méga-bassines : l'eau confisquée", description:"Enquête approfondie sur le système opaque qui permet aux multinationales agro-industrielles de capter l'eau publique au détriment des paysans.", siteName:'Reporterre', thumbnail:'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=600&q=70' }, likes:312, shares:127,
+    comments:[ C('Karim Z.','Indispensable comme lecture','il y a 4h'), C('Omar B.','Faisons-en un article de Maintenant','il y a 3h') ] },
+  { id:8,  author_id:4, author:'Omar Benzara',          time:'il y a 1 jour', date:'2026-04-21T10:00', content:"Vidéo très claire de Vert le Média sur la transition écologique — à partager sans modération 👇", link:{ url:'https://vert.eco/articles/comprendre-le-tournant-energetique', title:"Comprendre le tournant énergétique en 6 minutes", description:"Vert le média décrypte les enjeux du virage énergétique avec une vidéo pédagogique et accessible.", siteName:'Vert le média', thumbnail:'https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=600&q=70', type:'video' }, likes:178, shares:67,
+    comments:[ C('Salomé G.','Top — j\'ai partagé en cours','hier') ] },
+  { id:9,  author_id:6, author:'Karim Zidane',          time:'il y a 2 jours', date:'2026-04-20T16:00', content:"Mediapart vient de publier un papier important sur les paradis fiscaux européens. À lire et faire circuler.", link:{ url:'https://mediapart.fr/journal/economie/220425/paradis-fiscaux-europe-derobe-100-milliards', title:"Paradis fiscaux : 100 milliards d'euros qui échappent à l'Europe", description:"Une enquête de 6 mois révèle l'ampleur de la fuite des capitaux et la complicité des gouvernements.", siteName:'Mediapart', thumbnail:null }, likes:88, shares:42,
+    comments:[ C('Marie D.','100 milliards. Hôpitaux, écoles, retraites…','il y a 2 jours'), C('Pauline B.','À ce niveau c\'est plus de l\'optimisation, c\'est du pillage','il y a 2 jours') ] },
+  { id:10, author_id:8, author:'Sophie Leclercq',       time:'il y a 3 jours', date:'2026-04-19T15:00', content:"Petit live YouTube avec Hartmut Rosa sur l'accélération sociale, je recommande chaudement.", link:{ url:'https://youtube.com/watch?v=abcd1234', title:"Hartmut Rosa : sortir de la course folle", description:"Conférence de 1h15 du sociologue allemand sur sa théorie de la résonance et l'aliénation par l'urgence.", siteName:'YouTube', thumbnail:'https://images.unsplash.com/photo-1554189097-ffe88e998a2b?w=600&q=70', type:'video' }, likes:67, shares:24,
+    comments:[ C('Aisha R.','Sa théorie de la résonance change tout','il y a 3 jours') ] },
   // Posts d'amis d'amis
-  { id:11, author_id:11, author:'Nadia Belhadj',        time:'il y a 8h',  date:'2026-04-22T04:00', content:"Première AG de la commune libre de notre quartier ce soir 🏡 — on est 47 inscrits, plus qu'à attendre les autres camarades !", likes:42, comments:11, shares:6, tags:['communes-libres','Paris-20'] },
-  { id:12, author_id:12, author:'Mathieu Charlot',      time:'il y a 12h', date:'2026-04-22T00:00', content:"Trajet covoit Paris→Lille demain pour la mob du 23 avril, 2 places restantes, prix solidaire en T99CP 🚗", likes:18, comments:7, shares:3, tags:['covoit','mobilisation'] },
-  { id:13, author_id:13, author:'Salomé Garnier',       time:'hier',       date:'2026-04-21T20:00', content:"L'épisode 4 du podcast 'Décarboner les transports' est dingue, ça raconte la guerre du diesel comme un thriller industriel.", likes:55, comments:14, shares:9, tags:['podcast','transports'] },
+  { id:11, author_id:11, author:'Nadia Belhadj',        time:'il y a 8h',  date:'2026-04-22T04:00', content:"Première AG de la commune libre de notre quartier ce soir 🏡 — on est 47 inscrits, plus qu'à attendre les autres camarades !", likes:42, shares:6, tags:['communes-libres','Paris-20'],
+    comments:[ C('Marie D.','Bravo Nadia ! Tiens-nous au courant','il y a 6h') ] },
+  { id:12, author_id:12, author:'Mathieu Charlot',      time:'il y a 12h', date:'2026-04-22T00:00', content:"Trajet covoit Paris→Lille demain pour la mob du 23 avril, 2 places restantes, prix solidaire en T99CP 🚗", likes:18, shares:3, tags:['covoit','mobilisation'],
+    comments:[ C('Léa M.','Je prends une place 🙋','il y a 10h') ] },
+  { id:13, author_id:13, author:'Salomé Garnier',       time:'hier',       date:'2026-04-21T20:00', content:"L'épisode 4 du podcast 'Décarboner les transports' est dingue, ça raconte la guerre du diesel comme un thriller industriel.", likes:55, shares:9, tags:['podcast','transports'],
+    comments:[ C('Thomas R.','Romain Béral signe encore un grand épisode','hier') ] },
   // Posts d'autres
-  { id:14, author_id:21, author:'Pauline Brun',         time:'il y a 1 jour', date:'2026-04-21T09:00', content:"On organise un atelier 'monter une caisse de grève' la semaine prochaine à Toulouse, infos en commentaire 💪", likes:73, comments:31, shares:18, tags:['caisse-de-grève','Toulouse'] },
-  { id:15, author_id:22, author:'Jean Lefort',          time:'il y a 2 jours', date:'2026-04-20T19:00', content:"Magnifique soirée à la fête de la Conf' Paysanne hier — débats, concerts, et un vrai bon vin 🍷", likes:91, comments:24, shares:11, image:'https://picsum.photos/seed/conf/600/280', tags:['conf-paysanne','culture'] },
+  { id:14, author_id:21, author:'Pauline Brun',         time:'il y a 1 jour', date:'2026-04-21T09:00', content:"On organise un atelier 'monter une caisse de grève' la semaine prochaine à Toulouse, infos en commentaire 💪", likes:73, shares:18, tags:['caisse-de-grève','Toulouse'],
+    comments:[ C('Karim Z.','Comptez sur moi pour relayer dans le sud','hier'), C('Omar B.','Possible de récupérer le support de présentation ?','il y a 18h') ] },
+  { id:15, author_id:22, author:'Jean Lefort',          time:'il y a 2 jours', date:'2026-04-20T19:00', content:"Magnifique soirée à la fête de la Conf' Paysanne hier — débats, concerts, et un vrai bon vin 🍷", likes:91, shares:11, image:'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=900&q=70', tags:['conf-paysanne','culture'],
+    comments:[ C('Léa M.','J\'y étais aussi, soirée magique','il y a 2 jours') ] },
 ];
 
 // Marie Dupont = utilisatrice par défaut (id 1) — réseau simulé
@@ -179,15 +197,22 @@ function computeAffinityScore(item, user) {
 }
 
 // Compose un feed mixé selon les ratios 60/20/10/10
+// Les posts de l'utilisateur·rice (origin === 'self' ou author_id === userId) sont
+// systématiquement injectés en tête, hors du quota — c'est *son* fil.
 function composeFeed(user, posts, platformItems) {
   const userId = user?.id || 1; // par défaut Marie (id 1)
   const contactIds = new Set(DEFAULT_CONTACTS);
   const fofIds = new Set(DEFAULT_FOFS);
 
-  // Catégoriser
-  const byContacts = posts.filter(p => contactIds.has(p.author_id));
-  const byFoFs     = posts.filter(p => fofIds.has(p.author_id) && !contactIds.has(p.author_id));
-  const byOthers   = posts.filter(p => !contactIds.has(p.author_id) && !fofIds.has(p.author_id) && p.author_id !== userId);
+  // Posts publiés par l'utilisateur·rice elle-même (toujours en tête, ordre antichrono)
+  const bySelf = posts.filter(p => p._origin === 'self' || p.author_id === userId)
+                       .sort((a, b) => new Date(b.date) - new Date(a.date))
+                       .map(p => ({ ...p, _origin: 'self' }));
+
+  // Catégoriser le reste
+  const byContacts = posts.filter(p => p._origin !== 'self' && p.author_id !== userId && contactIds.has(p.author_id));
+  const byFoFs     = posts.filter(p => p._origin !== 'self' && p.author_id !== userId && fofIds.has(p.author_id) && !contactIds.has(p.author_id));
+  const byOthers   = posts.filter(p => p._origin !== 'self' && !contactIds.has(p.author_id) && !fofIds.has(p.author_id) && p.author_id !== userId);
 
   // Tri chronologique (plus récent d'abord)
   const sortDate = arr => arr.sort((a,b) => new Date(b.date) - new Date(a.date));
@@ -215,9 +240,9 @@ function composeFeed(user, posts, platformItems) {
     platform: scoredPlatform.slice(0, counts.platform).map(p => ({ ...p, _origin:'platform' })),
   };
 
-  // Composition : on injecte fofs / others / platform à des positions
-  // stratégiques pour casser la monotonie, le reste = contacts chronologique
-  const feed = [];
+  // Composition : self en premier (hors quota), puis on injecte fofs / others / platform
+  // à des positions stratégiques pour casser la monotonie, le reste = contacts chronologique
+  const feed = [...bySelf];
   let cIdx = 0, fIdx = 0, oIdx = 0, pIdx = 0;
   let lastPlatformService = null;
 
@@ -263,91 +288,140 @@ function getPlatformItems() {
   return items;
 }
 
-function PostCard({ post, user, onLike }) {
+// Menu contextuel ⋯ (Signaler / Masquer / Copier le lien)
+function PostMenu({ post, onHide }) {
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+  const copyLink = () => {
+    const url = `${location.origin}${location.pathname}#post-${post.id}`;
+    if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => window.showToast?.('Lien copié dans le presse-papiers', { type: 'success', icon: '🔗' }));
+    else window.showToast?.('Lien : ' + url, { type: 'info' });
+    close();
+  };
+  const report = () => { window.showToast?.('Signalement envoyé à la modération', { type: 'success', icon: '⚠️' }); close(); };
+  const hide = () => { onHide?.(post.id); window.showToast?.('Publication masquée', { type: 'info', icon: '🙈' }); close(); };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(o => !o)} aria-label="Plus d'options sur cette publication" aria-expanded={open}
+        style={{ border: 'none', background: open ? COLORS.gray100 : 'transparent', cursor: 'pointer', color: COLORS.gray500, fontSize: 18, padding: '4px 8px', borderRadius: 8, transition: 'background 0.15s' }}>⋯</button>
+      {open && (
+        <>
+          <div onClick={close} style={{ position: 'fixed', inset: 0, zIndex: 50 }}></div>
+          <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: '#fff', borderRadius: 10, boxShadow: '0 8px 32px rgba(0,0,0,0.15)', border: `1px solid ${COLORS.gray200}`, minWidth: 200, zIndex: 60, overflow: 'hidden' }}>
+            {[
+              { icon: '🔗', label: 'Copier le lien du post', action: copyLink },
+              { icon: '🙈', label: 'Masquer cette publication', action: hide },
+              { icon: '⚠️', label: 'Signaler', action: report, danger: true },
+            ].map(opt => (
+              <button key={opt.label} onClick={opt.action} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, color: opt.danger ? COLORS.red : COLORS.gray700, fontFamily: 'Inter,sans-serif', textAlign: 'left', transition: 'background 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.background = COLORS.gray50}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <span>{opt.icon}</span><span>{opt.label}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function PostCard({ post, user, onHide }) {
   const [liked, setLiked] = useState(false);
   const [likes, setLikes] = useState(post.likes);
+  const [shares, setShares] = useState(post.shares || 0);
   const [showComments, setShowComments] = useState(false);
   const [comment, setComment] = useState('');
-  const [comments, setComments] = useState([
-    { id:1, author:'Thomas R.', text:'Excellent ! On continue ✊', time:'il y a 1h' },
-    { id:2, author:'Aisha R.', text:'Partagé sur tous mes réseaux !', time:'il y a 30min' },
-  ]);
+  const [comments, setComments] = useState(post.comments || []);
 
-  const handleLike = () => { setLiked(!liked); setLikes(l=>liked?l-1:l+1); };
+  const handleLike = () => { setLiked(!liked); setLikes(l => liked ? l - 1 : l + 1); };
   const handleComment = () => {
-    if(!comment.trim()) return;
-    setComments(cs=>[...cs,{id:Date.now(),author:user?.name||'Anonyme',text:comment,time:'À l\'instant'}]);
+    if (!comment.trim()) return;
+    setComments(cs => [...cs, { id: Date.now(), author: user?.name || 'Anonyme', text: comment, time: 'À l\'instant' }]);
     setComment('');
+  };
+  const handleShare = () => {
+    const url = `${location.origin}${location.pathname}#post-${post.id}`;
+    if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => window.showToast?.('Lien copié dans le presse-papiers', { type: 'success', icon: '🔗' }));
+    else window.showToast?.('Lien : ' + url, { type: 'info' });
+    setShares(s => s + 1);
   };
 
   return (
-    <Card style={{ marginBottom:14 }}>
-      <div style={{ padding:'14px 16px' }}>
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ padding: '14px 16px' }}>
         {/* Author */}
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-          <div style={{ width:40, height:40, borderRadius:'50%', background:GRAD, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:700, fontSize:16, flexShrink:0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', background: GRAD, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 16, flexShrink: 0 }}>
             {post.author.charAt(0)}
           </div>
-          <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontWeight:700, fontSize:14, color:COLORS.gray900, display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.gray900, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               {post.author}
-              {post._origin === 'fof'   && <span style={{ fontSize:10, fontWeight:700, color:'#7C3AED', background:'#F3EBFE', padding:'2px 7px', borderRadius:9999, letterSpacing:'0.04em' }}>Ami·e d'ami·e</span>}
-              {post._origin === 'other' && <span style={{ fontSize:10, fontWeight:700, color:'#0891B2', background:'#ECFEFF', padding:'2px 7px', borderRadius:9999, letterSpacing:'0.04em' }}>Découverte communauté</span>}
+              {post._origin === 'self'  && <span style={{ fontSize: 10, fontWeight: 700, color: COLORS.red, background: '#FDE9F2', padding: '2px 7px', borderRadius: 9999, letterSpacing: '0.04em' }}>Ta publication</span>}
+              {post._origin === 'fof'   && <span style={{ fontSize: 10, fontWeight: 700, color: '#7C3AED', background: '#F3EBFE', padding: '2px 7px', borderRadius: 9999, letterSpacing: '0.04em' }}>Ami·e d'ami·e</span>}
+              {post._origin === 'other' && <span style={{ fontSize: 10, fontWeight: 700, color: '#0891B2', background: '#ECFEFF', padding: '2px 7px', borderRadius: 9999, letterSpacing: '0.04em' }}>Découverte communauté</span>}
             </div>
-            <div style={{ fontSize:11, color:COLORS.gray400 }}>{post.time}</div>
+            <div style={{ fontSize: 11, color: COLORS.gray400 }}>{post.time}</div>
           </div>
-          <button style={{ border:'none', background:'transparent', cursor:'pointer', color:COLORS.gray400, fontSize:18, padding:4 }}>⋯</button>
+          <PostMenu post={post} onHide={onHide} />
         </div>
 
         {/* Content */}
-        <p style={{ fontSize:14, color:COLORS.gray700, lineHeight:1.65, margin:'0 0 10px', whiteSpace:'pre-line' }}>{post.content}</p>
+        <p style={{ fontSize: 14, color: COLORS.gray700, lineHeight: 1.65, margin: '0 0 10px', whiteSpace: 'pre-line' }}>{post.content}</p>
 
         {/* Image */}
-        {post.image && <img src={post.image} alt="" style={{ width:'100%', borderRadius:12, marginBottom:10, maxHeight:280, objectFit:'cover' }} />}
+        {post.image && <img src={post.image} alt="" loading="lazy" style={{ width: '100%', borderRadius: 12, marginBottom: 10, maxHeight: 320, objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />}
+        {post.video && (
+          <video src={post.video} controls preload="metadata" style={{ width: '100%', borderRadius: 12, marginBottom: 10, maxHeight: 360, background: '#000' }} />
+        )}
         {post.link && <LinkPreviewCard link={post.link} />}
 
         {/* Tags */}
-        {post.tags?.length>0 && <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginBottom:10 }}>
-          {post.tags.map(t=><Badge key={t} color="blue" style={{ fontSize:11 }}>#{t}</Badge>)}
+        {post.tags?.length > 0 && <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10 }}>
+          {post.tags.map(t => <Badge key={t} color="blue" style={{ fontSize: 11 }}>#{t}</Badge>)}
         </div>}
 
         {/* Stats */}
-        <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:COLORS.gray400, padding:'8px 0', borderTop:`1px solid ${COLORS.gray100}`, borderBottom:`1px solid ${COLORS.gray100}`, margin:'0 0 8px' }}>
-          <span>{likes} j'aime{likes>1?'s':''}</span>
-          <span style={{ cursor:'pointer' }} onClick={()=>setShowComments(!showComments)}>{comments.length} commentaire{comments.length>1?'s':''} · {post.shares} partages</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: COLORS.gray400, padding: '8px 0', borderTop: `1px solid ${COLORS.gray100}`, borderBottom: `1px solid ${COLORS.gray100}`, margin: '0 0 8px' }}>
+          <span>{likes} j'aime{likes > 1 ? 's' : ''}</span>
+          <span style={{ cursor: 'pointer' }} onClick={() => setShowComments(!showComments)}>{comments.length} commentaire{comments.length > 1 ? 's' : ''} · {shares} partage{shares > 1 ? 's' : ''}</span>
         </div>
 
         {/* Actions */}
-        <div style={{ display:'flex', gap:0 }}>
+        <div style={{ display: 'flex', gap: 0 }}>
           {[
-            { icon: liked?'❤️':'🤍', label: liked?'Aimé':'J\'aime', action: handleLike, active: liked },
-            { icon:'💬', label:'Commenter', action:()=>setShowComments(!showComments) },
-            { icon:'↗️', label:'Partager', action:()=>{ const url = `${location.origin}${location.pathname}#post-${post.id}`; if (navigator.clipboard) navigator.clipboard.writeText(url).then(()=>window.showToast?.('Lien copié dans le presse-papiers', { type:'success', icon:'🔗' })); else window.showToast?.('Lien : ' + url, { type:'info' }); } },
-          ].map(a=>(
-            <button key={a.label} onClick={a.action} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:5, padding:'8px', border:'none', background:'transparent', cursor:'pointer', fontSize:13, fontWeight:600, color:a.active?COLORS.red:COLORS.gray500, borderRadius:8, fontFamily:'Inter,sans-serif', transition:'background 0.15s' }} onMouseEnter={e=>e.currentTarget.style.background=COLORS.gray50} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-              {a.icon} <span className="mn-desktop-nav" style={{ display:'inline' }}>{a.label}</span>
+            { icon: liked ? '❤️' : '🤍', label: liked ? 'Aimé' : 'J\'aime', action: handleLike, active: liked, aria: liked ? 'Retirer le j\'aime' : 'J\'aime cette publication' },
+            { icon: '💬', label: 'Commenter', action: () => setShowComments(!showComments), aria: 'Afficher ou masquer les commentaires' },
+            { icon: '↗️', label: 'Partager', action: handleShare, aria: 'Partager ce post' },
+          ].map(a => (
+            <button key={a.label} onClick={a.action} aria-label={a.aria} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: a.active ? COLORS.red : COLORS.gray500, borderRadius: 8, fontFamily: 'Inter,sans-serif', transition: 'background 0.15s' }} onMouseEnter={e => e.currentTarget.style.background = COLORS.gray50} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              {a.icon} <span className="mn-desktop-nav" style={{ display: 'inline' }}>{a.label}</span>
             </button>
           ))}
         </div>
 
         {/* Comments */}
         {showComments && (
-          <div style={{ marginTop:10, borderTop:`1px solid ${COLORS.gray100}`, paddingTop:10 }}>
-            {comments.map(c=>(
-              <div key={c.id} style={{ display:'flex', gap:8, marginBottom:8 }}>
-                <div style={{ width:30, height:30, borderRadius:'50%', background:COLORS.gray200, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:12, flexShrink:0 }}>{c.author.charAt(0)}</div>
-                <div style={{ background:COLORS.gray50, borderRadius:12, padding:'8px 12px', flex:1 }}>
-                  <div style={{ fontWeight:600, fontSize:12, color:COLORS.gray900 }}>{c.author}<span style={{ fontWeight:400, color:COLORS.gray400, marginLeft:6, fontSize:11 }}>{c.time}</span></div>
-                  <div style={{ fontSize:13, color:COLORS.gray700, marginTop:2 }}>{c.text}</div>
+          <div style={{ marginTop: 10, borderTop: `1px solid ${COLORS.gray100}`, paddingTop: 10 }}>
+            {comments.length === 0
+              ? <div style={{ fontSize: 12, color: COLORS.gray400, textAlign: 'center', padding: '12px 8px', fontStyle: 'italic' }}>Sois le·la premier·e à commenter cette publication</div>
+              : comments.map(c => (
+                <div key={c.id} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: '50%', background: COLORS.gray200, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{c.author.charAt(0)}</div>
+                  <div style={{ background: COLORS.gray50, borderRadius: 12, padding: '8px 12px', flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 12, color: COLORS.gray900 }}>{c.author}<span style={{ fontWeight: 400, color: COLORS.gray400, marginLeft: 6, fontSize: 11 }}>{c.time}</span></div>
+                    <div style={{ fontSize: 13, color: COLORS.gray700, marginTop: 2 }}>{c.text}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
             {user && (
-              <div style={{ display:'flex', gap:8, marginTop:8 }}>
-                <div style={{ width:30, height:30, borderRadius:'50%', background:GRAD, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:700, fontSize:12, flexShrink:0 }}>{user.name.charAt(0)}</div>
-                <div style={{ flex:1, display:'flex', gap:6 }}>
-                  <input value={comment} onChange={e=>setComment(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleComment()} placeholder="Votre commentaire..." style={{ flex:1, height:36, border:`1.5px solid ${COLORS.gray200}`, borderRadius:18, padding:'0 14px', fontSize:13, fontFamily:'Inter,sans-serif', outline:'none' }} />
-                  <button onClick={handleComment} style={{ border:'none', background:COLORS.red, color:'#fff', borderRadius:'50%', width:36, height:36, cursor:'pointer', fontSize:16 }}>↑</button>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <div style={{ width: 30, height: 30, borderRadius: '50%', background: GRAD, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{user.name.charAt(0)}</div>
+                <div style={{ flex: 1, display: 'flex', gap: 6 }}>
+                  <input value={comment} onChange={e => setComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleComment()} placeholder="Votre commentaire..." aria-label="Écrire un commentaire" style={{ flex: 1, height: 36, border: `1.5px solid ${COLORS.gray200}`, borderRadius: 18, padding: '0 14px', fontSize: 13, fontFamily: 'Inter,sans-serif', outline: 'none' }} />
+                  <button onClick={handleComment} aria-label="Envoyer le commentaire" style={{ border: 'none', background: COLORS.red, color: '#fff', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', fontSize: 16 }}>↑</button>
                 </div>
               </div>
             )}
@@ -392,13 +466,124 @@ function PlatformSuggestionCard({ item, setActivePage }) {
   );
 }
 
+// ════════════════════════════════════════════════════════════
+//  GroupDetailPage — vraie page détail (cohérence Bloc 5 cagnottes)
+//  Hero avec gradient color du groupe + posts liés + sidebar charte
+// ════════════════════════════════════════════════════════════
+function GroupDetailPage({ group, posts, user, onBack, isJoined, onToggleJoin, onSelectMember }) {
+  const [shareOpen, setShareOpen] = useState(false);
+  // 3 derniers posts qui mentionnent le nom du groupe ou son thème
+  const groupPosts = posts.filter(p => {
+    const txt = (p.content || '').toLowerCase();
+    const tags = (p.tags || []).join(' ').toLowerCase();
+    return txt.includes(group.name.toLowerCase().split(' ')[0]) || tags.includes(group.name.toLowerCase().split(' ')[0]) || (group.id === 1 && /climat|écolog|carbone/i.test(txt + tags)) || (group.id === 6 && /média|reporterre|mediapart|vert/i.test(txt + tags));
+  }).slice(0, 3);
+  const recentMembers = SAMPLE_MEMBERS.slice(0, 5);
+  const permalink = `${location.origin}${location.pathname}#groupe/${group.id}`;
+  const memberCount = group.members + (isJoined ? 1 : 0);
+
+  return (
+    <div style={{ maxWidth: 1152, margin: '0 auto', padding: '20px 16px 100px' }}>
+      <button onClick={onBack} aria-label="Retour à la liste des groupes" style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: COLORS.gray500, fontSize: 13, fontWeight: 600, fontFamily: 'Inter,sans-serif', padding: '8px 0', marginBottom: 12 }}>← Réseau · Groupes</button>
+
+      {/* Hero */}
+      <div style={{ background: `linear-gradient(135deg, ${group.color}, ${group.color}AA)`, borderRadius: 24, padding: '36px 32px', color: '#fff', marginBottom: 18, position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: -60, right: -40, fontSize: 240, opacity: 0.12, lineHeight: 1 }}>{group.icon}</div>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 20, flexWrap: 'wrap' }}>
+          <div style={{ width: 84, height: 84, borderRadius: 20, background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 44, flexShrink: 0, backdropFilter: 'blur(8px)' }}>{group.icon}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'rgba(255,255,255,0.18)', borderRadius: 9999, fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 10 }}>👥 Groupe public</div>
+            <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(22px,3.6vw,34px)', fontWeight: 800, margin: '0 0 8px', letterSpacing: '-0.03em', lineHeight: 1.15 }}>{group.name}</h1>
+            <p style={{ fontSize: 14, opacity: 0.92, margin: '0 0 16px', lineHeight: 1.5, maxWidth: 600 }}>{group.desc}</p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <Btn size="md" variant="white" onClick={onToggleJoin} icon={isJoined ? '✓' : '+'}>
+                {isJoined ? 'Membre · Quitter le groupe' : 'Rejoindre le groupe'}
+              </Btn>
+              <button onClick={() => setShareOpen(true)} aria-label="Partager ce groupe"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 44, padding: '0 22px', borderRadius: 12, border: '1.5px solid rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.12)', color: '#fff', fontSize: 14, fontWeight: 600, fontFamily: 'Inter,sans-serif', cursor: 'pointer', transition: 'all 0.18s', backdropFilter: 'blur(4px)' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.22)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}>
+                ↗ Partager
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 280px', gap: 20, alignItems: 'start' }} className="mn-reseau-grid">
+        {/* Main */}
+        <div>
+          {/* Stats */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 18 }}>
+            {[
+              { v: memberCount.toLocaleString('fr-FR'), l: 'Membres' },
+              { v: Math.floor(group.members / 50), l: 'Posts par sem.' },
+              { v: 'Public', l: 'Type' },
+            ].map(s => (
+              <div key={s.l} style={{ background: '#fff', border: `1px solid ${COLORS.gray200}`, borderRadius: 14, padding: '16px 12px', textAlign: 'center' }}>
+                <div style={{ fontFamily: "'Sora',sans-serif", fontSize: 22, fontWeight: 800, color: group.color, lineHeight: 1.1 }}>{s.v}</div>
+                <div style={{ fontSize: 11, color: COLORS.gray500, marginTop: 4, fontWeight: 600 }}>{s.l}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Charte */}
+          <div style={{ background: `${group.color}10`, borderRadius: 14, padding: '16px 18px', borderLeft: `4px solid ${group.color}`, marginBottom: 18 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: group.color, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>👋 Charte du groupe</div>
+            <div style={{ fontSize: 13, color: COLORS.gray700, lineHeight: 1.6 }}>Bienveillance, écoute, respect des positions divergentes. Pas de spam, pas de pub commerciale, modération par les pairs. Les contenus illégaux ou haineux entraînent une exclusion immédiate.</div>
+          </div>
+
+          {/* Derniers posts */}
+          <SectionHeader icon="📰" title={`Derniers échanges du groupe (${groupPosts.length})`} sub={groupPosts.length === 0 ? 'Aucune publication récente liée — sois le·la premier·e' : null} />
+          {groupPosts.length === 0
+            ? <Card style={{ padding: '24px 16px', textAlign: 'center', color: COLORS.gray500, fontSize: 13, fontStyle: 'italic' }}>Pas encore de publication dans ce fil. Publie depuis ton fil principal en mentionnant <strong style={{ color: group.color }}>#{group.name.toLowerCase().split(' ')[0]}</strong> pour amorcer la discussion.</Card>
+            : groupPosts.map(p => <PostCard key={p.id} post={p} user={user} />)
+          }
+        </div>
+
+        {/* Sidebar */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }} className="mn-reseau-sidebar">
+          {/* Membres récents */}
+          <Card style={{ padding: '14px 16px' }}>
+            <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: 13, color: COLORS.gray900, marginBottom: 10 }}>Membres récents</div>
+            {recentMembers.map(m => (
+              <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: `1px solid ${COLORS.gray100}` }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: GRAD, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>{m.name.charAt(0)}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 12, color: COLORS.gray900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
+                  <div style={{ fontSize: 11, color: COLORS.gray400 }}>{m.role}</div>
+                </div>
+                <button onClick={() => onSelectMember?.(m)} aria-label={`Envoyer un message à ${m.name}`} style={{ border: `1px solid ${COLORS.gray200}`, background: 'transparent', borderRadius: 8, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'Inter,sans-serif', fontWeight: 600, color: COLORS.gray600 }}>💬</button>
+              </div>
+            ))}
+          </Card>
+
+          {/* Couleur thématique du groupe */}
+          <div style={{ background: `linear-gradient(135deg, ${group.color}, ${group.color}DD)`, borderRadius: 14, padding: '16px', color: '#fff', textAlign: 'center' }}>
+            <div style={{ fontSize: 36, marginBottom: 6 }}>{group.icon}</div>
+            <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{group.name}</div>
+            <div style={{ fontSize: 12, opacity: 0.85 }}>Espace de discussion modéré par les pairs</div>
+          </div>
+        </div>
+      </div>
+
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} title={group.name} url={permalink} text={`Rejoins le groupe « ${group.name} » sur Maintenant !`} />
+    </div>
+  );
+}
+
 function ReseauPage({ user, onOpenAuth, setActivePage, adminMode }) {
   const [tab, setTab] = useState('feed');
   const [posts, setPosts] = useState(SAMPLE_POSTS);
+  const [hiddenIds, setHiddenIds] = useState(new Set());
   const [newPost, setNewPost] = useState('');
   const [newPostImg, setNewPostImg] = useState('');
+  const [newPostVideo, setNewPostVideo] = useState('');
+  const [newPostLink, setNewPostLink] = useState(null); // { url, internal:bool, title?, description?, thumbnail? }
+  const fileInputRef = useRef(null);
   const [search, setSearch] = useState('');
   const [groupDetail, setGroupDetail] = useState(null);
+  const [groupShareOpen, setGroupShareOpen] = useState(false);
   const [joinedTick, setJoinedTick] = useState(0);
   const [showAlgoExplain, setShowAlgoExplain] = useState(false);
 
@@ -424,13 +609,70 @@ function ReseauPage({ user, onOpenAuth, setActivePage, adminMode }) {
     </div>
   );
 
+  // Helpers compose
+  const handleImagePick = () => fileInputRef.current?.click();
+  const handleImageFile = e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 4 * 1024 * 1024) { window.showToast?.('Image trop grosse (max 4 Mo)', { type: 'error' }); return; }
+    const reader = new FileReader();
+    reader.onload = ev => setNewPostImg(ev.target.result);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+  const handleAddVideo = () => {
+    const url = window.prompt('URL de la vidéo (YouTube, Vimeo, fichier mp4 direct...) :');
+    if (!url || !url.trim()) return;
+    setNewPostVideo(url.trim());
+  };
+  const handleAddLink = () => {
+    const url = window.prompt('URL à partager (page externe ou lien interne #petitions/X) :');
+    if (!url || !url.trim()) return;
+    const trimmed = url.trim();
+    const internal = trimmed.startsWith('#') || trimmed.startsWith('/');
+    if (internal) {
+      setNewPostLink({ url: trimmed, internal: true, title: 'Lien interne · Maintenant !', description: trimmed });
+    } else {
+      const domain = (() => { try { return new URL(trimmed).hostname.replace(/^www\./, ''); } catch { return trimmed; } })();
+      setNewPostLink({ url: trimmed, internal: false, title: domain, description: 'Aperçu du lien à charger' });
+    }
+  };
+
   const handlePost = () => {
-    if(!newPost.trim()) return;
-    setPosts(ps=>[{ id:Date.now(), author:user.name, avatar:null, time:'À l\'instant', content:newPost, likes:0, comments:0, shares:0, image:newPostImg||null, tags:[] }, ...ps]);
-    setNewPost(''); setNewPostImg('');
+    if (!newPost.trim() && !newPostImg && !newPostVideo && !newPostLink) return;
+    const post = {
+      id: Date.now(),
+      author_id: user.id || 1,
+      author: user.name,
+      time: 'À l\'instant',
+      date: new Date().toISOString(),
+      content: newPost,
+      likes: 0,
+      shares: 0,
+      image: newPostImg || null,
+      video: newPostVideo || null,
+      link: newPostLink || null,
+      tags: [],
+      comments: [],
+      _origin: 'self',
+    };
+    setPosts(ps => [post, ...ps]);
+    setNewPost(''); setNewPostImg(''); setNewPostVideo(''); setNewPostLink(null);
+    window.showToast?.('Publication partagée sur ton fil', { type: 'success', icon: '✨' });
   };
 
   const tabStyle = (id) => ({ flex:1, padding:'10px 6px', border:'none', cursor:'pointer', fontWeight:600, fontSize:13, fontFamily:'Inter,sans-serif', background:tab===id?'#fff':COLORS.gray100, color:tab===id?COLORS.red:COLORS.gray500, boxShadow:tab===id?'0 2px 8px rgba(0,0,0,0.08)':'none', borderRadius:10, whiteSpace:'nowrap' });
+
+  // Early return : page détail d'un groupe (cohérence Bloc 5)
+  if (groupDetail) return (
+    <GroupDetailPage
+      group={groupDetail} posts={posts} user={user}
+      onBack={() => setGroupDetail(null)}
+      isJoined={isGroupJoined(groupDetail.id)}
+      onToggleJoin={() => toggleGroupJoin(groupDetail)}
+      onSelectMember={m => { setActivePage?.('messages'); window.showToast?.(`Conversation avec ${m.name.split(' ')[0]} ouverte`, { type: 'info', icon: '💬' }); }}
+    />
+  );
 
   return (
     <div style={{ maxWidth:1152, margin:'0 auto', padding:'20px 16px 100px' }}>
@@ -447,18 +689,52 @@ function ReseauPage({ user, onOpenAuth, setActivePage, adminMode }) {
           {/* Feed */}
           {tab==='feed' && <>
             {/* Compose */}
-            <Card style={{ marginBottom:16, padding:'14px 16px' }}>
-              <div style={{ display:'flex', gap:10, marginBottom:10 }}>
-                <div style={{ width:40, height:40, borderRadius:'50%', background:GRAD, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:700, fontSize:16, flexShrink:0 }}>{user.name.charAt(0)}</div>
-                <textarea value={newPost} onChange={e=>setNewPost(e.target.value)} placeholder={`Quoi de neuf, ${user.name.split(' ')[0]} ? Partagez une action, une info, une ressource...`} style={{ flex:1, border:`1.5px solid ${COLORS.gray200}`, borderRadius:12, padding:'10px 14px', fontSize:14, fontFamily:'Inter,sans-serif', resize:'none', outline:'none', minHeight:70, lineHeight:1.5 }} />
+            <Card style={{ marginBottom: 16, padding: '14px 16px' }}>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', background: GRAD, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 16, flexShrink: 0 }}>{user.name.charAt(0)}</div>
+                <textarea value={newPost} onChange={e => setNewPost(e.target.value)} placeholder={`Quoi de neuf, ${user.name.split(' ')[0]} ? Partagez une action, une info, une ressource...`} aria-label="Contenu de votre publication" style={{ flex: 1, border: `1.5px solid ${COLORS.gray200}`, borderRadius: 12, padding: '10px 14px', fontSize: 14, fontFamily: 'Inter,sans-serif', resize: 'none', outline: 'none', minHeight: 70, lineHeight: 1.5 }} />
               </div>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
-                <div style={{ display:'flex', gap:6 }}>
-                  {[['📷','Photo'],['📅','Événement'],['📜','Pétition'],['₮','T99CP']].map(([icon,label])=>(
-                    <button key={label} style={{ display:'flex', alignItems:'center', gap:4, padding:'5px 10px', borderRadius:8, border:`1px solid ${COLORS.gray200}`, background:'transparent', cursor:'pointer', fontSize:12, fontWeight:500, color:COLORS.gray600, fontFamily:'Inter,sans-serif' }}>{icon} {label}</button>
+
+              {/* Aperçus des médias attachés */}
+              {newPostImg && (
+                <div style={{ position: 'relative', marginBottom: 10 }}>
+                  <img src={newPostImg} alt="Aperçu" style={{ width: '100%', borderRadius: 12, maxHeight: 280, objectFit: 'cover' }} />
+                  <button onClick={() => setNewPostImg('')} aria-label="Retirer l'image" style={{ position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.7)', color: '#fff', cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>×</button>
+                </div>
+              )}
+              {newPostVideo && (
+                <div style={{ position: 'relative', marginBottom: 10, padding: '12px 14px', background: COLORS.gray50, borderRadius: 12, border: `1px dashed ${COLORS.gray300}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 20 }}>🎬</span>
+                  <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: COLORS.gray700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{newPostVideo}</div>
+                  <button onClick={() => setNewPostVideo('')} aria-label="Retirer la vidéo" style={{ width: 24, height: 24, borderRadius: '50%', border: 'none', background: COLORS.gray300, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>×</button>
+                </div>
+              )}
+              {newPostLink && (
+                <div style={{ position: 'relative', marginBottom: 10, padding: '10px 14px', background: newPostLink.internal ? '#FDE9F2' : COLORS.gray50, borderRadius: 12, border: `1px solid ${newPostLink.internal ? COLORS.red : COLORS.gray300}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 18 }}>{newPostLink.internal ? '🔗' : '🌐'}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: newPostLink.internal ? COLORS.red : COLORS.gray500, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>{newPostLink.internal ? 'Lien interne Maintenant !' : 'Lien externe'}</div>
+                    <div style={{ fontSize: 12, color: COLORS.gray700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{newPostLink.url}</div>
+                  </div>
+                  <button onClick={() => setNewPostLink(null)} aria-label="Retirer le lien" style={{ width: 24, height: 24, borderRadius: '50%', border: 'none', background: COLORS.gray300, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>×</button>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageFile} style={{ display: 'none' }} aria-hidden="true" />
+                  {[
+                    { icon: '📷', label: 'Image',  action: handleImagePick, active: !!newPostImg },
+                    { icon: '🎬', label: 'Vidéo',  action: handleAddVideo,  active: !!newPostVideo },
+                    { icon: '🔗', label: 'Lien',   action: handleAddLink,   active: !!newPostLink },
+                  ].map(b => (
+                    <button key={b.label} onClick={b.action} aria-label={`Ajouter ${b.label.toLowerCase()} à la publication`}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 8, border: `1px solid ${b.active ? COLORS.red : COLORS.gray200}`, background: b.active ? '#FDE9F2' : 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: b.active ? COLORS.red : COLORS.gray600, fontFamily: 'Inter,sans-serif', transition: 'all 0.15s' }}>
+                      {b.icon} {b.label}
+                    </button>
                   ))}
                 </div>
-                <Btn variant="gradient" size="sm" onClick={handlePost} disabled={!newPost.trim()}>Publier</Btn>
+                <Btn variant="gradient" size="sm" onClick={handlePost} disabled={!newPost.trim() && !newPostImg && !newPostVideo && !newPostLink}>Publier</Btn>
               </div>
             </Card>
 
@@ -478,51 +754,59 @@ function ReseauPage({ user, onOpenAuth, setActivePage, adminMode }) {
             </Card>
 
             {/* Feed mixé via composeFeed */}
-            {feed.map((item, idx) => (
+            {feed.filter(it => !hiddenIds.has(it.id)).map((item, idx) => (
               item._origin === 'platform'
                 ? <PlatformSuggestionCard key={`pf-${idx}`} item={item} setActivePage={setActivePage} />
-                : <PostCard key={item.id} post={item} user={user} />
+                : <PostCard key={item.id} post={item} user={user} onHide={id => setHiddenIds(s => new Set([...s, id]))} />
             ))}
           </>}
 
           {/* Groupes */}
           {tab==='groupes' && (
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))', gap:12 }}>
-              {SAMPLE_GROUPS.map(g=>(
-                <Card key={g.id} style={{ padding:'16px', cursor:'pointer' }} onClick={()=>setGroupDetail(g)}>
-                  <div style={{ display:'flex', gap:12, alignItems:'flex-start' }}>
-                    <div style={{ width:48, height:48, borderRadius:14, background:`${g.color}20`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, flexShrink:0 }}>{g.icon}</div>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:700, fontSize:14, color:COLORS.gray900, marginBottom:3 }}>{g.name}</div>
-                      <div style={{ fontSize:12, color:COLORS.gray500, marginBottom:8, lineHeight:1.4 }}>{g.desc}</div>
-                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                        <span style={{ fontSize:12, color:COLORS.gray400 }}>👥 {(g.members + (isGroupJoined(g.id) ? 1 : 0)).toLocaleString('fr-FR')} membres</span>
-                        <Btn variant={isGroupJoined(g.id) ? 'success' : 'outline'} size="sm" onClick={e=>{e.stopPropagation();toggleGroupJoin(g);}}>
+              {SAMPLE_GROUPS.map(g => (
+                <a key={g.id} href={`#groupe/${g.id}`} onClick={e => { e.preventDefault(); setGroupDetail(g); }} className="mn-card-hover"
+                  aria-label={`Groupe ${g.name} : ${g.members.toLocaleString('fr-FR')} membres`}
+                  style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: '#fff', border: `1px solid ${COLORS.gray200}`, borderRadius: 14, padding: '16px', transition: 'all 0.22s' }}>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                    <div style={{ width: 48, height: 48, borderRadius: 14, background: `${g.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>{g.icon}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: 14, color: COLORS.gray900, marginBottom: 3 }}>{g.name}</div>
+                      <div style={{ fontSize: 12, color: COLORS.gray500, marginBottom: 8, lineHeight: 1.4 }}>{g.desc}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 12, color: COLORS.gray400 }}>👥 {(g.members + (isGroupJoined(g.id) ? 1 : 0)).toLocaleString('fr-FR')} membres</span>
+                        <Btn variant={isGroupJoined(g.id) ? 'success' : 'outline'} size="sm" onClick={e => { e.stopPropagation(); e.preventDefault(); toggleGroupJoin(g); }}>
                           {isGroupJoined(g.id) ? '✓ Membre' : 'Rejoindre'}
                         </Btn>
                       </div>
                     </div>
                   </div>
-                </Card>
+                </a>
               ))}
             </div>
           )}
 
           {/* Membres */}
           {tab==='membres' && <>
-            <SearchBar value={search} onChange={setSearch} placeholder="Rechercher un membre..." />
+            <SearchBar value={search} onChange={setSearch} placeholder="Rechercher par nom, rôle, ville ou badge..." />
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {SAMPLE_MEMBERS.filter(m=>!search||m.name.toLowerCase().includes(search.toLowerCase())).map(m=>(
+              {SAMPLE_MEMBERS.filter(m => {
+                if (!search) return true;
+                const q = search.toLowerCase();
+                return [m.name, m.role, m.location, ...(m.badges || [])].some(s => typeof s === 'string' && s.toLowerCase().includes(q));
+              }).map(m => (
                 <Card key={m.id} style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:12 }}>
                   <div style={{ width:44, height:44, borderRadius:'50%', background:GRAD, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:700, fontSize:18, flexShrink:0 }}>{m.name.charAt(0)}</div>
                   <div style={{ flex:1 }}>
                     <div style={{ fontWeight:700, fontSize:14, color:COLORS.gray900 }}>{m.name}</div>
                     <div style={{ fontSize:12, color:COLORS.gray500 }}>{m.role} · 📍 {m.location} · Membre depuis {m.joined}</div>
-                    <div style={{ display:'flex', gap:4, marginTop:4, flexWrap:'wrap' }}>{m.badges.map(b=><Badge key={b} color="red" style={{ fontSize:10 }}>{b}</Badge>)}</div>
+                    <div style={{ display:'flex', gap:4, marginTop:4, flexWrap:'wrap' }}>{m.badges.map(b => <Badge key={b} color="red" style={{ fontSize:10 }}>{b}</Badge>)}</div>
                   </div>
                   <div style={{ textAlign:'right', flexShrink:0 }}>
                     <T99 value={m.t99cp} size={12} />
-                    <div style={{ marginTop:4 }}><Btn variant="outline" size="sm">Message</Btn></div>
+                    <div style={{ marginTop:4 }}>
+                      <Btn variant="outline" size="sm" onClick={() => { setActivePage?.('messages'); window.showToast?.(`Conversation avec ${m.name.split(' ')[0]} ouverte`, { type: 'info', icon: '💬' }); }}>Message</Btn>
+                    </div>
                   </div>
                 </Card>
               ))}
@@ -539,12 +823,14 @@ function ReseauPage({ user, onOpenAuth, setActivePage, adminMode }) {
                   { icon:'📅', label:'Événements à venir', desc:'Mobilisations près de chez vous', page:'mobilizations' },
                   { icon:'🤲', label:'Services SEL disponibles', desc:'Des compétences à échanger dès maintenant', page:'sel' },
                   { icon:'🥬', label:'Surplus du jardin', desc:'Dons et ventes dans votre région', page:'garden' },
-                ].map(item=>(
-                  <Card key={item.label} style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:12, cursor:'pointer' }} onClick={()=>setActivePage(item.page)}>
-                    <div style={{ fontSize:28 }}>{item.icon}</div>
-                    <div style={{ flex:1 }}><div style={{ fontWeight:700, fontSize:14, color:COLORS.gray900 }}>{item.label}</div><div style={{ fontSize:12, color:COLORS.gray500 }}>{item.desc}</div></div>
-                    <span style={{ color:COLORS.gray300, fontSize:20 }}>›</span>
-                  </Card>
+                ].map(item => (
+                  <a key={item.label} href={`#${item.page}`} onClick={e => { e.preventDefault(); setActivePage(item.page); }} className="mn-card-hover"
+                    aria-label={`${item.label} — ouvrir`}
+                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: '#fff', border: `1px solid ${COLORS.gray200}`, borderRadius: 14, textDecoration: 'none', color: 'inherit', transition: 'all 0.22s' }}>
+                    <div style={{ fontSize: 28 }}>{item.icon}</div>
+                    <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 14, color: COLORS.gray900 }}>{item.label}</div><div style={{ fontSize: 12, color: COLORS.gray500 }}>{item.desc}</div></div>
+                    <span style={{ color: COLORS.gray300, fontSize: 20 }}>›</span>
+                  </a>
                 ))}
               </div>
             </div>
@@ -553,35 +839,51 @@ function ReseauPage({ user, onOpenAuth, setActivePage, adminMode }) {
 
         {/* Right sidebar */}
         <div style={{ display:'flex', flexDirection:'column', gap:14 }} className="mn-reseau-sidebar">
-          {/* User card */}
-          <Card style={{ padding:'16px' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-              <div style={{ width:44, height:44, borderRadius:'50%', background:GRAD, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:700, fontSize:18 }}>{user.name.charAt(0)}</div>
-              <div><div style={{ fontWeight:700, fontSize:14, color:COLORS.gray900 }}>{user.name}</div><T99 value={user.t99cp_balance} size={12} /></div>
-            </div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:6, textAlign:'center' }}>
-              {[['8','Signatures'],['3','Groupes'],['5','Services']].map(([v,l])=>(
-                <div key={l} style={{ background:COLORS.gray50, borderRadius:10, padding:'8px 4px' }}>
-                  <div style={{ fontWeight:800, fontSize:16, color:COLORS.gray900 }}>{v}</div>
-                  <div style={{ fontSize:10, color:COLORS.gray400 }}>{l}</div>
+          {/* User card — stats connectées aux vraies valeurs */}
+          {(() => {
+            const joinedGroupsCount = SAMPLE_GROUPS.filter(g => isGroupJoined(g.id)).length;
+            const userPostsCount = posts.filter(p => p._origin === 'self' || p.author_id === (user.id || 1)).length;
+            const userSignatures = user.signatures_count ?? 0;
+            return (
+              <Card style={{ padding: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: GRAD, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 18 }}>{user.name.charAt(0)}</div>
+                  <div><div style={{ fontWeight: 700, fontSize: 14, color: COLORS.gray900 }}>{user.name}</div><T99 value={user.t99cp_balance} size={12} /></div>
                 </div>
-              ))}
-            </div>
-          </Card>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, textAlign: 'center' }}>
+                  {[
+                    [userSignatures, 'Signatures'],
+                    [joinedGroupsCount, 'Groupes'],
+                    [userPostsCount, 'Publi.'],
+                  ].map(([v, l]) => (
+                    <div key={l} style={{ background: COLORS.gray50, borderRadius: 10, padding: '8px 4px' }}>
+                      <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.gray900 }}>{v}</div>
+                      <div style={{ fontSize: 10, color: COLORS.gray400 }}>{l}</div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            );
+          })()}
 
-          {/* Groupes suggérés */}
-          <Card style={{ padding:'14px 16px' }}>
-            <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:700, fontSize:13, color:COLORS.gray900, marginBottom:10 }}>Groupes suggérés</div>
-            {SAMPLE_GROUPS.slice(0,3).map(g=>(
-              <div key={g.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 0', borderBottom:`1px solid ${COLORS.gray100}` }}>
-                <div style={{ fontSize:20 }}>{g.icon}</div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:600, fontSize:12, color:COLORS.gray900 }}>{g.name}</div>
-                  <div style={{ fontSize:11, color:COLORS.gray400 }}>{g.members} membres</div>
+          {/* Groupes suggérés (non-joints uniquement) */}
+          <Card style={{ padding: '14px 16px' }}>
+            <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: 13, color: COLORS.gray900, marginBottom: 10 }}>Groupes suggérés</div>
+            {SAMPLE_GROUPS.filter(g => !isGroupJoined(g.id)).slice(0, 3).map(g => (
+              <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: `1px solid ${COLORS.gray100}` }}>
+                <div style={{ fontSize: 20 }}>{g.icon}</div>
+                <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => setGroupDetail(g)}>
+                  <div style={{ fontWeight: 600, fontSize: 12, color: COLORS.gray900 }}>{g.name}</div>
+                  <div style={{ fontSize: 11, color: COLORS.gray400 }}>{g.members.toLocaleString('fr-FR')} membres</div>
                 </div>
-                <button style={{ border:`1px solid ${COLORS.gray200}`, background:'transparent', borderRadius:8, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'Inter,sans-serif', fontWeight:600, color:COLORS.gray600 }}>+</button>
+                <button onClick={() => toggleGroupJoin(g)} aria-label={`Rejoindre ${g.name}`} style={{ border: `1px solid ${COLORS.red}`, background: 'transparent', borderRadius: 8, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'Inter,sans-serif', fontWeight: 700, color: COLORS.red, transition: 'all 0.15s' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = COLORS.red; e.currentTarget.style.color = '#fff'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = COLORS.red; }}>+</button>
               </div>
             ))}
+            {SAMPLE_GROUPS.filter(g => !isGroupJoined(g.id)).length === 0 && (
+              <div style={{ fontSize: 12, color: COLORS.gray400, textAlign: 'center', padding: '10px 4px', fontStyle: 'italic' }}>Tu as rejoint tous les groupes 🎉</div>
+            )}
           </Card>
 
           {/* T99CP info */}
@@ -594,41 +896,6 @@ function ReseauPage({ user, onOpenAuth, setActivePage, adminMode }) {
         </div>
       </div>
 
-      {/* Modal détail du groupe */}
-      {groupDetail && (
-        <Modal open onClose={()=>setGroupDetail(null)} title={`${groupDetail.icon} ${groupDetail.name}`} width={520}>
-          <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-            <div style={{ height:140, borderRadius:14, background:`linear-gradient(135deg, ${groupDetail.color}, ${groupDetail.color}AA)`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:64 }}>
-              {groupDetail.icon}
-            </div>
-            <p style={{ fontSize:14, color:COLORS.gray700, lineHeight:1.6, margin:0 }}>{groupDetail.desc}</p>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
-              <div style={{ background:COLORS.gray50, borderRadius:10, padding:'12px', textAlign:'center' }}>
-                <div style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, color:COLORS.gray900 }}>{(groupDetail.members + (isGroupJoined(groupDetail.id) ? 1 : 0)).toLocaleString('fr-FR')}</div>
-                <div style={{ fontSize:11, color:COLORS.gray500, marginTop:2 }}>Membres</div>
-              </div>
-              <div style={{ background:COLORS.gray50, borderRadius:10, padding:'12px', textAlign:'center' }}>
-                <div style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, color:COLORS.gray900 }}>{Math.floor(groupDetail.members / 50)}</div>
-                <div style={{ fontSize:11, color:COLORS.gray500, marginTop:2 }}>Posts/sem</div>
-              </div>
-              <div style={{ background:COLORS.gray50, borderRadius:10, padding:'12px', textAlign:'center' }}>
-                <div style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, color:COLORS.gray900 }}>Public</div>
-                <div style={{ fontSize:11, color:COLORS.gray500, marginTop:2 }}>Type</div>
-              </div>
-            </div>
-            <div style={{ background:`${groupDetail.color}15`, borderRadius:12, padding:'14px 16px', borderLeft:`3px solid ${groupDetail.color}` }}>
-              <div style={{ fontWeight:700, fontSize:13, color:groupDetail.color, marginBottom:4 }}>👋 Charte du groupe</div>
-              <div style={{ fontSize:12, color:COLORS.gray700, lineHeight:1.55 }}>Bienveillance, écoute, respect des positions divergentes. Pas de spam, pas de pub commerciale, modération par les pairs.</div>
-            </div>
-            <div style={{ display:'flex', gap:8 }}>
-              <Btn full variant={isGroupJoined(groupDetail.id) ? 'success' : 'gradient'} size="lg" onClick={()=>toggleGroupJoin(groupDetail)} icon={isGroupJoined(groupDetail.id) ? ICONS.check : ICONS.plus}>
-                {isGroupJoined(groupDetail.id) ? '✓ Membre — Quitter' : 'Rejoindre le groupe'}
-              </Btn>
-              <Btn variant="ghost" size="lg" onClick={()=>setGroupDetail(null)}>Fermer</Btn>
-            </div>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }

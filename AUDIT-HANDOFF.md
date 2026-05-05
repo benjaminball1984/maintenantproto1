@@ -44,7 +44,8 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | `082ec5c` | Bloc 5 | Refonte Crowdfunding : CFCard + CFFeaturedCard + CFDetailPage (modal → page) + CrowdfundingPage selon Q1-Q4 — tags statut dynamiques, similaires, ShareModal, FAB mobile |
 | `d7973b3` | Bloc 6 | Sondages : suppression dead code `StepEmail` (-105L) + PollCard `<a>` + PollDetail nettoyage wordings email + ShareModal + similaires + FAB + PollsPage search/tri |
 | `997adb0` | Bloc 7 | Médias : enrichissement 5 articles (body+quote+author_bio) + MediaArticle nettoyage Lorem + ShareModal + Related `<a>` + MediaCard `<a>` + MediaPage search étendue + tip jar presets + MCreateModal wizard |
-| _(à venir)_ | Bloc 7+ | Médias : ajout rubrique **Tribune** (nouveau format) — FORMAT_META.tribune + 3 tribunes data + section dédiée « Tribunes libres » + MediaArticle (avertissement éditorial + author_role) + MCreateModal + EditModal |
+| `80579c1` | Bloc 7+ | Médias : ajout rubrique **Tribune** (nouveau format) — FORMAT_META.tribune + 3 tribunes data + section dédiée « Tribunes libres » + MediaArticle (avertissement éditorial + author_role) + MCreateModal + EditModal |
+| _(à venir)_ | Bloc 8 | Réseau social : SAMPLE_POSTS comments spécifiques + PostCard refactor (menu ⋯ + shares + EmptyState) + Composer riche (image/vidéo/lien interne+externe) + composeFeed self-injection + GroupDetailPage (modal → page) + sidebar stats vraies valeurs + Message → messages |
 
 ---
 
@@ -59,7 +60,7 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | 5 | Cagnottes (crowdfunding) | `Pages_Commerce.jsx:253-871` (CFCard + CFFeaturedCard + CFDetailPage + CFCreateModal + CrowdfundingPage) | ✅ **Fait** (1 commit) |
 | 6 | Sondages | `PollsPage.jsx` (1330 lignes après cleanup) | ✅ **Fait** (1 commit) |
 | 7 | Médias | `Pages_Media_Profile.jsx:5-435` (MediaArticle + MediaCard + MCreateModal + MediaPage) | ✅ **Fait** (1 commit) |
-| 8 | Réseau social | `ReseauPage.jsx` (635 lignes) | ⏳ |
+| 8 | Réseau social | `ReseauPage.jsx` (635 → ~890 lignes) | ✅ **Fait** (1 commit) |
 | 9 | Campagnes | `CampaignPage.jsx` (1224 lignes) | ⏳ |
 | 10 | Hub Services + CreerPage | `Pages_Home.jsx:442-...` | ⏳ |
 | 11 | Commerce (SEL/Marketplace/Lending/Carpooling/Housing/Garden) | `Pages_Commerce.jsx` (1066 lignes) | ⏳ |
@@ -625,6 +626,67 @@ Pages_Media_Profile.jsx :
 - `MCreateModal` n'utilise pas la persistance `getUserCreations('media')` pour le moment (le contenu créé reste en state local de MediaPage). À terme, persistance via `addUserCreation('media', item)` pour cohérence.
 - Pas de FAB mobile pour Médias : pas de CTA primaire évident (lire un article = pas un bouton). Cohérent.
 - Articles featured : 2 sur 5 (id 1 et 2). Le hero featured affiche le 1er en grand, les autres dans la grille standard.
+
+---
+
+### 6.8 BLOC 8 — Réseau social ✅ FAIT
+
+**Audit** : 8 bugs critiques + 4 incohérences vs Bloc 3-7, 9 décisions clés.
+
+#### Décisions Q-arbitrées (9 questions)
+
+| Q | Choix utilisateur | Implémentation | Statut |
+|---|---|---|---|
+| **Q1** | Comments mock spécifiques par post (data) | SAMPLE_POSTS : ajout `comments[]` 1-2 plausibles par post, helper `C(author, text, time)` | ✅ |
+| **Q2** | Photo : input file caché + base64 | `fileInputRef` + FileReader → DataURL, max 4 Mo, preview avant publication | ✅ |
+| **Q3** | Composer riche : texte + image + vidéo + lien (interne/externe avec preview) | 3 boutons remplaçant les 4 morts : Image (file), Vidéo (prompt URL), Lien (prompt avec auto-detect interne `#path` vs externe). Aperçus interactifs avant publication, bouton × pour retirer. | ✅ |
+| **Q4** | Bouton Message membre → setActivePage('messages') | Toast confirme + navigation interne | ✅ |
+| **Q5** | Wallet sidebar : statu quo (lien externe the99coinproject.org) | Pas modifié | ✅ |
+| **Q6** | Menu ⋯ contextuel (Signaler / Masquer / Copier le lien) | Composant `PostMenu` avec dropdown + overlay click-outside, signalement + masquage (state `hiddenIds`) + copie lien | ✅ |
+| **Q7** | Stats user card : connecter vraies valeurs | Signatures `user.signatures_count ?? 0`, Groupes via `isGroupJoined()` count, Publi. = posts `_origin === 'self'` count | ✅ |
+| **Q8** | Découvrir : statu quo (cards thématiques) | Pas modifié sur la liste, cards désormais en `<a>` + mn-card-hover | ✅ |
+| **Q9** | Détail groupe : modal → vraie page (cohérence Bloc 5) | `GroupDetailPage` (page complète) : hero gradient color du groupe, stats 3 cards, charte, derniers posts liés (filter heuristique sur tags/contenu), sidebar membres récents + ShareModal + permalink `#groupe/{id}` | ✅ |
+
+#### Bugs critiques corrigés
+
+- **Compose post sans `author_id` ni `date`** → handlePost enrichi avec `author_id: user.id`, `date: new Date().toISOString()`, `_origin: 'self'`
+- **Posts perso disparaissaient du feed mixé** → `composeFeed` injecte `bySelf` en tête (hors quota 60/20/10/10), ordre antichronologique
+- **Comments hardcoded identiques** (« Thomas R. », « Aisha R. ») → init depuis `post.comments`, EmptyState si vide
+- **Compteur shares non incrémenté** → state local `shares` + `+1` lors du share
+- **Stats user card hardcoded `8/3/5`** → dynamiques (cf. Q7)
+- **Bouton « + » groupes suggérés sans onClick** → `toggleGroupJoin(g)` câblé + filtre non-joints uniquement
+- **Boutons compose `📷 📅 📜 ₮` morts** → cf. Q3 (3 nouveaux boutons fonctionnels)
+- **Bouton « ⋯ » sans onClick** → cf. Q6 (PostMenu)
+- **Bouton Message membre sans onClick** → cf. Q4
+
+#### Bonus / cohérence Bloc 3-7
+
+- Images posts picsum → Unsplash thématique sur les 6 posts qui en ont
+- Cards groupes / découvrir : `<div onClick>` → `<a href="#groupe/{id}">` + `mn-card-hover` + aria-label
+- Search membres étendue (name → name + role + location + badges)
+- ShareModal sur GroupDetailPage avec permalink `#groupe/{id}`
+- aria-label sur tous les boutons interactifs (like, comment, share, ⋯, +, Message…)
+- Badge nouveau `_origin === 'self'` (rouge T99CP) pour distinguer ses propres posts dans le feed
+
+#### Composants concernés
+
+```
+ReseauPage.jsx :
+- C() helper                 (NOUVEAU — factory comments mock)
+- SAMPLE_POSTS               (enrichi : comments par post + Unsplash)
+- composeFeed                (refactor : self en tête hors quota)
+- PostMenu                   (NOUVEAU — dropdown ⋯ Signaler/Masquer/Copier)
+- PostCard                   (refactor : init comments + shares state + EmptyState + onHide prop)
+- GroupDetailPage            (NOUVEAU — remplace le Modal détail groupe)
+- ReseauPage                 (composer riche + handlePost fixed + sidebar stats vraies + groupes filtrés non-joints + Message → messages)
+```
+
+#### Décisions techniques
+
+- Le filtre `hiddenIds: Set<id>` est state local de `ReseauPage` (perdu au refresh) — TODO persist localStorage si besoin
+- L'image base64 est stockée dans le post directement (pas d'upload serveur). Acceptable pour un proto, mais alourdit le state si beaucoup de photos
+- Les groupes filtrés dans `GroupDetailPage` sont une heuristique simple (tags + mots-clés du contenu) — pas un vrai groupes-posts join
+- Le bouton « Partager » du hero GroupDetailPage est custom (pas de variant `ghost-on-dark` dans Theme) — reste discret sur fond gradient
 
 ---
 
