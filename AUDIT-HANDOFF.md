@@ -29,7 +29,7 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 
 ## 2. Branche & commits
 
-**Branche** : `claude/refactor-for-review-7iBj8` (poussée sur le remote `benjaminball1984/maintenantproto1`).
+**Branches** : travail historique sur `claude/refactor-for-review-7iBj8`, suite poussée sur `claude/review-audit-handoff-sAVU6` (toutes deux sur le remote `benjaminball1984/maintenantproto1`).
 
 **Commits effectués pendant cette session** (du plus ancien au plus récent) :
 
@@ -38,7 +38,8 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | `e2cdb9f` | Bloc 1 R1 | Header/BottomNav/Footer — bugs purs + a11y minimum (15 correctifs) |
 | `8c2a68f` | Bloc 1 R2 | Décisions Q2/Q5/Q6/Q7/Q8/Q9/Q10/Q11/Q13 (Communes gradient T99CP, mega-menu, footer enrichi, pages légales, …) |
 | `b40ed3c` | Bloc 2 | Refonte HomePage complète selon Q1-Q11 (hero T99CP/noir, 3 stats, sections actu, services colorés, newsletter, T99CP blanc) |
-| _(WIP au moment du doc)_ | Bloc 3 étape 1+2+3 | AppData enrichi (3 pétitions featured) + helpers Theme (`generateMockNames`, `getStatusTag`, `ShareModal`, `SignAnonymousModal`) |
+| `ec23c94` | Bloc 3 étapes 1-3 | AppData enrichi (3 pétitions featured) + helpers Theme (`generateMockNames`, `getStatusTag`, `ShareModal`, `SignAnonymousModal`) + ce HANDOFF |
+| _(à venir)_ | Bloc 3 étapes 4-6 | Refonte PetitionCard + PetitionDetail + PetitionsPage selon Q1-Q12 — câblage helpers, signature anonyme, FAB mobile, search/tri étendus |
 
 ---
 
@@ -48,7 +49,7 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 |---|---|---|---|
 | 1 | Globaux : Header (AppNav) + BottomNav + Footer | `Pages_Home.jsx:5-253`, `Maintenant.html` (footer + tweaks) | ✅ **Fait** (2 commits) |
 | 2 | Home (HomePage) | `Pages_Home.jsx:255-440` | ✅ **Fait** (1 commit) |
-| 3 | Pétitions (List + Card + Detail) | `Pages_Services.jsx:5-301` | 🟡 **En cours** — audit fait, décisions prises, étapes 1-3 faites, étapes 4-6 à faire |
+| 3 | Pétitions (List + Card + Detail) | `Pages_Services.jsx:5-389` | ✅ **Fait** (2 commits — étapes 1-3 puis 4-6) |
 | 4 | Mobilisations | `Pages_Services.jsx:?` ou ailleurs (à localiser via `grep "function Mobilizations"`) | ⏳ |
 | 5 | Cagnottes (crowdfunding) | À localiser | ⏳ |
 | 6 | Sondages | `PollsPage.jsx` (1367 lignes) | ⏳ |
@@ -248,26 +249,26 @@ Couleurs hub (différenciation par service dans le spectre violet→magenta→ro
 
 ---
 
-### 6.3 BLOC 3 — Pétitions 🟡 EN COURS
+### 6.3 BLOC 3 — Pétitions ✅ FAIT
 
 **Audit** : 30 incohérences/bugs (PetitionDetail, PetitionCard, PetitionsPage), 7 écarts brief, 12 points UX, 12 décisions.
 
-#### Décisions Q-arbitrées (12 questions, toutes répondues)
+#### Décisions Q-arbitrées (12 questions, toutes implémentées)
 
-| Q | Choix utilisateur | À implémenter dans | Statut |
+| Q | Choix utilisateur | Implémentation | Statut |
 |---|---|---|---|
-| **Q1** | About = description + context + quote (3 champs optionnels AppData) | AppData + PetitionDetail | ✅ AppData fait, PetitionDetail à câbler |
-| **Q2** | Updates : EmptyState si pas de data (au lieu de 3 mockés identiques) | PetitionDetail | ⏳ |
-| **Q3** | Comments : EmptyState + form fonctionnel (au lieu de 3 mockés identiques) | PetitionDetail | ⏳ |
-| **Q4** | Signataires générés par seed (déterministe par p.id) | PetitionDetail (utilise `window.generateMockNames`) | ✅ helper créé, à câbler |
-| **Q5** | Adhésion → lien vers /join (au lieu de bouton inline qui duplique le flow) | PetitionDetail sidebar | ⏳ |
-| **Q6** | Tags status colorés (active=success dot / won=gradient ✨ Victoire / closed=default Clôturée / archived=warning Archivée) | PetitionDetail + PetitionCard (utilise `window.getStatusTag`) | ✅ helper créé, à câbler |
-| **Q7** | **CHANGEMENT MAJEUR** : <br>• Soutien T99CP **optionnel** par pétition (`p.support_enabled`) <br>• Signature SANS compte (email seulement) <br>• Signature 1-clic si user connecté <br>• Adhésion exige toujours un compte | PetitionDetail (gros refactor du handleSign) | ✅ `SignAnonymousModal` créé, à câbler |
-| **Q8** | Permalink #petitions/{id} + ShareModal multi-réseaux (X, Facebook, WhatsApp, Mastodon, Instagram) | PetitionDetail (utilise `window.ShareModal`) | ✅ ShareModal créé, à câbler |
-| **Q9** | Search dans tous les champs (titre + description + lieu + auteur + tags) | PetitionsPage | ⏳ |
-| **Q10** | Dropdown 4 tris : ✨ Plus pertinentes / Plus récentes / Plus de signatures / Bientôt clôturées | PetitionsPage | ⏳ |
-| **Q11** | FAB bottom mobile pour bouton Signer (sticky en bas d'écran sur mobile) | PetitionDetail | ⏳ |
-| **Q12** | Bloc "Mêmes signataires" en bas du détail (3 cards) | PetitionDetail (mock : 3 random même catégorie + label "Aussi signées par les militant·es de cette pétition") | ⏳ |
+| **Q1** | About = description + context + quote (3 champs optionnels AppData) | AppData enrichi + PetitionDetail tab About avec EmptyState fallback | ✅ |
+| **Q2** | Updates : EmptyState si pas de data (au lieu de 3 mockés identiques) | `data.updates \|\| []` + EmptyState | ✅ |
+| **Q3** | Comments : EmptyState + form fonctionnel (au lieu de 3 mockés identiques) | State + persist `mn_comments_pet_${id}` + bouton Publier | ✅ |
+| **Q4** | Signataires générés par seed (déterministe par p.id) | `window.generateMockNames(data.id, 5)` câblé | ✅ |
+| **Q5** | Adhésion → lien vers /join (au lieu de bouton inline qui duplique le flow) | 1 seul bouton « ★ En savoir plus sur l'adhésion » → `setPage('join')` | ✅ |
+| **Q6** | Tags status colorés (active=success dot / won=gradient ✨ Victoire / closed=default Clôturée / archived=warning Archivée) | `window.getStatusTag(status)` câblé sur Card + Detail | ✅ |
+| **Q7** | **CHANGEMENT MAJEUR** : <br>• Soutien T99CP **optionnel** par pétition (`p.support_enabled`) <br>• Signature SANS compte (email seulement) <br>• Signature 1-clic si user connecté <br>• Adhésion exige toujours un compte | `handleSignClick` route user/anon + `SignAnonymousModal` + bloc Soutien gated par `data.support_enabled` avec presets 5/10/20/50 T99CP | ✅ |
+| **Q8** | Permalink #petitions/{id} + ShareModal multi-réseaux (X, Facebook, WhatsApp, Mastodon, Instagram) | `permalink = origin + pathname + #petitions/${id}` + ShareModal câblé | ✅ |
+| **Q9** | Search dans tous les champs (titre + description + lieu + auteur + tags) | Filter sur `[title, description, location, author, ...tags]` | ✅ |
+| **Q10** | Dropdown 4 tris : ✨ Plus pertinentes / Plus récentes / Plus de signatures / Bientôt clôturées | `<select>` + objet `sorters` + ordre canonique des catégories | ✅ |
+| **Q11** | FAB bottom mobile pour bouton Signer (sticky en bas d'écran sur mobile) | Classe `.mn-petition-fab` (Maintenant.html, `@media max-width:767px`) + Btn rendu si `!signed` | ✅ |
+| **Q12** | Bloc "Mêmes signataires" en bas du détail (3 cards) | 3 PetitionCards filtrées par catégorie + callback `onSelectPetition` | ✅ |
 
 #### Modifications déjà faites (WIP non encore committé au moment de l'écriture du doc)
 

@@ -2,59 +2,78 @@
 const { useState, useEffect } = React;
 
 // ── PÉTITIONS v2 ───────────────────────────────────────────
-function PetitionDetail({ p, onBack, user, setUser, onAuth, adminMode, onSave }) {
-  const [signed, setSigned] = useState(() => window.isUserJoined?.('petitions_signed', p.id) || false);
+function PetitionDetail({ p, onBack, user, setUser, onAuth, adminMode, onSave, setPage, onSelectPetition }) {
   const [data, setData] = useState(p);
+  const [signed, setSigned] = useState(() => {
+    if (window.isUserJoined?.('petitions_signed', p.id)) return true;
+    try { if (localStorage.getItem(`mn_sign_anon_pet_${p.id}`)) return true; } catch (e) {}
+    return false;
+  });
   const [editOpen, setEditOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
-  const [adhesionPayOpen, setAdhesionPayOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [signAnonOpen, setSignAnonOpen] = useState(false);
   const [tab, setTab] = useState('about');
-  const pct = Math.min(Math.round((data.signatures / data.goal) * 100), 100);
+  const [supportAmount, setSupportAmount] = useState(10);
+  const [comments, setComments] = useState(() => {
+    try {
+      const raw = localStorage.getItem(`mn_comments_pet_${p.id}`);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return p.comments || [];
+  });
+  const [commentDraft, setCommentDraft] = useState('');
 
-  const handleSign = () => {
-    if (!user) { onAuth(); return; }
-    window.toggleUserJoin?.('petitions_signed', p.id);
+  const updates = data.updates || [];
+  const statusTag = window.getStatusTag?.(data.status) || { variant: 'success', label: 'Active', dot: true };
+  const permalink = (typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '') + '#petitions/' + data.id;
+  const signatories = (window.generateMockNames?.(data.id, 5)) || ['Marie D.', 'Thomas R.', 'Aisha K.', 'Omar B.', 'Clara F.'];
+  const sameCategory = (window.AppData?.petitions || []).filter(o => o.category === data.category && o.id !== data.id).slice(0, 3);
+
+  const handleSignClick = () => {
+    if (signed) return;
+    if (user) {
+      window.toggleUserJoin?.('petitions_signed', p.id);
+      setSigned(true);
+      setData(d => ({ ...d, signatures: d.signatures + 1 }));
+      window.showToast?.('Pétition signée — merci !', { type: 'success', icon: '✊' });
+    } else {
+      setSignAnonOpen(true);
+    }
+  };
+
+  const handleAnonSign = (formData) => {
+    try { localStorage.setItem(`mn_sign_anon_pet_${p.id}`, JSON.stringify({ email: formData.email, signed_at: formData.signed_at })); } catch (e) {}
     setSigned(true);
     setData(d => ({ ...d, signatures: d.signatures + 1 }));
-    window.showToast?.('Pétition signée — merci !', { type: 'success', icon: '✊' });
+    window.showToast?.('Signature confirmée — un email t\'a été envoyé.', { type: 'success', icon: '✊', duration: 5000 });
   };
 
-  const handleJoinFree = () => {
-    if (typeof setUser === 'function') {
-      setUser(u => ({ ...(u || {}), is_member: true, member_tier: 'gratuit', member_since: new Date().toISOString() }));
-    }
-    window.showToast?.('Bienvenue ! Tu es maintenant adhérent·e du mouvement.', { type: 'success', icon: '★', duration: 5000 });
+  const submitComment = () => {
+    const txt = commentDraft.trim();
+    if (!txt) return;
+    const newCmt = { name: user?.name || 'Anonyme', text: txt, time: 'à l\'instant' };
+    const updated = [newCmt, ...comments];
+    setComments(updated);
+    try { localStorage.setItem(`mn_comments_pet_${p.id}`, JSON.stringify(updated)); } catch (e) {}
+    setCommentDraft('');
+    window.showToast?.('Commentaire publié', { type: 'success' });
   };
-
-  const handleJoinPaid = () => {
-    setAdhesionPayOpen(true);
-  };
-
-  const updates = [
-    { date: '2026-04-20', text: 'La pétition atteint 10 000 signatures ! Merci à toutes et tous.', author: data.author },
-    { date: '2026-04-10', text: 'Nous avons remis nos revendications à la préfecture.', author: data.author },
-    { date: '2026-03-28', text: 'Lancement de la pétition.', author: data.author },
-  ];
-  const comments = [
-    { name: 'Thomas R.', text: 'Essentiel ! J\'ai partagé à tous mes contacts.', time: 'il y a 2h' },
-    { name: 'Aisha K.', text: 'C\'est scandaleux. On doit continuer à se battre.', time: 'il y a 4h' },
-    { name: 'Omar B.', text: 'Soutien total depuis Marseille ✊', time: 'hier' },
-  ];
 
   return (
     <div style={{ background: T.bg, minHeight: '100vh' }}>
       {/* Hero */}
-      <div style={{ position: 'relative', height: 320, overflow: 'hidden' }}>
-        <img src={`https://images.unsplash.com/photo-1573164713988-8665fc963095?w=1200&q=70`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
+      <div style={{ position: 'relative', height: 320, overflow: 'hidden', background: T.text1 }}>
+        {data.image && <img src={data.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.85 }} onError={e => e.target.style.display = 'none'} />}
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,10,10,0.85) 0%, rgba(0,0,0,0.3) 60%, transparent 100%)' }}></div>
-        <button onClick={onBack} style={{ position: 'absolute', top: 20, left: 20, background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 12, padding: '8px 16px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, fontFamily: 'Inter,sans-serif' }}>
+        <button onClick={onBack} aria-label="Retour à la liste des pétitions" style={{ position: 'absolute', top: 20, left: 20, background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 12, padding: '8px 16px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, fontFamily: 'Inter,sans-serif' }}>
           {ICONS.arrow_l} Pétitions
         </button>
         {adminMode && <div style={{ position: 'absolute', top: 20, right: 20 }}><AdminBtn onEdit={() => setEditOpen(true)} /></div>}
         <div style={{ position: 'absolute', bottom: 24, left: 24, right: 24 }}>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
             <Tag variant="brand">{data.category}</Tag>
-            <Tag variant="success" dot>Active</Tag>
+            <Tag variant={statusTag.variant} dot={statusTag.dot}>{statusTag.label}</Tag>
           </div>
           <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(20px,3.5vw,30px)', fontWeight: 800, color: '#fff', margin: 0, lineHeight: 1.2, letterSpacing: '-0.02em' }}>{data.title}</h1>
         </div>
@@ -69,7 +88,7 @@ function PetitionDetail({ p, onBack, user, setUser, onAuth, adminMode, onSave })
               <Avatar name={data.author} size={40} />
               <div>
                 <div style={{ fontWeight: 700, fontSize: 14, color: T.text1 }}>{data.author}</div>
-                <div style={{ fontSize: 12, color: T.text3 }}>Initiateur de la pétition · {new Date(data.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                <div style={{ fontSize: 12, color: T.text3 }}>Initiateur·rice de la pétition · {new Date(data.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
               </div>
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                 {data.tags?.map(t => <Tag key={t} size="xs">#{t}</Tag>)}
@@ -85,46 +104,61 @@ function PetitionDetail({ p, onBack, user, setUser, onAuth, adminMode, onSave })
 
             {tab === 'about' && (
               <div>
-                <p style={{ fontSize: 16, color: T.text2, lineHeight: 1.75, margin: '0 0 20px' }}>{data.description}</p>
-                <p style={{ fontSize: 15, color: T.text2, lineHeight: 1.7 }}>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. La situation actuelle exige une réponse immédiate et collective. Nos droits fondamentaux sont en jeu.</p>
-                <div style={{ margin: '24px 0', padding: '16px 20px', background: T.brandLight, borderLeft: `4px solid ${T.brand}`, borderRadius: '0 12px 12px 0' }}>
-                  <p style={{ fontSize: 14, color: T.brand, fontWeight: 600, lineHeight: 1.6, margin: 0 }}>« Face aux oppressions systémiques, nos luttes doivent devenir systémiques. Ils ont des milliards, soyons des millions ! »</p>
-                </div>
+                {data.description ? (
+                  <p style={{ fontSize: 16, color: T.text2, lineHeight: 1.75, margin: '0 0 20px' }}>{data.description}</p>
+                ) : (
+                  <EmptyState title="Description en cours de rédaction" desc="L'auteur·rice ajoutera bientôt les détails de cette pétition." />
+                )}
+                {data.context && (
+                  <p style={{ fontSize: 15, color: T.text2, lineHeight: 1.7, margin: '0 0 20px' }}>{data.context}</p>
+                )}
+                {data.quote && (
+                  <div style={{ margin: '24px 0', padding: '16px 20px', background: T.brandLight, borderLeft: `4px solid ${T.brand}`, borderRadius: '0 12px 12px 0' }}>
+                    <p style={{ fontSize: 14, color: T.brand, fontWeight: 600, lineHeight: 1.6, margin: 0 }}>« {data.quote} »</p>
+                  </div>
+                )}
               </div>
             )}
 
             {tab === 'updates' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {updates.map((u, i) => (
-                  <div key={i} style={{ background: T.surface, borderRadius: 14, padding: '16px 18px', border: `1px solid ${T.border}` }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                      <Avatar name={u.author} size={28} />
-                      <div style={{ fontWeight: 600, fontSize: 13, color: T.text1 }}>{u.author}</div>
-                      <div style={{ fontSize: 12, color: T.text4, marginLeft: 'auto' }}>{new Date(u.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</div>
+              updates.length === 0 ? (
+                <EmptyState title="Aucune mise à jour pour le moment" desc="L'auteur·rice publiera ici les avancées de la mobilisation." />
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {updates.map((u, i) => (
+                    <div key={i} style={{ background: T.surface, borderRadius: 14, padding: '16px 18px', border: `1px solid ${T.border}` }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <Avatar name={u.author} size={28} />
+                        <div style={{ fontWeight: 600, fontSize: 13, color: T.text1 }}>{u.author}</div>
+                        <div style={{ fontSize: 12, color: T.text4, marginLeft: 'auto' }}>{new Date(u.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</div>
+                      </div>
+                      <p style={{ fontSize: 14, color: T.text2, margin: 0, lineHeight: 1.6 }}>{u.text}</p>
                     </div>
-                    <p style={{ fontSize: 14, color: T.text2, margin: 0, lineHeight: 1.6 }}>{u.text}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )
             )}
 
             {tab === 'comments' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {comments.map((c, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 10 }}>
-                    <Avatar name={c.name} size={32} />
-                    <div style={{ flex: 1, background: T.surface2, borderRadius: 12, padding: '10px 14px' }}>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: T.text1 }}>{c.name}<span style={{ fontWeight: 400, color: T.text4, marginLeft: 8, fontSize: 11 }}>{c.time}</span></div>
-                      <div style={{ fontSize: 14, color: T.text2, marginTop: 3 }}>{c.text}</div>
+                {comments.length === 0 ? (
+                  <EmptyState title="Aucun commentaire pour le moment" desc="Soyez le·la premier·ère à laisser un commentaire." />
+                ) : (
+                  comments.map((c, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 10 }}>
+                      <Avatar name={c.name} size={32} />
+                      <div style={{ flex: 1, background: T.surface2, borderRadius: 12, padding: '10px 14px' }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: T.text1 }}>{c.name}<span style={{ fontWeight: 400, color: T.text4, marginLeft: 8, fontSize: 11 }}>{c.time}</span></div>
+                        <div style={{ fontSize: 14, color: T.text2, marginTop: 3 }}>{c.text}</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {user && (
-                  <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-                    <Avatar name={user.name} size={32} />
-                    <input placeholder="Votre commentaire..." style={{ flex: 1, height: 40, border: `1.5px solid ${T.border}`, borderRadius: 12, padding: '0 14px', fontSize: 14, fontFamily: 'Inter,sans-serif', outline: 'none', background: T.bg }} />
-                  </div>
+                  ))
                 )}
+                <div style={{ display: 'flex', gap: 10, marginTop: 8, alignItems: 'center' }}>
+                  <Avatar name={user?.name || 'Anonyme'} size={32} />
+                  <input value={commentDraft} onChange={e => setCommentDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submitComment(); }} placeholder={user ? 'Votre commentaire...' : 'Commentaire (publié sous "Anonyme")'} style={{ flex: 1, height: 40, border: `1.5px solid ${T.border}`, borderRadius: 12, padding: '0 14px', fontSize: 14, fontFamily: 'Inter,sans-serif', outline: 'none', background: T.bg }} />
+                  <Btn variant="gradient" size="md" onClick={submitComment} disabled={!commentDraft.trim()}>Publier</Btn>
+                </div>
               </div>
             )}
           </div>
@@ -138,56 +172,62 @@ function PetitionDetail({ p, onBack, user, setUser, onAuth, adminMode, onSave })
               <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {signed ? (
                   <>
-                    {/* Bloc remerciement */}
-                    <div style={{ background: 'linear-gradient(135deg, #DCFCE7 0%, #BBF7D0 100%)', borderRadius: 14, padding: '18px', textAlign: 'center', border: `1px solid #86EFAC` }}>
+                    {/* Bloc remerciement (vert tokenisé) */}
+                    <div style={{ background: T.successLight, borderRadius: 14, padding: '18px', textAlign: 'center', border: `1px solid #BBF7D0` }}>
                       <div style={{ fontSize: 40, marginBottom: 8 }}>✊</div>
-                      <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, color: T.success, fontSize: 17, letterSpacing:'-0.01em' }}>Merci d'avoir signé !</div>
+                      <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, color: T.success, fontSize: 17, letterSpacing: '-0.01em' }}>Merci d'avoir signé !</div>
                       <div style={{ fontSize: 13, color: T.text2, marginTop: 6, lineHeight: 1.5 }}>
                         Ta voix s'ajoute aux <strong>{data.signatures.toLocaleString('fr-FR')}</strong> autres. On avance.
                       </div>
                     </div>
 
-                    {/* Bloc adhésion (uniquement si pas déjà adhérent·e) */}
+                    {/* Adhésion : 1 seul CTA → /join (Q5) */}
                     {!user?.is_member && (
                       <div style={{ background: 'linear-gradient(135deg, #FDE9F2 0%, #F3EBFE 100%)', borderRadius: 14, padding: '18px', border: `1.5px solid ${T.brandLight}` }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom: 8 }}>
-                          <span style={{ fontSize:18 }}>★</span>
-                          <span style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, color:T.brand, fontSize:15 }}>Rejoins le mouvement</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <span style={{ fontSize: 18 }}>★</span>
+                          <span style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, color: T.brand, fontSize: 15 }}>Rejoins le mouvement</span>
                         </div>
-                        <p style={{ fontSize:12.5, color:T.text2, margin:'0 0 12px', lineHeight:1.55 }}>
+                        <p style={{ fontSize: 12.5, color: T.text2, margin: '0 0 12px', lineHeight: 1.55 }}>
                           Adhère à <strong>Maintenant !</strong> pour accéder aux Communes Libres, à l'Assemblée Confédérale et peser sur les décisions du mouvement.
                         </p>
-                        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                          <Btn full variant="white" size="md" onClick={handleJoinFree} style={{ border:`1.5px solid ${T.brand}`, color:T.brand }}>
-                            Adhérer gratuitement
-                          </Btn>
-                          <Btn full variant="gradient" size="md" onClick={handleJoinPaid} icon={ICONS.wallet}>
-                            Adhérer · 12 T99CP / an
-                          </Btn>
-                        </div>
+                        <Btn full variant="gradient" size="md" onClick={() => setPage?.('join')}>★ En savoir plus sur l'adhésion</Btn>
                       </div>
                     )}
+                    {/* Badge adhérent·e en gradient T99CP (Q6 — plus de jaune hardcoded) */}
                     {user?.is_member && (
-                      <div style={{ background:'#FEF3C7', border:`1px solid #FDE68A`, borderRadius:12, padding:'10px 14px', display:'flex', alignItems:'center', gap:8 }}>
-                        <span style={{ fontSize:16 }}>★</span>
-                        <span style={{ fontSize:12, fontWeight:800, color:'#B45309', letterSpacing:'0.04em' }}>ADHÉRENT·E DU MOUVEMENT</span>
+                      <div style={{ background: T.gradR, borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 16, color: '#fff' }}>★</span>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: '#fff', letterSpacing: '0.04em' }}>ADHÉRENT·E DU MOUVEMENT</span>
                       </div>
                     )}
                   </>
                 ) : (
-                  <Btn full variant="gradient" size="lg" onClick={handleSign}>
-                    {user ? 'Signer cette pétition' : '🔒 Se connecter pour signer'}
-                  </Btn>
+                  <Btn full variant="gradient" size="lg" onClick={handleSignClick}>Signer cette pétition</Btn>
                 )}
-                <Btn full variant="outline" size="md" onClick={() => setPayOpen(true)} icon={ICONS.wallet}>Soutenir en T99CP</Btn>
-                <Btn full variant="ghost" size="md" onClick={() => { const url = window.location.href; if (navigator.clipboard) navigator.clipboard.writeText(url).then(()=>window.showToast?.('Lien de la pétition copié', {type:'success', icon:'🔗'})); else navigator.share?.({ title: data.title, url }).catch(()=>{}); }} icon={ICONS.share}>Partager</Btn>
+
+                {/* Soutien T99CP — conditionnel sur support_enabled (Q7) */}
+                {data.support_enabled && (
+                  <div style={{ marginTop: 4, padding: '14px 16px', borderRadius: 14, background: T.surface2, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: T.text2, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Soutenir en T99CP</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 10 }}>
+                      {[5, 10, 20, 50].map(a => (
+                        <button key={a} onClick={() => setSupportAmount(a)} style={{ padding: '8px 0', borderRadius: 10, border: `1.5px solid ${supportAmount === a ? T.brand : T.border}`, background: supportAmount === a ? T.brandLight : T.surface, color: supportAmount === a ? T.brand : T.text2, fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter,sans-serif', transition: 'all 0.15s' }}>{a}</button>
+                      ))}
+                    </div>
+                    <Btn full variant="outline" size="md" icon={ICONS.wallet} onClick={() => setPayOpen(true)}>Faire un don pour amplifier la campagne</Btn>
+                  </div>
+                )}
+
+                <Btn full variant="ghost" size="md" onClick={() => setShareOpen(true)} icon={ICONS.share}>Partager</Btn>
               </div>
             </div>
 
+            {/* Derniers signataires (Q4) */}
             <div style={{ background: T.surface, borderRadius: 16, padding: '18px', border: `1px solid ${T.border}` }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: T.text4, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Derniers signataires</div>
-              {['Marie D.', 'Thomas R.', 'Aisha K.', 'Omar B.', 'Clara F.'].map((n, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: i < 4 ? `1px solid ${T.border}` : 'none' }}>
+              {signatories.map((n, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: i < signatories.length - 1 ? `1px solid ${T.border}` : 'none' }}>
                   <Avatar name={n} size={28} />
                   <span style={{ fontSize: 13, color: T.text2, fontWeight: 500 }}>{n}</span>
                   <span style={{ fontSize: 11, color: T.text4, marginLeft: 'auto' }}>il y a {i + 1}h</span>
@@ -196,10 +236,28 @@ function PetitionDetail({ p, onBack, user, setUser, onAuth, adminMode, onSave })
             </div>
           </div>
         </div>
+
+        {/* Bloc « Aussi signées par les militant·es de cette pétition » (Q12) */}
+        {sameCategory.length > 0 && (
+          <div style={{ marginTop: 56 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.text4, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>Aussi signées par les militant·es de cette pétition</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+              {sameCategory.map(o => <PetitionCard key={o.id} p={o} onClick={() => onSelectPetition?.(o)} />)}
+            </div>
+          </div>
+        )}
       </div>
 
-      <PayModal open={payOpen} onClose={() => setPayOpen(false)} amount={5} item={data.title} description="Soutenez cette pétition avec un don en T99CP pour financer la campagne." />
-      <PayModal open={adhesionPayOpen} onClose={() => { setAdhesionPayOpen(false); if (typeof setUser === 'function') setUser(u => ({ ...(u||{}), is_member: true, member_tier: 't99cp', member_since: new Date().toISOString() })); }} amount={12} item="Adhésion annuelle Maintenant !" description="Cotisation annuelle au mouvement. Donne accès aux Communes Libres et à l'Assemblée Confédérale." seller="Maintenant ! (mouvement)" />
+      {/* FAB mobile (Q11) — caché desktop via CSS .mn-petition-fab */}
+      {!signed && (
+        <div className="mn-petition-fab">
+          <Btn full variant="gradient" size="lg" onClick={handleSignClick}>Signer cette pétition</Btn>
+        </div>
+      )}
+
+      <PayModal open={payOpen} onClose={() => setPayOpen(false)} amount={supportAmount} item={`Soutien à : ${data.title}`} description="Don T99CP pour financer cette campagne. Le bénéficiaire reçoit ses T99CP sous 24h." seller={data.author} />
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} title={data.title} url={permalink} text={`${data.title} — Maintenant !`} />
+      <SignAnonymousModal open={signAnonOpen} onClose={() => setSignAnonOpen(false)} onSign={handleAnonSign} petitionTitle={data.title} />
       <EditModal open={editOpen} onClose={() => setEditOpen(false)} title="Pétition" data={data} onSave={f => { setData(d => ({ ...d, ...f })); onSave?.({ ...data, ...f }); }}
         fields={[{ key: 'title', label: 'Titre' }, { key: 'category', label: 'Catégorie', type: 'select', options: ['Santé', 'Écologie', 'Démocratie', 'Économie', 'Solidarité', 'Social', 'Justice', 'Transport', 'Logement', 'Droits', 'Éducation'] }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'goal', label: 'Objectif', type: 'number' }, { key: 'location', label: 'Lieu' }]} />
     </div>
@@ -208,18 +266,19 @@ function PetitionDetail({ p, onBack, user, setUser, onAuth, adminMode, onSave })
 
 function PetitionCard({ p, onClick, adminMode, onEdit }) {
   const pct = Math.min(Math.round((p.signatures / p.goal) * 100), 100);
+  const statusTag = window.getStatusTag?.(p.status) || { variant: 'success', label: 'Active', dot: true };
   return (
-    <div onClick={onClick} style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden', cursor: 'pointer', transition: 'all 0.22s', position: 'relative' }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 16px 48px rgba(0,0,0,0.09)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-      {adminMode && <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 3 }} onClick={e => { e.stopPropagation(); onEdit(); }}><AdminBtn onEdit={onEdit} /></div>}
+    <a href={`#petitions/${p.id}`} onClick={e => { e.preventDefault(); onClick?.(); }} className="mn-card-hover"
+      style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden', display: 'block', textDecoration: 'none', color: 'inherit', transition: 'all 0.22s', position: 'relative' }}>
+      {adminMode && <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 3 }} onClick={e => { e.stopPropagation(); e.preventDefault(); onEdit(); }}><AdminBtn onEdit={onEdit} /></div>}
       {p._userCreated && <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 3 }}><window.UserBadge /></div>}
       <div style={{ height: 160, position: 'relative', overflow: 'hidden', background: T.text1 }}>
-        <img src={`https://picsum.photos/seed/pet${p.id}/600/300`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.65),transparent 60%)' }}></div>
-        <div style={{ position: 'absolute', bottom: 12, left: 14, right: 14 }}>
+        {p.image && <img src={p.image} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.85 }} onError={e => e.target.style.display = 'none'} />}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent 60%)' }}></div>
+        <div style={{ position: 'absolute', bottom: 12, left: 14, right: 14, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           <Tag variant="brand" size="xs">{p.category}</Tag>
-          {p.featured && <Tag variant="gradient" size="xs" style={{ marginLeft: 6 }}>En vedette</Tag>}
+          <Tag variant={statusTag.variant} size="xs" dot={statusTag.dot}>{statusTag.label}</Tag>
+          {p.featured && <Tag variant="gradient" size="xs">En vedette</Tag>}
         </div>
       </div>
       <div style={{ padding: '16px 18px 18px' }}>
@@ -233,36 +292,67 @@ function PetitionCard({ p, onClick, adminMode, onEdit }) {
           <Tag>{pct}% atteint</Tag>
         </div>
       </div>
-    </div>
+    </a>
   );
 }
+
+// Ordre canonique des catégories (Q10 — au lieu de tri par ordre d'apparition)
+const PETITION_CAT_ORDER = ['Toutes', 'Santé', 'Écologie', 'Démocratie', 'Économie', 'Solidarité', 'Social', 'Justice', 'Transport', 'Logement', 'Droits', 'Éducation', 'Autre'];
+const PETITION_SORTS = [
+  { id: 'relevance',  label: '✨ Plus pertinentes' },
+  { id: 'recent',     label: 'Plus récentes' },
+  { id: 'signatures', label: 'Plus de signatures' },
+  { id: 'closing',    label: 'Bientôt clôturées' },
+];
 
 function PetitionsPage({ user, setUser, adminMode, onAuth, setPage }) {
   const [data, setData] = useState([...window.getUserCreations('petitions'), ...AppData.petitions]);
   const [detail, setDetail] = useState(null);
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState('Toutes');
+  const [sort, setSort] = useState('relevance');
   const [editItem, setEditItem] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
 
-  const cats = ['Toutes', ...new Set(data.map(p => p.category))];
+  // Catégories ordonnées canoniquement
+  const present = new Set(data.map(p => p.category));
+  const cats = PETITION_CAT_ORDER.filter(c => c === 'Toutes' || present.has(c));
+
+  // Search étendue (Q9) : titre + description + lieu + auteur + tags
+  const q = search.trim().toLowerCase();
   const filtered = data.filter(p => {
-    const ms = !search || p.title.toLowerCase().includes(search.toLowerCase());
+    const ms = !q || [p.title, p.description, p.location, p.author, ...(p.tags || [])]
+      .some(s => typeof s === 'string' && s.toLowerCase().includes(q));
     const mc = cat === 'Toutes' || p.category === cat;
     return ms && mc;
   });
-  const featured = filtered.filter(p => p.featured);
-  const rest = filtered.filter(p => !p.featured);
 
-  if (detail) return <PetitionDetail p={detail} onBack={() => setDetail(null)} user={user} setUser={setUser} onAuth={onAuth} adminMode={adminMode} onSave={u => setData(d => d.map(p => p.id === u.id ? u : p))} />;
+  // Tri (Q10)
+  const sorters = {
+    relevance:  (a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || b.signatures - a.signatures,
+    recent:     (a, b) => new Date(b.date) - new Date(a.date),
+    signatures: (a, b) => b.signatures - a.signatures,
+    closing:    (a, b) => (b.signatures / b.goal) - (a.signatures / a.goal),
+  };
+  const sorted = [...filtered].sort(sorters[sort] || sorters.relevance);
+
+  // En vedette : on garde "featured" en tête uniquement quand le tri est 'relevance'
+  const featured = sort === 'relevance' ? sorted.filter(p => p.featured) : [];
+  const rest     = sort === 'relevance' ? sorted.filter(p => !p.featured) : sorted;
+
+  if (detail) return <PetitionDetail p={detail} onBack={() => setDetail(null)} user={user} setUser={setUser} onAuth={onAuth} adminMode={adminMode} setPage={setPage} onSelectPetition={p => setDetail(p)} onSave={u => setData(d => d.map(p => p.id === u.id ? u : p))} />;
 
   return (
     <PageContainer>
       <SectionTitle label="Mobilisation" title="Pétitions citoyennes" action={
         <Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Créer une pétition</Btn>
       } />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, marginBottom: 8 }} className="mn-detail-grid">
-        <SearchInput value={search} onChange={setSearch} placeholder="Rechercher une pétition, une cause..." />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 12, marginBottom: 8 }} className="mn-detail-grid">
+        <SearchInput value={search} onChange={setSearch} placeholder="Titre, cause, lieu, auteur·rice, #tag..." />
+        <select value={sort} onChange={e => setSort(e.target.value)} aria-label="Trier les pétitions"
+          style={{ height: 48, border: `1.5px solid ${T.border}`, borderRadius: 14, padding: '0 14px', fontSize: 14, fontFamily: 'Inter,sans-serif', color: T.text1, background: T.bg, outline: 'none', cursor: 'pointer', fontWeight: 600 }}>
+          {PETITION_SORTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
       </div>
       <FilterTabs options={cats} active={cat} onChange={setCat} />
 

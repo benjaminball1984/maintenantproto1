@@ -427,7 +427,7 @@ window.EditModal = EditModal;
 // Admin Edit Button
 function AdminBtn({ onEdit, style={} }) {
   return (
-    <button onClick={e=>{e.stopPropagation();onEdit();}} style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'4px 10px', borderRadius:8, border:`1px solid ${T.warning}`, background:T.warnLight, color:T.warning, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'Inter,sans-serif', ...style }}>
+    <button onClick={e=>{e.stopPropagation();e.preventDefault();onEdit();}} style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'4px 10px', borderRadius:8, border:`1px solid ${T.warning}`, background:T.warnLight, color:T.warning, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'Inter,sans-serif', ...style }}>
       {ICONS.edit} Modifier
     </button>
   );
