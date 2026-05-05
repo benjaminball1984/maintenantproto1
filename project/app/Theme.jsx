@@ -656,6 +656,117 @@ function SignAnonymousModal({ open, onClose, onSign, petitionTitle }) {
 }
 window.SignAnonymousModal = SignAnonymousModal;
 
+// ────────────── ParticipateAnonymousModal ──────────────
+// Inscription à une mobilisation sans création de compte (email seulement).
+function ParticipateAnonymousModal({ open, onClose, onParticipate, mobTitle, mobDate }) {
+  const [form, setForm] = useState({ email: '', firstName: '', lastName: '', code_postal: '', remind: true });
+  const [errors, setErrors] = useState({});
+  const inputCss = { width: '100%', height: 46, border: `1.5px solid ${T.border}`, borderRadius: 12, padding: '0 14px', fontSize: 14, fontFamily: 'Inter,sans-serif', color: T.text1, background: T.bg, outline: 'none', boxSizing: 'border-box' };
+
+  const submit = () => {
+    const errs = {};
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Email invalide';
+    if (!form.firstName.trim()) errs.firstName = 'Prénom requis';
+    if (!form.lastName.trim()) errs.lastName = 'Nom requis';
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+    onParticipate({ ...form, anonymous: true, joined_at: new Date().toISOString() });
+    onClose();
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Participer à la mobilisation" width={460}>
+      <div>
+        <p style={{ fontSize: 13, color: T.text3, margin: '0 0 6px', lineHeight: 1.55 }}>
+          Tu t'inscris à : <strong style={{ color: T.text1 }}>{mobTitle}</strong>
+          {mobDate && <> · <span style={{ color: T.text2 }}>{new Date(mobDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</span></>}
+        </p>
+        <p style={{ fontSize: 12, color: T.text4, margin: '0 0 18px', lineHeight: 1.55 }}>
+          Pas besoin de créer un compte. Ton email sert à recevoir les infos pratiques (lieu de RDV, dernière minute, annulation).
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: T.text2, display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Prénom *</label>
+            <input value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value })} style={{ ...inputCss, borderColor: errors.firstName ? '#DC2626' : T.border }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: T.text2, display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Nom *</label>
+            <input value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value })} style={{ ...inputCss, borderColor: errors.lastName ? '#DC2626' : T.border }} />
+          </div>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: T.text2, display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Email *</label>
+          <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} style={{ ...inputCss, borderColor: errors.email ? '#DC2626' : T.border }} />
+          {errors.email && <div style={{ fontSize: 11, color: '#DC2626', marginTop: 4 }}>{errors.email}</div>}
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: T.text2, display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Code postal (optionnel)</label>
+          <input value={form.code_postal} onChange={e => setForm({ ...form, code_postal: e.target.value })} placeholder="75011" style={inputCss} />
+        </div>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 14, cursor: 'pointer' }}>
+          <input type="checkbox" checked={form.remind} onChange={e => setForm({ ...form, remind: e.target.checked })} style={{ marginTop: 3 }} />
+          <span style={{ fontSize: 12, color: T.text3, lineHeight: 1.5 }}>M'envoyer un rappel la veille de la mobilisation et m'informer en cas d'annulation ou de changement de lieu.</span>
+        </label>
+        <Btn full variant="gradient" size="lg" onClick={submit} icon={ICONS.check}>Confirmer ma participation</Btn>
+        <p style={{ fontSize: 11, color: T.text4, marginTop: 10, textAlign: 'center', lineHeight: 1.5 }}>
+          En participant, tu acceptes notre <a href="#rgpd" style={{ color: T.brand, textDecoration: 'underline' }}>politique de confidentialité</a>. Aucun compte créé.
+        </p>
+      </div>
+    </Modal>
+  );
+}
+window.ParticipateAnonymousModal = ParticipateAnonymousModal;
+
+// ────────────── exportICS ──────────────
+// Génère un fichier .ics standard (RFC 5545) téléchargeable pour une mobilisation.
+window.exportICS = function(mob) {
+  const pad = n => String(n).padStart(2, '0');
+  const fmt = (dateStr, timeStr) => {
+    const d = new Date(`${dateStr}T${(timeStr || '12:00')}:00`);
+    return d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate()) + 'T' + pad(d.getUTCHours()) + pad(d.getUTCMinutes()) + '00Z';
+  };
+  const escape = s => String(s || '').replace(/[\\;,]/g, m => '\\' + m).replace(/\n/g, '\\n');
+  const startUtc = fmt(mob.date, mob.time);
+  const endDate = new Date(`${mob.date}T${(mob.time || '12:00')}:00`);
+  endDate.setHours(endDate.getHours() + 3);
+  const endUtc = endDate.getUTCFullYear() + pad(endDate.getUTCMonth() + 1) + pad(endDate.getUTCDate()) + 'T' + pad(endDate.getUTCHours()) + pad(endDate.getUTCMinutes()) + '00Z';
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Maintenant//Mobilisations//FR',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:mob-${mob.id}@maintenant.fr`,
+    `DTSTAMP:${stamp}`,
+    `DTSTART:${startUtc}`,
+    `DTEND:${endUtc}`,
+    `SUMMARY:${escape(mob.title)}`,
+    `DESCRIPTION:${escape(mob.description)}`,
+    `LOCATION:${escape(mob.location)}`,
+    `ORGANIZER;CN=${escape(mob.organizer)}:mailto:contact@maintenant.fr`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+
+  try {
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mobilisation-${mob.id}.ics`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    if (window.showToast) window.showToast('Événement ajouté à ton agenda', { type: 'success', icon: '📅' });
+  } catch (e) {
+    if (window.showToast) window.showToast('Impossible de générer le fichier agenda', { type: 'error' });
+  }
+};
+
 // ════════════════════════════════════════════════════════════
 //   useLocalStore — hook de persistance localStorage
 //   Utilisé pour stocker les contributions de l'utilisateur·rice

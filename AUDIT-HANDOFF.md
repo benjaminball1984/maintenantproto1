@@ -39,7 +39,8 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | `8c2a68f` | Bloc 1 R2 | Décisions Q2/Q5/Q6/Q7/Q8/Q9/Q10/Q11/Q13 (Communes gradient T99CP, mega-menu, footer enrichi, pages légales, …) |
 | `b40ed3c` | Bloc 2 | Refonte HomePage complète selon Q1-Q11 (hero T99CP/noir, 3 stats, sections actu, services colorés, newsletter, T99CP blanc) |
 | `ec23c94` | Bloc 3 étapes 1-3 | AppData enrichi (3 pétitions featured) + helpers Theme (`generateMockNames`, `getStatusTag`, `ShareModal`, `SignAnonymousModal`) + ce HANDOFF |
-| _(à venir)_ | Bloc 3 étapes 4-6 | Refonte PetitionCard + PetitionDetail + PetitionsPage selon Q1-Q12 — câblage helpers, signature anonyme, FAB mobile, search/tri étendus |
+| `1121f7b` | Bloc 3 étapes 4-6 | Refonte PetitionCard + PetitionDetail + PetitionsPage selon Q1-Q12 — câblage helpers, signature anonyme, FAB mobile, search/tri étendus |
+| _(à venir)_ | Bloc 4 | AppData mobs enrichi (5 mobs) + helpers `exportICS`, `ParticipateAnonymousModal` + refonte MobilizationsPage (Card + Detail + List) selon Q1-Q10 |
 
 ---
 
@@ -50,7 +51,7 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | 1 | Globaux : Header (AppNav) + BottomNav + Footer | `Pages_Home.jsx:5-253`, `Maintenant.html` (footer + tweaks) | ✅ **Fait** (2 commits) |
 | 2 | Home (HomePage) | `Pages_Home.jsx:255-440` | ✅ **Fait** (1 commit) |
 | 3 | Pétitions (List + Card + Detail) | `Pages_Services.jsx:5-389` | ✅ **Fait** (2 commits — étapes 1-3 puis 4-6) |
-| 4 | Mobilisations | `Pages_Services.jsx:?` ou ailleurs (à localiser via `grep "function Mobilizations"`) | ⏳ |
+| 4 | Mobilisations | `Pages_Media_Profile.jsx:441-...` (MobilizationsPage + extraction Card/Detail) | ✅ **Fait** (1 commit) |
 | 5 | Cagnottes (crowdfunding) | À localiser | ⏳ |
 | 6 | Sondages | `PollsPage.jsx` (1367 lignes) | ⏳ |
 | 7 | Médias | `Pages_Media_Profile.jsx` | ⏳ |
@@ -420,6 +421,56 @@ PetitionsPage
 - Signature 1-clic si compte créé
 - Adhésion exige toujours un compte
 - Soutien T99CP optionnel par pétition (data.support_enabled)
+```
+
+---
+
+### 6.4 BLOC 4 — Mobilisations ✅ FAIT
+
+**Audit** : 23 incohérences/bugs, 5 écarts brief, 13 points UX, 10 décisions.
+
+#### Décisions Q-arbitrées (10 questions)
+
+| Q | Choix utilisateur | Implémentation | Statut |
+|---|---|---|---|
+| **Q1** | Garder layout 1 col actuelle (refactor inside) | Card extraite (`MobilizationCard`), `<a>` semantic, mn-card-hover | ✅ |
+| **Q2** | Tri date proche d'abord + dropdown 4 options | `<select>` + `MOB_SORTS` (date_close / date_far / participants / relevance) | ✅ |
+| **Q3** | Toutes mobs mélangées + tag « Passée » sur les anciennes | `isMobPast()` helper + `Tag variant="warning"` + opacity .78 sur cards | ✅ |
+| **Q4** | Search étendue (titre + description + lieu + organisateur·rice + tags) | Filter sur tous les champs concaténés | ✅ |
+| **Q5** | Participation 1-clic si connecté, sinon modal email-only sans compte | `handleJoinClick` + `ParticipateAnonymousModal` + persist `mn_join_anon_mob_${id}` | ✅ |
+| **Q6** | Bouton « Contribuer » conditionnel sur `m.support_enabled` activé par le créateur + presets 5/10/20/50 T99CP | Bloc Contribuer affiché si `support_enabled`, picker amount + PayModal | ✅ |
+| **Q7** | Enrichir 5 mobs avec image + context + quote (cohérence Bloc 3) | AppData : mobs 1-5 enrichies + tags + support_enabled (true sur 4/5) | ✅ |
+| **Q8** | Bouton « Ajouter à mon agenda » export .ics sur détail | `window.exportICS(mob)` génère un fichier ICS RFC 5545 téléchargeable | ✅ |
+| **Q9** | Bloc « Mobilisations similaires » en bas du détail (3 cards même type ou même ville) | Filter par type ou cityOf(location) puis slice(0, 3) | ✅ |
+| **Q10** | Garder copy « Participer à cette mobilisation » | Pas de changement de wording sur le CTA | ✅ |
+
+#### Bonus / cohérence Bloc 3
+
+- ShareModal câblé sur le bouton Partager (permalink `#mobs/{id}`)
+- FAB mobile : généralisation de `.mn-petition-fab` → `.mn-detail-fab` (réutilisable)
+- Inclusivité : « organisateur·rice » partout (CreateModal + EditModal + détail)
+- TYPE_COLOR enrichi : « Action directe » → `#DC2654` (avant : fallback brand)
+- `_userCreated` UserBadge déplacé en `top: 10, left: 80` pour ne plus chevaucher AdminBtn
+- Mob 6 : `organizer: "THE99COINPROJECT"` → `"Collectif Politique des 99%"`
+- `EditModal` options synchronisées avec CreateModal (constante `MOB_FIELDS`)
+- `EmptyState` quand aucun résultat (cohérence Bloc 3)
+- `Tag variant="dark"` workaround supprimé → spans inline propres dans le hero
+- CreateModal : nouveau champ `support_enabled` (Oui/Non)
+
+#### Composants extraits
+
+```
+Pages_Media_Profile.jsx :
+- MobilizationCard      (composant standalone, `<a>` + admin/userBadge)
+- MobilizationDetail    (composant standalone, hero + stats + context/quote + CTAs + similaires + FAB)
+- MobilizationsPage     (liste : search + tri + filter type)
+```
+
+#### Helpers globaux ajoutés (Theme.jsx)
+
+```js
+window.ParticipateAnonymousModal({ open, onClose, onParticipate, mobTitle, mobDate })
+window.exportICS(mob)  // télécharge mobilisation-${mob.id}.ics au format RFC 5545
 ```
 
 ---

@@ -248,9 +248,9 @@ function PetitionDetail({ p, onBack, user, setUser, onAuth, adminMode, onSave, s
         )}
       </div>
 
-      {/* FAB mobile (Q11) — caché desktop via CSS .mn-petition-fab */}
+      {/* FAB mobile (Q11) — caché desktop via CSS .mn-detail-fab */}
       {!signed && (
-        <div className="mn-petition-fab">
+        <div className="mn-detail-fab">
           <Btn full variant="gradient" size="lg" onClick={handleSignClick}>Signer cette pétition</Btn>
         </div>
       )}
