@@ -191,7 +191,7 @@ function AppNav({ page, setPage, user, onAuth, onLogout, adminMode, setAdminMode
               {l.label}
             </button>
           ))}
-          <div style={{ fontSize:9, fontWeight:800, color:T.text4, letterSpacing:'0.14em', padding:'14px 4px 4px', textTransform:'uppercase' }}>━ Commerce & Entraide</div>
+          <div style={{ fontSize:9, fontWeight:800, color:T.text4, letterSpacing:'0.14em', padding:'14px 4px 4px', textTransform:'uppercase' }}>━ Économie du partage</div>
           {navCommerce.map(l => (
             <button key={l.id} role="menuitem" onClick={() => go(l.id)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '12px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 15, fontFamily: 'Inter,sans-serif', marginBottom: 4, background: page === l.id ? T.brandLight : 'transparent', color: page === l.id ? T.brand : T.text2 }}>
               {l.label}
@@ -618,7 +618,7 @@ function ServicesHub({ setPage, user, onAuth }) {
       { id: 'lending',       title: 'Ki Prête Tout',        desc: 'Empruntez des objets de votre réseau',           color: '#A21CAF',          icon:'🔧', stat:`${liveStats.lending} objets disponibles`, kw:'prêt outil emprunt' },
       { id: 'garden',        title: 'Surplus de Jardin',    desc: 'Légumes, fruits, plants, miel',                  color: T.hub.garden,       icon:'🌱', stat:`${liveStats.garden} surplus partagés`, kw:'jardin légume fruit' },
     ]},
-    { label: 'Commerce solidaire', desc: 'Acheter local, acheter juste', services: [
+    { label: 'Économie du partage', desc: 'Acheter, échanger, prêter — local et juste', services: [
       { id: 'marketplace',   title: 'Marketplace',          desc: 'Seconde main · ports en € ou Polygon',            color: T.hub.marketplace,  icon:'🛍️', stat:`${liveStats.marketplace} articles en vente`, kw:'achat vendre vente' },
     ]},
     { label: 'Information & Réseau', desc: 'Sortir des bulles algorithmiques', services: [
@@ -679,7 +679,7 @@ function ServicesHub({ setPage, user, onAuth }) {
                 Tous les services solidaires de la plateforme
               </h1>
               <p style={{ fontSize:16, opacity:0.92, lineHeight:1.55, margin:'0 0 22px', maxWidth:600 }}>
-                Mobilisation, entraide, commerce, information. Une plateforme unique au service du peuple, payable en T99CP ou en euros — sans publicité, sans algorithme commercial.
+                Mobilisation, entraide, économie du partage, information. Une plateforme unique au service du peuple, payable en T99CP ou en euros — sans publicité, sans algorithme commercial.
               </p>
             </div>
             {/* Stats live calculées */}

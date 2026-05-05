@@ -15,7 +15,7 @@ git branch --show-current        # claude/review-audit-handoff-sAVU6
 
 **Première instruction à donner à Claude dans la nouvelle session** (copier-coller tel quel) :
 
-> Lis `/home/user/maintenantproto1/AUDIT-HANDOFF.md` en entier (en particulier la section 6.11 sur le Bloc 11 et la section 11 sur la reprise). On a fini le Bloc 10 (Hub Services + CreerPage, commit `f00c12a`). Tu dois maintenant **auditer le Bloc 11 (Commerce — SEL/Marketplace/Lending/Carpooling/Housing/Garden, fichier `Pages_Commerce.jsx` ~1066 lignes)**. Conduis l'audit en suivant la méthodologie section 4.1 (5 sections : cartographie, incohérences, écart vs intention, UX/design, décisions). Une fois les Q identifiées, pose-les **avec l'outil AskUserQuestion** (système cliquable, comme au Bloc 8 — voir section 4.3), par batches de max 4. Une fois les décisions verrouillées, exécute, vérifie syntaxiquement (cf. section 4.4), commit + push sur `claude/review-audit-handoff-sAVU6`, mets à jour ce handoff.
+> Lis `/home/user/maintenantproto1/AUDIT-HANDOFF.md` en entier (en particulier la section 6.11 sur le Bloc 11 et la section 11 sur la reprise). On a fini le Bloc 10 (Hub Services + CreerPage, commit `f00c12a`). Tu dois maintenant **auditer le Bloc 11 (Économie du partage — SEL/Marketplace/Lending/Carpooling/Housing/Garden, fichier `Pages_Commerce.jsx` ~1066 lignes)**. Conduis l'audit en suivant la méthodologie section 4.1 (5 sections : cartographie, incohérences, écart vs intention, UX/design, décisions). Une fois les Q identifiées, pose-les **avec l'outil AskUserQuestion** (système cliquable, comme au Bloc 8 — voir section 4.3), par batches de max 4. Une fois les décisions verrouillées, exécute, vérifie syntaxiquement (cf. section 4.4), commit + push sur `claude/review-audit-handoff-sAVU6`, mets à jour ce handoff.
 
 **Modèle de prompts cliquables à utiliser** (cf. Bloc 8, fonctionne très bien) :
 - Charger l'outil : `ToolSearch` avec `select:AskUserQuestion`
@@ -70,7 +70,7 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | 8 | Réseau social | `ReseauPage.jsx` (635 → ~890 lignes) | ✅ **Fait** (1 commit) |
 | 9 | Campagnes | `CampaignPage.jsx` (1345 lignes après refonte) | ✅ **Fait** (1 commit `a324e5c`) |
 | 10 | Hub Services + CreerPage | `Pages_Home.jsx:547-933` | ✅ **Fait** (1 commit `f00c12a`) |
-| 11 | Commerce (SEL/Marketplace/Lending/Carpooling/Housing/Garden) | `Pages_Commerce.jsx` (1066 lignes) | ⏳ |
+| 11 | Économie du partage (SEL/Marketplace/Lending/Carpooling/Housing/Garden) | `Pages_Commerce.jsx` (1066 lignes) | ⏳ |
 | 12 | Adhérer | `JoinMovement.jsx` | ⏳ |
 | 13 | Communes Libres | `CommunesLibres.jsx` (1427 lignes) | ⏳ |
 | 14 | Profil utilisateur | `Pages_Media_Profile.jsx` | ⏳ |
@@ -834,7 +834,7 @@ CommunesLibres.jsx :
 
 ---
 
-### 6.11 BLOC 11 — Commerce ⏳ À AUDITER
+### 6.11 BLOC 11 — Économie du partage ⏳ À AUDITER
 
 **Fichier** : `project/app/Pages_Commerce.jsx` (1066 lignes)
 
@@ -916,7 +916,7 @@ project/app/
 
 ---
 
-## 11. Reprise concrète de Bloc 11 (Commerce — Pages_Commerce.jsx)
+## 11. Reprise concrète de Bloc 11 (Économie du partage — Pages_Commerce.jsx)
 
 **Mode opératoire verrouillé** :
 > *« il faudra me poser les questions cliquables on reste en mode audit puis modifications que j'ai choisi »*

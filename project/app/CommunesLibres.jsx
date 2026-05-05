@@ -668,7 +668,7 @@ function CommuneSpace({ c, onBack, user, isAdminCommune=true }) {
             {['mobilisation','entraide'].map(cat=>(
               <div key={cat} style={{ marginBottom:32 }}>
                 <div style={{ fontSize:10, fontWeight:800, letterSpacing:'0.16em', color:T.text3, marginBottom:14, textTransform:'uppercase' }}>
-                  ━━ {cat==='mobilisation'?'Information & Mobilisation':'Commerce & Entraide'}
+                  ━━ {cat==='mobilisation'?'Information & Mobilisation':'Économie du partage'}
                 </div>
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))', gap:0, border:`2px solid ${T.text1}` }}>
                   {ALL_SERVICES.filter(s=>s.cat===cat).map((s,i,arr)=>{

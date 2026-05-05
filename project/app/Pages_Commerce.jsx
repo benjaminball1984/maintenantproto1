@@ -102,7 +102,7 @@ function MarketplacePage({ user, adminMode, onAuth }) {
   if (detail) return <MPDetail item={detail} onBack={() => setDetail(null)} user={user} onAuth={onAuth} adminMode={adminMode} onSave={u => setData(d => d.map(i => i.id === u.id ? u : i))} />;
   return (
     <PageContainer>
-      <SectionTitle label="Commerce solidaire" title="Marketplace" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Vendre un article</Btn>} />
+      <SectionTitle label="Économie du partage" title="Marketplace" action={<Btn variant="gradient" size="sm" icon={ICONS.plus} onClick={() => user ? setCreateOpen(true) : onAuth()}>Vendre un article</Btn>} />
       <CreateModal open={createOpen} onClose={() => setCreateOpen(false)} title="Vendre un article"
         subtitle="Publie une annonce. Le prix en T99CP est environ 45% en dessous du prix euro habituel (1 T99CP = 1 €)."
         domain="marketplace" color={T.hub.marketplace}
