@@ -496,6 +496,167 @@ window.EmptyState = EmptyState;
 Object.assign(window, { T, ICONS, Btn, Card, Tag, ProgressBar, TokenDisplay, Stars, Avatar, Photo, Modal, AdminBtn, SearchInput, FilterTabs, SectionTitle, PageContainer, EmptyState });
 
 // ════════════════════════════════════════════════════════════
+//   Helpers : seedRandom, statusTag, share
+// ════════════════════════════════════════════════════════════
+
+// Génère N noms français déterministes à partir d'un seed (ex: id de pétition)
+window.generateMockNames = function(seed, count) {
+  const firstNames = ['Marie','Sophie','Léa','Camille','Emma','Léna','Manon','Inès','Anaïs','Sarah','Yasmine','Aïcha','Mariam','Fatou','Pierre','Jean','Lucas','Hugo','Théo','Antoine','Maxime','Karim','Mehdi','Adam','Yanis','Omar','Idriss','Thomas','Bastien','Léo','Clara','Anna','Julie','Margot','Romain','Nicolas','Olivier','Mathieu','Vincent','Fanny','Élise','Justine','Charlotte','Pauline'];
+  const lastInitials = ['M.','D.','B.','R.','L.','P.','C.','F.','T.','N.','K.','V.','H.','S.','G.','A.','J.','O.'];
+  const out = [];
+  let s = ((seed || 1) * 374761393) >>> 0;
+  for (let i = 0; i < count; i++) {
+    s = (s * 9301 + 49297) % 233280;
+    const f = firstNames[Math.floor((s / 233280) * firstNames.length)];
+    s = (s * 9301 + 49297) % 233280;
+    const l = lastInitials[Math.floor((s / 233280) * lastInitials.length)];
+    out.push(`${f} ${l}`);
+  }
+  return out;
+};
+
+// Mappe un status de pétition vers les props d'un Tag
+window.getStatusTag = function(status) {
+  switch (status) {
+    case 'won':      return { variant: 'gradient', label: '✨ Victoire',   dot: false };
+    case 'closed':   return { variant: 'default',  label: 'Clôturée',     dot: false };
+    case 'archived': return { variant: 'warning',  label: 'Archivée',     dot: false };
+    case 'active':
+    default:         return { variant: 'success',  label: 'Active',       dot: true };
+  }
+};
+
+// ────────────── ShareModal ──────────────
+// Permalink + 5 boutons réseaux : X, Facebook, WhatsApp, Mastodon, Instagram (copie texte)
+function ShareModal({ open, onClose, title, url, text }) {
+  const link = url || (typeof window !== 'undefined' ? window.location.href : '');
+  const shareText = text || title || '';
+  const encodedUrl = encodeURIComponent(link);
+  const encodedText = encodeURIComponent(shareText);
+
+  const copy = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(link).then(() => {
+        if (window.showToast) window.showToast('Lien copié — colle-le où tu veux', { type: 'success', icon: '🔗' });
+      });
+    }
+  };
+
+  const networks = [
+    { id: 'x', label: 'X (Twitter)', color: '#000', url: `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`,
+      svg: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg> },
+    { id: 'facebook', label: 'Facebook', color: '#1877F2', url: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedText}`,
+      svg: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647z"/></svg> },
+    { id: 'whatsapp', label: 'WhatsApp', color: '#25D366', url: `https://wa.me/?text=${encodedText}%20${encodedUrl}`,
+      svg: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163a11.867 11.867 0 0 1-1.587-5.946C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 0 1 8.413 3.488 11.824 11.824 0 0 1 3.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 0 1-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.86 9.86 0 0 0 1.55 5.328l-.999 3.648 3.938-1.633z"/></svg> },
+    { id: 'mastodon', label: 'Mastodon', color: '#6364FF', url: null,
+      svg: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M21.58 13.913c-.29 1.469-2.592 3.121-5.238 3.396-1.379.165-2.737.32-4.185.255-2.368-.108-4.235-.567-4.235-.567 0 .234.014.456.043.665.307 2.348 2.319 2.488 4.226 2.554 1.925.066 3.64-.475 3.64-.475l.079 1.745s-1.347.724-3.749.857c-1.323.073-2.967-.034-4.881-.541-4.151-1.099-4.866-5.524-4.975-10.012-.034-1.334-.013-2.591-.013-3.643 0-4.589 3.005-5.935 3.005-5.935 1.515-.696 4.114-.989 6.815-1.011h.066c2.701.022 5.302.315 6.817 1.011 0 0 3.005 1.346 3.005 5.935 0 0 .038 3.388-.42 5.766z"/></svg> },
+    { id: 'instagram', label: 'Instagram', color: '#E4405F', url: null,
+      svg: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4z"/></svg> },
+  ];
+
+  const handleShare = (n) => {
+    if (n.url) {
+      window.open(n.url, '_blank', 'noopener,noreferrer,width=600,height=540');
+    } else {
+      const blob = `${shareText}\n\n${link}`;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(blob).then(() => {
+          if (window.showToast) window.showToast(`Texte copié — colle-le dans ${n.label}`, { type: 'info', icon: '📋' });
+        });
+      }
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Partager" width={460}>
+      <div>
+        <p style={{ fontSize: 13, color: T.text3, margin: '0 0 16px', lineHeight: 1.55 }}>
+          Plus on est nombreux·euses, plus on pèse. Diffuse autour de toi.
+        </p>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 18, padding: '10px 12px', background: T.surface2, borderRadius: 12, border: `1px solid ${T.border}` }}>
+          <span style={{ flex: 1, fontSize: 13, color: T.text2, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', alignSelf: 'center' }}>{link}</span>
+          <Btn variant="surface" size="sm" onClick={copy}>Copier</Btn>
+        </div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Réseaux sociaux</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 8 }}>
+          {networks.map(n => (
+            <button key={n.id} onClick={() => handleShare(n)} aria-label={`Partager sur ${n.label}`}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 12, border: `1px solid ${T.border}`, background: T.surface, color: T.text1, cursor: 'pointer', fontFamily: 'Inter,sans-serif', fontSize: 13, fontWeight: 600, transition: 'all 0.15s' }}
+              onMouseEnter={e => { e.currentTarget.style.background = n.color; e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = n.color; }}
+              onMouseLeave={e => { e.currentTarget.style.background = T.surface; e.currentTarget.style.color = T.text1; e.currentTarget.style.borderColor = T.border; }}>
+              <span style={{ display: 'flex', flexShrink: 0 }}>{n.svg}</span>
+              <span>{n.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+window.ShareModal = ShareModal;
+
+// ────────────── SignAnonymousModal ──────────────
+// Permet de signer une pétition sans créer de compte (email seulement).
+function SignAnonymousModal({ open, onClose, onSign, petitionTitle }) {
+  const [form, setForm] = useState({ email: '', firstName: '', lastName: '', code_postal: '', newsletter: true });
+  const [errors, setErrors] = useState({});
+  const inputCss = { width: '100%', height: 46, border: `1.5px solid ${T.border}`, borderRadius: 12, padding: '0 14px', fontSize: 14, fontFamily: 'Inter,sans-serif', color: T.text1, background: T.bg, outline: 'none', boxSizing: 'border-box' };
+
+  const submit = () => {
+    const errs = {};
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Email invalide';
+    if (!form.firstName.trim()) errs.firstName = 'Prénom requis';
+    if (!form.lastName.trim()) errs.lastName = 'Nom requis';
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+    onSign({ ...form, anonymous: true, signed_at: new Date().toISOString() });
+    onClose();
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Signer la pétition" width={460}>
+      <div>
+        <p style={{ fontSize: 13, color: T.text3, margin: '0 0 6px', lineHeight: 1.55 }}>
+          Vous signez : <strong style={{ color: T.text1 }}>{petitionTitle}</strong>
+        </p>
+        <p style={{ fontSize: 12, color: T.text4, margin: '0 0 18px', lineHeight: 1.55 }}>
+          Pas besoin de créer un compte. Votre email sert uniquement à confirmer votre signature.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: T.text2, display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Prénom *</label>
+            <input value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value })} style={{ ...inputCss, borderColor: errors.firstName ? '#DC2626' : T.border }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: T.text2, display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Nom *</label>
+            <input value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value })} style={{ ...inputCss, borderColor: errors.lastName ? '#DC2626' : T.border }} />
+          </div>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: T.text2, display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Email *</label>
+          <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} style={{ ...inputCss, borderColor: errors.email ? '#DC2626' : T.border }} />
+          {errors.email && <div style={{ fontSize: 11, color: '#DC2626', marginTop: 4 }}>{errors.email}</div>}
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: T.text2, display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Code postal (optionnel)</label>
+          <input value={form.code_postal} onChange={e => setForm({ ...form, code_postal: e.target.value })} placeholder="75011" style={inputCss} />
+        </div>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 14, cursor: 'pointer' }}>
+          <input type="checkbox" checked={form.newsletter} onChange={e => setForm({ ...form, newsletter: e.target.checked })} style={{ marginTop: 3 }} />
+          <span style={{ fontSize: 12, color: T.text3, lineHeight: 1.5 }}>Je souhaite recevoir les actualités de Maintenant ! et les mobilisations à venir (désinscription en 1 clic).</span>
+        </label>
+        <Btn full variant="gradient" size="lg" onClick={submit} icon={ICONS.check}>Signer la pétition</Btn>
+        <p style={{ fontSize: 11, color: T.text4, marginTop: 10, textAlign: 'center', lineHeight: 1.5 }}>
+          En signant, vous acceptez notre <a href="#rgpd" style={{ color: T.brand, textDecoration: 'underline' }}>politique de confidentialité</a>. Aucun compte créé.
+        </p>
+      </div>
+    </Modal>
+  );
+}
+window.SignAnonymousModal = SignAnonymousModal;
+
+// ════════════════════════════════════════════════════════════
 //   useLocalStore — hook de persistance localStorage
 //   Utilisé pour stocker les contributions de l'utilisateur·rice
 //   (logements, articles, sondages, etc. créés depuis l'app).
