@@ -8,14 +8,19 @@
 
 ```bash
 cd /home/user/maintenantproto1
-git status           # Doit être clean
-git log --oneline -8 # Doit afficher les 4 commits "audit bloc ..."
-git branch --show-current  # claude/refactor-for-review-7iBj8
+git status                       # Doit être clean
+git log --oneline -15            # Doit afficher les 11 commits "audit bloc ..." (Blocs 1→8 = 11 commits)
+git branch --show-current        # claude/review-audit-handoff-sAVU6
 ```
 
-**Première instruction à donner à Claude dans la nouvelle session :**
+**Première instruction à donner à Claude dans la nouvelle session** (copier-coller tel quel) :
 
-> Lis `/home/user/maintenantproto1/AUDIT-HANDOFF.md` en entier puis reprends le Bloc 3 (Pétitions) à l'étape 4 — refonte du composant `PetitionCard` selon les décisions Q1-Q12 documentées dans la section Bloc 3.
+> Lis `/home/user/maintenantproto1/AUDIT-HANDOFF.md` en entier (en particulier la section 6.9 sur le Bloc 9 et la section 11 sur la reprise). On a fini le Bloc 8 (Réseau social, commit `55c6a91`). Tu dois maintenant **reprendre le Bloc 9 (Campagnes)**. L'audit est déjà fait et documenté dans la section 6.9 (12 bugs identifiés + 11 questions de décision préparées). Pose-moi ces questions **avec l'outil AskUserQuestion** (système cliquable, comme au Bloc 8 — voir section 4.3), par batches de 4. Une fois les décisions verrouillées, exécute, vérifie syntaxiquement (cf. section 4.4), commit + push sur `claude/review-audit-handoff-sAVU6`, mets à jour ce handoff.
+
+**Modèle de prompts cliquables à utiliser** (cf. Bloc 8, fonctionne très bien) :
+- Charger l'outil : `ToolSearch` avec `select:AskUserQuestion`
+- Maximum 4 questions par batch (limite de l'outil)
+- Headers ≤ 12 chars, options 2-4 par question, descriptions courtes
 
 ---
 
@@ -45,7 +50,8 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | `d7973b3` | Bloc 6 | Sondages : suppression dead code `StepEmail` (-105L) + PollCard `<a>` + PollDetail nettoyage wordings email + ShareModal + similaires + FAB + PollsPage search/tri |
 | `997adb0` | Bloc 7 | Médias : enrichissement 5 articles (body+quote+author_bio) + MediaArticle nettoyage Lorem + ShareModal + Related `<a>` + MediaCard `<a>` + MediaPage search étendue + tip jar presets + MCreateModal wizard |
 | `80579c1` | Bloc 7+ | Médias : ajout rubrique **Tribune** (nouveau format) — FORMAT_META.tribune + 3 tribunes data + section dédiée « Tribunes libres » + MediaArticle (avertissement éditorial + author_role) + MCreateModal + EditModal |
-| _(à venir)_ | Bloc 8 | Réseau social : SAMPLE_POSTS comments spécifiques + PostCard refactor (menu ⋯ + shares + EmptyState) + Composer riche (image/vidéo/lien interne+externe) + composeFeed self-injection + GroupDetailPage (modal → page) + sidebar stats vraies valeurs + Message → messages |
+| `55c6a91` | Bloc 8 | Réseau social : SAMPLE_POSTS comments spécifiques + PostCard refactor (menu ⋯ + shares + EmptyState) + Composer riche (image/vidéo/lien interne+externe) + composeFeed self-injection + GroupDetailPage (modal → page) + sidebar stats vraies valeurs + Message → messages |
+| _(à venir)_ | Bloc 9 | Campagnes : audit fait (12 bugs identifiés + 11 Q préparées dans section 6.9). Implémentation à conduire dans la nouvelle session après pose des questions cliquables. |
 
 ---
 
@@ -61,7 +67,7 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | 6 | Sondages | `PollsPage.jsx` (1330 lignes après cleanup) | ✅ **Fait** (1 commit) |
 | 7 | Médias | `Pages_Media_Profile.jsx:5-435` (MediaArticle + MediaCard + MCreateModal + MediaPage) | ✅ **Fait** (1 commit) |
 | 8 | Réseau social | `ReseauPage.jsx` (635 → ~890 lignes) | ✅ **Fait** (1 commit) |
-| 9 | Campagnes | `CampaignPage.jsx` (1224 lignes) | ⏳ |
+| 9 | Campagnes | `CampaignPage.jsx` (1224 lignes) | 🟡 **Audit fait** (cf. 6.9), implémentation à venir |
 | 10 | Hub Services + CreerPage | `Pages_Home.jsx:442-...` | ⏳ |
 | 11 | Commerce (SEL/Marketplace/Lending/Carpooling/Housing/Garden) | `Pages_Commerce.jsx` (1066 lignes) | ⏳ |
 | 12 | Adhérer | `JoinMovement.jsx` | ⏳ |
@@ -690,6 +696,122 @@ ReseauPage.jsx :
 
 ---
 
+### 6.9 BLOC 9 — Campagnes 🟡 AUDIT FAIT (implémentation à venir)
+
+**Fichier** : `project/app/CampaignPage.jsx` (1224 lignes — le plus gros fichier audité jusqu'ici)
+
+**Composants** :
+```
+ALL_MODULES                  (12 modules : petition, mobilizations, crowdfunding,
+                              housing, carpooling, lending, marketplace, sel, garden,
+                              media, cta, stats)
+MODULE_SOURCES               (config par module : data source, listItem, createFields,
+                              createDefaults, emptyMsg)
+SAMPLE_CAMPAIGNS             (6 campagnes mock : urgences-ouvertes, transition-écologique,
+                              logement-pour-tous, ecoles-libres, salaires-cheminots,
+                              larzac-2026)
+CAMPAIGN_TEMPLATES           (6 templates : blank, sante, climat, logement, travail, culturel)
+InlineItemCreator            (formulaire compact création à la volée d'un item)
+ModuleItemSelector           (modale de sélection multi-items pour un module)
+ModulePreview                (rendu preview de chaque module dans la CampaignView)
+CampaignBuilder              (drag & drop builder fullscreen, panneau gauche modules
+                              + tabs settings/preview, panneau droit live preview)
+CampaignView                 (rendu de la campagne complète avec hero + modules)
+CampaignCard                 (card dans la liste)
+CampaignsPage                (page liste + recherche + bouton créer + modal templates)
+```
+
+#### Bugs identifiés (12)
+
+| # | Bug | Ligne | Conséquence |
+|---|---|---|---|
+| 1 | **Images picsum hardcoded partout** dans ModulePreview | 639, 666, 679, 710, 744 | Cohérence brisée vs Bloc 4-7 (tout migré sur Unsplash). Fallback gradient T.text1 attendu. |
+| 2 | CampaignCard : `<div onClick>` + onMouseEnter/Leave | 1076-1103 | Pas en `<a href>` + pas de `mn-card-hover` (cohérence Bloc 3-8) |
+| 3 | CampaignCard image : picsum hardcoded `picsum.photos/seed/${campaign.slug}` | 1083 | Cohérence Bloc 4-7 |
+| 4 | Hero CampaignView : picsum hardcoded fallback | 996 | Idem |
+| 5 | Bouton `Btn variant="white"` du module CTA n'a **pas d'onClick** | 758 | CTA mort dans la preview |
+| 6 | `aggregateStats` ne tient compte ni des items mobilisations (participants), ni du module stats lui-même | 957-973 | Stats incomplètes, "T99CP collectés" hardcoded à 247 ligne 764 |
+| 7 | Search CampaignsPage limitée à `c.title` | 1114 | Cohérence Bloc 3-8 : étendre à title + subtitle + organizer + modules-icons (mots-clés) |
+| 8 | Stats du module 'stats' avec valeur hardcoded `'247'` (T99CP collectés) | 764 | Devrait agréger raised_t99cp réel des cagnottes intégrées |
+| 9 | Pas de ShareModal système : `handleShare` utilise navigator.share natif uniquement, pas le `ShareModal` du Theme.jsx | 977-990 | Cohérence Bloc 3-8 : tous utilisent `<ShareModal />` avec permalink |
+| 10 | Pas de FAB mobile pour "Créer une campagne" | n/a | Bloc 4-6 ont un FAB. Cohérence éventuelle. |
+| 11 | Permalink campagne pas géré (#campagnes/{slug} ou {id}) | n/a | Cohérence Bloc 3-8 |
+| 12 | Preview side-panel du builder : badge "👁️ Aperçu en temps réel" en `display:'inline-flex'` mais sans wrapping si écran étroit | 936 | Cosmétique mineur |
+
+#### Incohérences vs Bloc 3-8
+
+- Cards en `<div onClick>` au lieu de `<a>` + `mn-card-hover`
+- Search title-only
+- Pas de ShareModal réutilisable
+- Pas de permalink hash (cohérence : pétitions → `#petitions/{id}`, mobs → `#mobs/{id}`, cagnottes → `#cagnottes/{id}`, sondages → `#sondages/{id}`, médias → `#media/{id}`, groupes → `#groupe/{id}`)
+- Stats hardcoded (247 T99CP)
+- Suppression d'une campagne pas câblée (admin uniquement actuellement, pas de bouton)
+
+#### 11 décisions à arbitrer (à poser via AskUserQuestion en 3 batches : Q1-Q4, Q5-Q8, Q9-Q11)
+
+**BATCH 1 — Cosmétique cohérence + bugs visuels**
+
+| Q | Question | Header chip | Options |
+|---|---|---|---|
+| **Q1** | Images dans CampaignCard et ModulePreview (petition/crowdfunding/housing/marketplace/media) — toutes en picsum hardcoded. On les remplace par quoi ? | Images | **A.** `data.image` ou `data.cover` quand l'item l'a, fallback fond `T.text1` (gradient noir) — cohérence Bloc 4-7 (Recommandé) · **B.** Garder picsum (statu quo) · **C.** Supprimer les visuels du tout (texte uniquement) |
+| **Q2** | CampaignCard : `<div onClick>` → `<a href>` + `mn-card-hover` ? | Card link | **A.** Oui, `<a href="#campagnes/{slug}">` + permalink (cohérence Bloc 3-8) · **B.** Non, statu quo |
+| **Q3** | Bouton CTA du module preview (`📣 Appel à l'action`) sans onClick : que doit-il faire au clic ? | CTA module | **A.** Scroller vers le 1er module pétition/cagnotte de la campagne (Recommandé) · **B.** Naviguer vers la 1re action concrète (premier item sélectionné dans le 1er module) · **C.** Alerte/toast « Cette CTA est conçue pour ta page publique » (le bouton ne fait rien dans la preview) |
+| **Q4** | Module 'stats' : `'247'` T99CP collectés hardcoded. Recalcule depuis les cagnottes intégrées ? | Stats live | **A.** Oui, agréger `raised_t99cp` des cagnottes sélectionnées + agréger `participants` des mobs + signatures (Recommandé) · **B.** Garder hardcoded (proto) |
+
+**BATCH 2 — Search, Share, FAB**
+
+| Q | Question | Header chip | Options |
+|---|---|---|---|
+| **Q5** | Search CampaignsPage limitée à `title`. Étendre à quoi ? | Search étendue | **A.** title + subtitle + organizer + tags des modules (icônes/labels) (Recommandé, cohérence Bloc 3-8) · **B.** title + organizer seulement · **C.** Statu quo |
+| **Q6** | `handleShare` utilise navigator.share natif. Remplacer par `<ShareModal />` du Theme.jsx (utilisé dans tous les blocs précédents) ? | ShareModal | **A.** Oui, ShareModal + permalink `#campagnes/{slug}` (Recommandé) · **B.** Non, garder navigator.share natif (statu quo) |
+| **Q7** | FAB mobile « Créer une campagne » (cohérence Bloc 4-6) ? | FAB mobile | **A.** Oui, FAB rouge en bas à droite mobile uniquement · **B.** Non, le bouton hero suffit |
+| **Q8** | Permalink hash `#campagnes/{slug}` (slug existe déjà) ou `#campagnes/{id}` ? | Permalink | **A.** `#campagnes/{slug}` (lisible humainement, Recommandé) · **B.** `#campagnes/{id}` (cohérent avec Bloc 3-8) |
+
+**BATCH 3 — Détail page, suppression, similaires**
+
+| Q | Question | Header chip | Options |
+|---|---|---|---|
+| **Q9** | Bouton « Supprimer la campagne » sur le détail (admin OU organizer === user.name) ? | Suppression | **A.** Oui (admin only, avec confirm) (Recommandé) · **B.** Oui (admin + organizer, avec confirm) · **C.** Non, pas de suppression dans la session d'audit |
+| **Q10** | Bloc « Campagnes similaires » en bas du détail (3 cards filtrées par color OU modules en commun) — cohérence Bloc 3-7 ? | Similaires | **A.** Oui, 3 cards filtrées par couleur thématique (Recommandé) · **B.** Oui, par modules en commun (intersection) · **C.** Non, statu quo |
+| **Q11** | Builder fullscreen : actuellement `position: fixed` qui couvre toute la page. Modifier ? | Builder UX | **A.** Garder fullscreen (immersif, statu quo) (Recommandé) · **B.** Convertir en page `setActivePage` interne (cohérence Bloc 5/8) · **C.** Side-drawer 50% écran |
+
+#### Plan d'exécution (après réponses Q1-Q11)
+
+1. **AppData / SAMPLE_CAMPAIGNS** : pas de modification structurelle (les 6 campagnes restent telles quelles)
+2. **CampaignCard** : `<a>` + `mn-card-hover` + `data.image` ou fond gradient (Q1+Q2)
+3. **CampaignView** :
+   - Hero : `data.cover` ou fond gradient (Q1)
+   - Module CTA : onClick câblé (Q3)
+   - Module stats : recalcul `aggregateStats` étendu (Q4+Q8)
+   - `handleShare` → ShareModal (Q6)
+   - Bloc « Campagnes similaires » en bas si Q10A/B
+   - Bouton Supprimer si Q9A/B
+4. **ModulePreview** : remplacement de tous les picsum par `item.image` ou fond gradient noir (Q1)
+5. **CampaignsPage** :
+   - Search étendue (Q5)
+   - FAB mobile si Q7A
+   - Permalink `#campagnes/{slug}` ou `{id}` (Q8) + parsing au mount
+6. **CampaignBuilder** : modif si Q11B/C uniquement
+7. **Vérif syntaxique** : `node parser` cf. section 4.4
+8. **Commit + push** : message style « audit bloc 9 (campagnes) — décisions Q1-Q11 + N bugs corrigés »
+9. **MAJ AUDIT-HANDOFF.md** :
+   - Table commits : remplacer `(à venir)` Bloc 9 par hash réel
+   - Plan blocs : ✅ FAIT
+   - Section 6.9 : remplacer le contenu actuel par bilan post-implémentation
+   - Section 0 : MAJ première instruction pour Bloc 10
+
+#### Notes critiques pour le prochain Claude
+
+- **Le fichier fait 1224 lignes**. Pour le lire, utiliser `Read` avec `offset/limit` (déjà 4 reads de ~400 lignes nécessaires pour tout couvrir).
+- **`window.AppData`** : variable globale lue par `getPlatformItems` etc. Toujours disponible une fois `AppData.jsx` chargé.
+- **`window.getUserCreations(domain)`** : retourne le tableau des items créés par l'user via `localStorage` (clé `mn_user_${domain}`). Déjà câblé dans Theme.jsx.
+- **Les modules ont 2 formats compatibles** : `'petition'` (string, legacy) ou `{id:'petition', items:[1,2]}`. Toujours passer par `normalizeModule(m)`, `moduleId(m)`, `moduleItems(m)`.
+- **`MODULE_SOURCES`** : si tu ajoutes un module, ajoute aussi sa source ici sinon `getAllItemsForModule` retournera vide.
+- **`InlineItemCreator`** : déjà fonctionnel, ne pas toucher (déjà testé via les commits précédents).
+- **Le builder est en `position: fixed`** au-dessus de tout (zIndex 500 + sélecteur d'items zIndex 2000). Attention si tu modifies, ne pas casser le z-index stack.
+
+---
+
 ## 7. Dette traçable (à traiter dans les blocs concernés)
 
 | # | Item | Bloc cible |
@@ -755,24 +877,36 @@ project/app/
 
 ---
 
-## 11. Reprise concrète de Bloc 3
+## 11. Reprise concrète de Bloc 9 (Campagnes)
 
 **Première chose à faire** dans la nouvelle session après lecture de ce doc :
 
 1. `git status` (vérifier clean)
-2. `git log --oneline -5` (voir les 4 commits)
-3. Lire les fichiers concernés :
-   - `Pages_Services.jsx` lignes 5-301 (3 composants pétitions à refondre)
-   - `Theme.jsx` lignes 498-700 environ (les helpers/modals déjà créés à utiliser)
-   - `AppData.jsx` lignes 7-70 (les 3 pétitions featured enrichies)
-4. Implémenter dans cet ordre :
-   1. PetitionCard (court, ~30 lignes finales)
-   2. PetitionDetail (long, ~250 lignes finales) — partir des 12 sous-tâches de l'Étape 5 ci-dessus
-   3. PetitionsPage (moyen, ~80 lignes finales)
-5. Vérifier syntaxiquement (`grep` pour résidus, `wc -l`)
-6. Commit + push avec le format documenté section 6.3
-7. Mettre à jour ce HANDOFF avec : `🟡 EN COURS` → `✅ Fait` pour Bloc 3
-8. Demander à l'utilisateur s'il veut tester visuellement avant Bloc 4 ou enchaîner
+2. `git log --oneline -15` (voir les 11 commits "audit bloc …")
+3. `git branch --show-current` (doit être `claude/review-audit-handoff-sAVU6`)
+4. **Lire les fichiers concernés** (le fichier campagnes est volumineux : 1224 lignes) :
+   - `project/app/CampaignPage.jsx` en 4 reads de 400 lignes (offset 0/400/800/1100) — voir section 6.9 pour le repérage des composants
+   - `project/app/Theme.jsx` ligne 540 environ (`ShareModal` à réutiliser)
+   - `project/app/AppData.jsx` (référence pour les items consommés par les modules)
+5. **Charger AskUserQuestion** : `ToolSearch` avec query `select:AskUserQuestion`
+6. **Poser les 11 Q par batch de 4** (Batch 1 : Q1-Q4 cosmétique/CTA/stats · Batch 2 : Q5-Q8 search/share/FAB/permalink · Batch 3 : Q9-Q11 suppression/similaires/builder UX). Les questions sont rédigées et prêtes à copier-coller en section 6.9.
+7. **Implémenter** dans cet ordre (cf. Plan d'exécution section 6.9) :
+   1. CampaignCard (`<a>` + mn-card-hover + image fallback)
+   2. ModulePreview (remplacement picsum → data.image/cover ou fond gradient)
+   3. CampaignView (hero, module CTA onClick, module stats agrégées, ShareModal, similaires si Q10A/B, suppression si Q9A/B)
+   4. CampaignsPage (search étendue, FAB si Q7A, permalink + parsing)
+   5. CampaignBuilder (uniquement si Q11B/C)
+8. **Vérif syntaxique** : `node -e "const p=require('@babel/parser');const fs=require('fs');p.parse(fs.readFileSync('project/app/CampaignPage.jsx','utf8'),{sourceType:'script',plugins:['jsx']});console.log('OK')"`
+9. **Commit + push** avec le format des blocs précédents (HEREDOC, multiple sections : décisions Q-arbitrées + bugs corrigés + bonus cohérence + composants concernés + AUDIT-HANDOFF.md)
+10. **MAJ AUDIT-HANDOFF.md** :
+    - Table commits section 2 : remplacer `(à venir)` Bloc 9 par hash réel
+    - Plan blocs section 3 : `🟡 Audit fait` → `✅ Fait`
+    - Section 6.9 : remplacer le contenu par bilan post-implémentation (cf. modèle Bloc 8 section 6.8)
+    - Section 0 : MAJ première instruction pour Bloc 10 (Hub Services + CreerPage)
+    - Section 11 : MAJ reprise concrète pour Bloc 10
+11. Demander à l'utilisateur s'il veut tester visuellement avant Bloc 10 ou enchaîner
+
+**Si l'utilisateur dit « avec le système cliquable »** (comme Bloc 8) → utiliser AskUserQuestion. C'est le mode par défaut désormais.
 
 ---
 
