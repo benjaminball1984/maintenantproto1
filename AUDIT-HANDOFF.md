@@ -9,13 +9,13 @@
 ```bash
 cd /home/user/maintenantproto1
 git status                       # Doit être clean
-git log --oneline -15            # Doit afficher les 13 commits "audit bloc ..." (Blocs 1→10)
+git log --oneline -15            # Doit afficher les 14 commits "audit bloc ..." (Blocs 1→11)
 git branch --show-current        # claude/review-audit-handoff-sAVU6
 ```
 
 **Première instruction à donner à Claude dans la nouvelle session** (copier-coller tel quel) :
 
-> Lis `/home/user/maintenantproto1/AUDIT-HANDOFF.md` en entier (en particulier la section 6.11 sur le Bloc 11 et la section 11 sur la reprise). On a fini le Bloc 10 (Hub Services + CreerPage, commit `f00c12a`). Tu dois maintenant **auditer le Bloc 11 (Économie du partage — SEL/Marketplace/Lending/Carpooling/Housing/Garden, fichier `Pages_Commerce.jsx` ~1066 lignes)**. Conduis l'audit en suivant la méthodologie section 4.1 (5 sections : cartographie, incohérences, écart vs intention, UX/design, décisions). Une fois les Q identifiées, pose-les **avec l'outil AskUserQuestion** (système cliquable, comme au Bloc 8 — voir section 4.3), par batches de max 4. Une fois les décisions verrouillées, exécute, vérifie syntaxiquement (cf. section 4.4), commit + push sur `claude/review-audit-handoff-sAVU6`, mets à jour ce handoff.
+> Lis `/home/user/maintenantproto1/AUDIT-HANDOFF.md` en entier (en particulier la section 6.12 sur le Bloc 12 et la section 11 sur la reprise). On a fini le Bloc 11 (Économie du partage, commit `a51c5be`). Tu dois maintenant **auditer le Bloc 12 (Adhérer — `JoinMovement.jsx`)**. Conduis l'audit en suivant la méthodologie section 4.1 (5 sections : cartographie, incohérences, écart vs intention, UX/design, décisions). Une fois les Q identifiées, pose-les **avec l'outil AskUserQuestion** (système cliquable, comme au Bloc 8 — voir section 4.3), par batches de max 4. Une fois les décisions verrouillées, exécute, vérifie syntaxiquement (cf. section 4.4), commit + push sur `claude/review-audit-handoff-sAVU6`, mets à jour ce handoff.
 
 **Modèle de prompts cliquables à utiliser** (cf. Bloc 8, fonctionne très bien) :
 - Charger l'outil : `ToolSearch` avec `select:AskUserQuestion`
@@ -53,6 +53,8 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | `55c6a91` | Bloc 8 | Réseau social : SAMPLE_POSTS comments spécifiques + PostCard refactor (menu ⋯ + shares + EmptyState) + Composer riche (image/vidéo/lien interne+externe) + composeFeed self-injection + GroupDetailPage (modal → page) + sidebar stats vraies valeurs + Message → messages |
 | `a324e5c` | Bloc 9 | Campagnes : 6 SAMPLE_CAMPAIGNS + status:'active' + ModulePreview (picsum→data.image/cover ou fond gradient T99CP) + CTA scroll vers 1er module action + module stats agrégé (raised+sigs+participants) + ShareModal + permalink #campagnes/{slug} + CampaignCard `<a>`+mn-card-hover + FAB mobile + suppression admin + clôture organizer + bloc Campagnes proches (intersection modules) |
 | `f00c12a` | Bloc 10 | Hub Services + CreerPage : ServicesHub (cards services + parcours rapides + écosystème + chips Mes services tous en `<a>` + mn-card-hover) + jaune→magenta T.brand + members/t99cpCirc/communes/campaigns désormais live (auteurs distincts × 18 + somme T99CP réelle + window.SAMPLE_COMMUNES + window.SAMPLE_CAMPAIGNS) + CTA fin → creer + CreerPage refonte (13 tiles avec icônes/couleurs, +Sondage +Post réseau, tile Campagne via #campagnes/new + useEffect hashchange dans CampaignsPage) |
+| `94d0388` | (rename) | Renommage 'Commerce' → 'Économie du partage' dans 5 libellés UI + handoff (avant Bloc 11) |
+| `a51c5be` | Bloc 11 | Économie du partage : 5 services (Marketplace, SEL, Garden, Lending, Carpooling) refondus — cards en `<a>` + mn-card-hover, 6 picsum → fallback gradient T99CP, search étendue, ShareModal sur 5 détails, FAB mobile sur 5 listings, permalink hash, 'Contacter' → messagerie. Lending : bug price_per_day vs price_t99cp fixé + L1020 nettoyé + Modal → page LendingDetail. Garden : page GardenDetail créée. Carpooling : Modal → page CarpoolDetail + champ 'car' ajouté au CreateModal + guard t.car undefined |
 
 ---
 
@@ -70,7 +72,7 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | 8 | Réseau social | `ReseauPage.jsx` (635 → ~890 lignes) | ✅ **Fait** (1 commit) |
 | 9 | Campagnes | `CampaignPage.jsx` (1345 lignes après refonte) | ✅ **Fait** (1 commit `a324e5c`) |
 | 10 | Hub Services + CreerPage | `Pages_Home.jsx:547-933` | ✅ **Fait** (1 commit `f00c12a`) |
-| 11 | Économie du partage (SEL/Marketplace/Lending/Carpooling/Housing/Garden) | `Pages_Commerce.jsx` (1066 lignes) | ⏳ |
+| 11 | Économie du partage (SEL/Marketplace/Lending/Carpooling/Garden) | `Pages_Commerce.jsx` (1375 lignes après refonte) | ✅ **Fait** (1 commit `a51c5be`) |
 | 12 | Adhérer | `JoinMovement.jsx` | ⏳ |
 | 13 | Communes Libres | `CommunesLibres.jsx` (1427 lignes) | ⏳ |
 | 14 | Profil utilisateur | `Pages_Media_Profile.jsx` | ⏳ |
@@ -834,18 +836,95 @@ CommunesLibres.jsx :
 
 ---
 
-### 6.11 BLOC 11 — Économie du partage ⏳ À AUDITER
+### 6.11 BLOC 11 — Économie du partage ✅ FAIT
 
-**Fichier** : `project/app/Pages_Commerce.jsx` (1066 lignes)
+**Audit** : 18 incohérences/bugs sur 5 services (Marketplace, SEL, Garden, Lending, Carpooling) — Cagnottes (Bloc 5) intactes. 12 décisions arbitrées en 3 batches.
 
-**Périmètre** : SEL + Marketplace + Lending (Ki Prête Tout) + Carpooling + Housing + Garden — gros fichier, 6 services en un.
+**Note importante** : avant le Bloc 11, l'utilisateur a précisé que ce périmètre ne s'appelle pas 'Commerce' mais **'Économie du partage'** (commit `94d0388` : 5 libellés UI renommés).
+
+#### Décisions Q-arbitrées (12 questions)
+
+| Q | Choix utilisateur | Implémentation | Statut |
+|---|---|---|---|
+| **Q1** | 5 services en `<a href>` + mn-card-hover | MPCard, SELCard, GardenCard (NOUVEAU), LendingCard (NOUVEAU), TripCard (extrait du composant interne) tous en `<a>` avec `e.preventDefault() + onClick`. Suppression du JS hover inline | ✅ |
+| **Q2** | data.image/cover + fallback gradient T99CP | Helper local `imgFallbackGrad = linear-gradient(135deg,#7C3AED,#E11D74,#DC2654)`. Suppression de 6 picsum hardcoded (MP card+detail+thumbs, Garden, Lending card+detail) | ✅ |
+| **Q3** | Renommer `price_per_day` → `price_t99cp` partout (Lending) | CreateModal champ unifié + onSubmit + EditModal + détail. Ajout du champ 'condition' manquant dans CreateModal | ✅ |
+| **Q4** | Lending L1020 — nettoyer + réintégrer fragment dans description | `<PayModal description={`${days} jour${s} + caution ${data.deposit_t99cp} T99CP remboursable`} />` propre | ✅ |
+| **Q5** | Search étendue (title/nom + description + lieu + auteur) | 5 listings refondus : Marketplace (title+desc+location+seller), SEL (service+desc+provider+location), Garden (item+desc+location+giver), Lending (name+desc+location+owner), Carpool (from+to+desc+driver/passenger/requester) | ✅ |
+| **Q6** | ShareModal sur les 4 détails (sauf Garden ?) | ShareModal sur **les 5** détails finalement (MPDetail, SELDetail, GardenDetail créé, LendingDetail créé, CarpoolDetail créé). Permalink standard `${origin}${pathname}#${section}/${id}` | ✅ |
+| **Q7** | FAB mobile sur les 5 listings | `<div className="mn-detail-fab"><Btn full variant="gradient" size="lg" .../></div>` sur les 5 (variant adapté : success pour Garden) | ✅ |
+| **Q8** | Hash `{section}/{id}` sur les 5 services | `#marketplace/{id}`, `#sel/{id}`, `#garden/{id}`, `#lending/{id}`, `#carpool/{id}` | ✅ |
+| **Q9** | 'Contacter' → setPage('messages') | 5 boutons 'Contacter' refondus : toast confirme + navigation `setPage?.('messages')`. MarketplacePage (Contacter le vendeur), SELDetail (le prestataire), GardenDetail (le donateur), LendingDetail (le propriétaire), CarpoolDetail (le conducteur·rice/demandeur·euse) | ✅ |
+| **Q10** | Lending Modal → page LendingDetail | Hero photo (cover + fallback gradient), stats (état/lieu/proprio), description, sélecteur de jours avec total, boutons emprunter + contacter. Bug Q3+Q4 corrigés | ✅ |
+| **Q11** | Garden : page détail complète | GardenCard + GardenDetail (hero, type, quantity, description, boutons gratuit→demander/payant→PayModal + contacter). state `detail` + render conditionnel | ✅ |
+| **Q12** | Carpooling Modal → page CarpoolDetail | Hero from→to (fond noir), grid date/heure/places/flexibilité, info driver/requester, boutons réserver+contacter. Champ `car` ajouté au CreateModal + guard `t.car &&` | ✅ |
+
+#### Bugs corrigés
+
+- 5 `<div onClick>` + onMouseEnter/Leave inline → `<a href>` + mn-card-hover
+- 6 picsum hardcoded → fallback gradient T99CP
+- Bug Lending price_per_day vs price_t99cp (création user → 'Gratuit' à tort)
+- Bug Lending L1020 (code JSX corrompu après PayModal)
+- Search title-only x4 → étendue
+- Pas de ShareModal sur les 5 détails (5 ajoutés)
+- Pas de FAB mobile (5 ajoutés)
+- Pas de permalink hash (5 ajoutés)
+- 'Contacter' en toast → vraie navigation messagerie
+- Garden sans page détail (créée)
+- Lending détail en Modal (page créée)
+- Carpooling détail en Modal (page créée)
+- `t.car.split` undefined potentiel sur trajets créés via UI (guard ajouté + champ 'car' au CreateModal)
+- Tags hub harmonisés ('Économie du partage' partout)
+- SELDetail 'Disponible' affichait true/false brut (Oui/Non si bool, sinon string)
+- MarketplacePage similar.onClick : `window.scrollTo(0,0)` seul → ouvre vraiment le détail
+- onError sur tous les `<img>` (cache propre en cas de 404)
+- aria-label sur boutons de favoris MP
+
+#### Bonus / cohérence Bloc 3-10
+
+- Bouton 'Partager' en haut de chaque détail (cohérence MPDetail/SELDetail établie ici)
+- Toast confirme + navigation messages (pattern Bloc 8 réutilisé)
+- imgFallbackGrad : helper module exporté → réutilisable dans futurs blocs
+
+#### Composants concernés
+
+```
+Pages_Commerce.jsx (1149 → 1375 lignes) :
+- imgFallbackGrad                    (NOUVEAU helper local au top)
+- MPCard, MPDetail, MarketplacePage  (refonte)
+- SELCard, SELDetail, SELPage        (refonte)
+- GardenCard                         (NOUVEAU)
+- GardenDetail                       (NOUVEAU)
+- GardenPage                         (refonte avec page-detail)
+- LendingCard                        (NOUVEAU)
+- LendingDetail                      (NOUVEAU — remplace le Modal)
+- LendingPage                        (refonte + 2 bug fixes)
+- TripCard                           (extrait au top-level, en <a>)
+- CarpoolDetail                      (NOUVEAU — remplace le Modal)
+- CarpoolingPage                     (refonte)
+```
+
+#### Décisions techniques
+
+- **`setActivePage` renommé en `setPage`** : alignement avec le common spread du routing principal (Maintenant.html L328). Important pour Bloc 12+ : utiliser `setPage` partout dans Pages_Commerce.jsx (et la plupart des fichiers) ; ReseauPage.jsx est l'exception car le routing lui passe explicitement `setActivePage={setPage}` (Maintenant.html L347).
+- **imgFallbackGrad** : constante au top du fichier. Pattern réutilisable pour Bloc 12+ (Joindre / Communes).
+- **Garden gratuit** : bouton 'Demander à {giver}' navigue vers messagerie (cohérence Q9) plutôt que toast simple.
+- **Carpooling 'car'** : champ optionnel ajouté au CreateModal — préserve la rétrocompatibilité avec data legacy via guard.
+
+---
+
+### 6.12 BLOC 12 — Adhérer ⏳ À AUDITER
+
+**Fichier** : `project/app/JoinMovement.jsx`
+
+**Périmètre** : parcours d'adhésion à la Confédération des Communes Libres (formulaire, paiement adhérent·e, badge, wallet T99CP).
 
 **À regarder en priorité** :
-- Cohérence des cards (déjà migrées en partie sur Lending/Garden ?)
-- Wizards de création (CFCreateModal multi-step pourrait inspirer)
-- Logique paiement T99CP avec fallback € (Polygon pour le port marketplace)
-- Search/tri uniformes vs Bloc 3-9
-- ShareModal / permalink hash sur chaque détail
+- Le wizard d'adhésion (steps, validation, soumission)
+- La cohérence avec Bloc 13 (Communes Libres) — l'adhésion débloque l'accès à `EspaceAdherents`
+- Paiement adhésion en T99CP / euros (cf. décision verrouillée 5.3)
+- Badge `defaultUser.member: true` après adhésion
+- L'utilisateur a précisé que **5+ adhérent·es minimum** sont nécessaires pour qu'une commune envoie un binôme à l'Assemblée Confédérale
 
 À conduire selon section 4.1 (5 sections d'audit) puis 4.3 (questions cliquables).
 
@@ -916,7 +995,7 @@ project/app/
 
 ---
 
-## 11. Reprise concrète de Bloc 11 (Économie du partage — Pages_Commerce.jsx)
+## 11. Reprise concrète de Bloc 12 (Adhérer — JoinMovement.jsx)
 
 **Mode opératoire verrouillé** :
 > *« il faudra me poser les questions cliquables on reste en mode audit puis modifications que j'ai choisi »*
@@ -928,25 +1007,25 @@ project/app/
 1. `git status` (vérifier clean)
 2. `git log --oneline -15` (voir les 13 commits + MAJ doc)
 3. `git branch --show-current` (doit être `claude/review-audit-handoff-sAVU6`)
-4. **Lire `Pages_Commerce.jsx`** (~1066 lignes) :
-   - Identifier les 6 sous-blocs : SEL, Marketplace, Lending, Carpooling, Housing, Garden
-   - Repérer les Cards / Detail / Create par service
-   - Bloc 5 (Cagnottes) déjà fait dans le même fichier — ne pas y retoucher
-5. **Conduire l'audit complet** (section 4.1) — la taille du fichier impose probablement plusieurs Q par service (max 4 par batch comme d'habitude)
+4. **Lire `JoinMovement.jsx`** :
+   - Identifier les composants (probablement un wizard multi-steps, un formulaire, un récap, un paiement)
+   - Vérifier la connexion avec `defaultUser.member` dans AppData.jsx
+   - Vérifier comment l'adhésion débloque `EspaceAdherents` (CommunesLibres.jsx)
+5. **Conduire l'audit complet** (section 4.1)
 6. **Charger AskUserQuestion** : `ToolSearch` avec query `select:AskUserQuestion`
-7. **Poser les Q par batches** (probablement 2 ou 3 batches selon le nombre de services touchés)
+7. **Poser les Q par batches** de max 4
 8. **Implémenter** uniquement après réponses verrouillées
-9. **Vérif syntaxique** : `cd /tmp && node -e "const p=require('@babel/parser');const fs=require('fs');p.parse(fs.readFileSync('/home/user/maintenantproto1/project/app/Pages_Commerce.jsx','utf8'),{sourceType:'script',plugins:['jsx']});console.log('OK')"`
+9. **Vérif syntaxique** : `cd /tmp && node -e "const p=require('@babel/parser');const fs=require('fs');p.parse(fs.readFileSync('/home/user/maintenantproto1/project/app/JoinMovement.jsx','utf8'),{sourceType:'script',plugins:['jsx']});console.log('OK')"`
 10. **Commit + push** sur `claude/review-audit-handoff-sAVU6`
 11. **MAJ AUDIT-HANDOFF.md** dans un commit séparé :
-    - Table commits section 2 : ajouter ligne Bloc 11
+    - Table commits section 2 : ajouter ligne Bloc 12
     - Plan blocs section 3 : `⏳` → `✅ Fait`
-    - Section 6.11 : remplacer le contenu par bilan post-implémentation
-    - Section 0 : MAJ première instruction pour Bloc 12
-    - Section 11 : MAJ reprise concrète pour Bloc 12
-12. Demander à l'utilisateur s'il veut tester visuellement avant Bloc 12 ou enchaîner
+    - Section 6.12 : remplacer le contenu par bilan post-implémentation
+    - Section 0 : MAJ première instruction pour Bloc 13
+    - Section 11 : MAJ reprise concrète pour Bloc 13
+12. Demander à l'utilisateur s'il veut tester visuellement avant Bloc 13 ou enchaîner
 
-**Patterns à respecter (consolidés Blocs 3-10)** :
+**Patterns à respecter (consolidés Blocs 3-11)** :
 - Cards en `<a href="#${section}/${id}">` + `className="mn-card-hover"` + `e.preventDefault()`
 - ShareModal du Theme.jsx pour tout partage (permalink `${origin}${pathname}#${section}/${id}`)
 - FAB mobile `.mn-detail-fab` pour les actions principales sur listing
@@ -956,6 +1035,9 @@ project/app/
 - Stats live calculées depuis AppData (jamais hardcodées en `'247'` ou similaire)
 - Couleurs : T.brand / gradients T99CP, **pas** de jaune `#FFD93D` libre
 - Liens internes : préférer `#campagnes/new` ou équivalent pour deep-link à un wizard, plutôt que de la nav simple
+- 'Contacter' / 'Message' → `setPage('messages')` + toast confirmant l'ouverture de conversation (Bloc 8 + Bloc 11)
+- `imgFallbackGrad` : motif gradient T99CP en fallback (cf. Pages_Commerce.jsx top)
+- **Convention de prop pour le routing** : utiliser `setPage` (passé via `{...common}` dans Maintenant.html L328). ReseauPage.jsx est l'exception qui reçoit `setActivePage={setPage}`.
 
 ---
 
