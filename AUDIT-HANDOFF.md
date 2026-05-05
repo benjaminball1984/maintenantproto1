@@ -43,7 +43,8 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | `ff30699` | Bloc 4 | AppData mobs enrichi (5 mobs) + helpers `exportICS`, `ParticipateAnonymousModal` + refonte MobilizationsPage (Card + Detail + List) selon Q1-Q10 |
 | `082ec5c` | Bloc 5 | Refonte Crowdfunding : CFCard + CFFeaturedCard + CFDetailPage (modal → page) + CrowdfundingPage selon Q1-Q4 — tags statut dynamiques, similaires, ShareModal, FAB mobile |
 | `d7973b3` | Bloc 6 | Sondages : suppression dead code `StepEmail` (-105L) + PollCard `<a>` + PollDetail nettoyage wordings email + ShareModal + similaires + FAB + PollsPage search/tri |
-| _(à venir)_ | Bloc 7 | Médias : enrichissement 5 articles (body+quote+author_bio) + MediaArticle nettoyage Lorem + ShareModal + Related `<a>` + MediaCard `<a>` + MediaPage search étendue + tip jar presets + MCreateModal wizard |
+| `997adb0` | Bloc 7 | Médias : enrichissement 5 articles (body+quote+author_bio) + MediaArticle nettoyage Lorem + ShareModal + Related `<a>` + MediaCard `<a>` + MediaPage search étendue + tip jar presets + MCreateModal wizard |
+| _(à venir)_ | Bloc 7+ | Médias : ajout rubrique **Tribune** (nouveau format) — FORMAT_META.tribune + 3 tribunes data + section dédiée « Tribunes libres » + MediaArticle (avertissement éditorial + author_role) + MCreateModal + EditModal |
 
 ---
 

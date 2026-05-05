@@ -43,14 +43,24 @@ function MediaArticle({ a, onBack, adminMode, onSave, onSelectArticle }) {
 
         {/* Header */}
         <div style={{ marginBottom: 32 }}>
-          <Tag variant="brand" style={{ marginBottom: 16 }}>{data.category}</Tag>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+            <Tag variant="brand">{data.category}</Tag>
+            {data.format === 'tribune' && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', background: `${FORMAT_META.tribune.color}15`, color: FORMAT_META.tribune.color, fontSize: 11, fontWeight: 800, borderRadius: 9999, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{FORMAT_META.tribune.icon} Tribune libre</span>
+            )}
+          </div>
           <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(24px,4vw,42px)', fontWeight: 800, color: T.text1, margin: '0 0 20px', letterSpacing: '-0.04em', lineHeight: 1.1 }}>{data.title}</h1>
+          {data.format === 'tribune' && (
+            <div style={{ padding: '12px 16px', background: T.surface2, border: `1px dashed ${FORMAT_META.tribune.color}40`, borderRadius: 10, fontSize: 12.5, color: T.text3, lineHeight: 1.5, marginBottom: 18 }}>
+              <strong style={{ color: FORMAT_META.tribune.color }}>Tribune libre.</strong> Cet article est signé par une voix extérieure à la rédaction. Il n'engage que son auteur·rice. Maintenant ! Média ouvre ses colonnes à la pluralité des analyses progressistes.
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 0', borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, marginBottom: 28, flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <Avatar name={data.author} size={40} />
               <div>
                 <div style={{ fontWeight: 700, fontSize: 14, color: T.text1 }}>{data.author}</div>
-                <div style={{ fontSize: 12, color: T.text4 }}>Journaliste · Maintenant ! Média</div>
+                <div style={{ fontSize: 12, color: T.text4 }}>{data.format === 'tribune' ? (data.author_role || 'Tribune libre · auteur·rice invité·e') : 'Journaliste · Maintenant ! Média'}</div>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 14, fontSize: 13, color: T.text4, marginLeft: 'auto', flexWrap: 'wrap' }}>
@@ -104,10 +114,11 @@ function MediaArticle({ a, onBack, adminMode, onSave, onSelectArticle }) {
         <div style={{ background: T.surface, borderRadius: 20, border: `1px solid ${T.border}`, padding: '24px', marginTop: 40, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
           <Avatar name={data.author} size={56} />
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: T.text4, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>À propos de l'auteur·rice</div>
-            <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: 17, color: T.text1, marginBottom: 8 }}>{data.author}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.text4, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{data.format === 'tribune' ? 'Auteur·rice invité·e' : 'À propos de l\'auteur·rice'}</div>
+            <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: 17, color: T.text1, marginBottom: data.author_role ? 4 : 8 }}>{data.author}</div>
+            {data.author_role && <div style={{ fontSize: 13, color: FORMAT_META.tribune.color, fontWeight: 600, marginBottom: 8 }}>{data.author_role}</div>}
             <p style={{ fontSize: 14, color: T.text3, margin: 0, lineHeight: 1.6 }}>
-              {data.author_bio || 'Journaliste à Maintenant ! Média. Engagé·e dans la lutte pour une information libre et indépendante.'}
+              {data.author_bio || (data.format === 'tribune' ? 'Auteur·rice invité·e par la rédaction de Maintenant ! Média.' : 'Journaliste à Maintenant ! Média. Engagé·e dans la lutte pour une information libre et indépendante.')}
             </p>
           </div>
         </div>
@@ -137,8 +148,8 @@ function MediaArticle({ a, onBack, adminMode, onSave, onSelectArticle }) {
       </div>
 
       <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} title={data.title} url={permalink} text={`${data.title} — Maintenant ! Média`} />
-      <EditModal open={editOpen} onClose={() => setEditOpen(false)} title="Article" data={data} onSave={f => { setData(d => ({ ...d, ...f })); onSave?.({ ...a, ...f }); }}
-        fields={[{ key: 'title', label: 'Titre' }, { key: 'category', label: 'Catégorie', type: 'select', options: ['Enquête', 'Politique', 'Environnement', 'Justice', 'Économie', 'Portrait', 'Innovation', 'Culture', 'Logement'] }, { key: 'excerpt', label: 'Chapeau', type: 'textarea' }, { key: 'body', label: 'Corps de l\'article (paragraphes séparés par retour ligne)', type: 'textarea' }, { key: 'quote', label: 'Citation pull-quote' }, { key: 'author_bio', label: 'Bio auteur·rice', type: 'textarea' }, { key: 'author', label: 'Auteur·rice' }, { key: 'image', label: 'URL photo' }, { key: 'reading_time', label: 'Temps de lecture (min)', type: 'number' }]} />
+      <EditModal open={editOpen} onClose={() => setEditOpen(false)} title={data.format === 'tribune' ? 'Tribune' : 'Article'} data={data} onSave={f => { setData(d => ({ ...d, ...f })); onSave?.({ ...a, ...f }); }}
+        fields={[{ key: 'title', label: 'Titre' }, { key: 'category', label: 'Catégorie', type: 'select', options: ['Enquête', 'Politique', 'Environnement', 'Justice', 'Économie', 'Portrait', 'Innovation', 'Culture', 'Logement', 'Travail'] }, { key: 'excerpt', label: 'Chapeau', type: 'textarea' }, { key: 'body', label: 'Corps (paragraphes séparés par retour ligne)', type: 'textarea' }, { key: 'quote', label: 'Citation pull-quote' }, { key: 'author_bio', label: 'Bio auteur·rice', type: 'textarea' }, { key: 'author', label: 'Auteur·rice' }, { key: 'author_role', label: 'Rôle auteur·rice (tribune)' }, { key: 'image', label: 'URL photo' }, { key: 'reading_time', label: 'Temps de lecture (min)', type: 'number' }]} />
     </div>
   );
 }
@@ -146,6 +157,7 @@ function MediaArticle({ a, onBack, adminMode, onSave, onSelectArticle }) {
 // Métadonnées par format de contenu
 const FORMAT_META = {
   article: { label:'Article',  icon:'📰', color:'#5B21B6' },
+  tribune: { label:'Tribune',  icon:'💬', color:'#0F766E' },
   video:   { label:'Vidéo',    icon:'▶',  color:'#DC2654' },
   podcast: { label:'Podcast',  icon:'🎙', color:'#7C3AED' },
   live:    { label:'Live',     icon:'●',  color:'#DC2626' },
@@ -245,13 +257,14 @@ function MediaCard({ item, onClick, adminMode, onEdit, size = 'md' }) {
 // MCreateModal — wizard 3 steps pour créer un nouveau contenu média
 function MCreateModal({ open, onClose, onSubmit }) {
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ format: 'article', title: '', category: '', author: '', excerpt: '', image: '', body: '', tags: '', reading_time: '', duration_sec: '' });
+  const [form, setForm] = useState({ format: 'article', title: '', category: '', author: '', author_role: '', excerpt: '', image: '', body: '', tags: '', reading_time: '', duration_sec: '' });
   if (!open) return null;
 
-  const reset = () => { setStep(1); setForm({ format: 'article', title: '', category: '', author: '', excerpt: '', image: '', body: '', tags: '', reading_time: '', duration_sec: '' }); };
+  const reset = () => { setStep(1); setForm({ format: 'article', title: '', category: '', author: '', author_role: '', excerpt: '', image: '', body: '', tags: '', reading_time: '', duration_sec: '' }); };
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const FORMAT_CHOICES = [
-    { id: 'article', icon: '📰', label: 'Article',  desc: 'Texte long avec corps éditorial' },
+    { id: 'article', icon: '📰', label: 'Article',  desc: 'Texte long de la rédaction' },
+    { id: 'tribune', icon: '💬', label: 'Tribune',  desc: 'Opinion d\'une voix extérieure' },
     { id: 'video',   icon: '▶',  label: 'Vidéo',    desc: 'Reportage, tuto, court métrage' },
     { id: 'podcast', icon: '🎙', label: 'Podcast',  desc: 'Audio long format, entretien' },
     { id: 'breve',   icon: '⚡', label: 'Brève',    desc: 'Info rapide en 2 lignes' },
@@ -273,6 +286,7 @@ function MCreateModal({ open, onClose, onSubmit }) {
       title: form.title.trim(),
       category: form.category.trim(),
       author: form.author.trim(),
+      author_role: form.author_role.trim() || undefined,
       excerpt: form.excerpt.trim(),
       image: form.image.trim() || null,
       body: form.body.trim() || '',
@@ -352,9 +366,15 @@ function MCreateModal({ open, onClose, onSubmit }) {
                 </div>
                 <div>
                   <label style={labelCss}>Auteur·rice *</label>
-                  <input value={form.author} onChange={e => set('author', e.target.value)} placeholder="Sandrine Moreau" style={inputCss} />
+                  <input value={form.author} onChange={e => set('author', e.target.value)} placeholder={form.format === 'tribune' ? 'Pr. Christophe Aguiton' : 'Sandrine Moreau'} style={inputCss} />
                 </div>
               </div>
+              {form.format === 'tribune' && (
+                <div>
+                  <label style={labelCss}>Rôle / titre de l'auteur·rice (visible sur la tribune)</label>
+                  <input value={form.author_role} onChange={e => set('author_role', e.target.value)} placeholder="Sociologue, professeur·e à l'Université Paris-Nanterre" style={inputCss} />
+                </div>
+              )}
               <div>
                 <label style={labelCss}>Chapeau / accroche (1-2 phrases) *</label>
                 <textarea value={form.excerpt} onChange={e => set('excerpt', e.target.value)} rows={2} placeholder="Une phrase qui résume le contenu en restant accrocheuse." style={{ ...inputCss, height: 'auto', padding: '10px 14px', resize: 'vertical', lineHeight: 1.5 }} />
@@ -368,9 +388,9 @@ function MCreateModal({ open, onClose, onSubmit }) {
 
           {step === 3 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {form.format === 'article' && (
+              {(form.format === 'article' || form.format === 'tribune') && (
                 <div>
-                  <label style={labelCss}>Corps de l'article (paragraphes séparés par retour ligne)</label>
+                  <label style={labelCss}>Corps {form.format === 'tribune' ? 'de la tribune' : 'de l\'article'} (paragraphes séparés par retour ligne)</label>
                   <textarea value={form.body} onChange={e => set('body', e.target.value)} rows={10} placeholder="Premier paragraphe...&#10;&#10;Deuxième paragraphe..." style={{ ...inputCss, height: 'auto', padding: '12px 14px', resize: 'vertical', lineHeight: 1.6, fontSize: 13 }} />
                 </div>
               )}
@@ -380,7 +400,7 @@ function MCreateModal({ open, onClose, onSubmit }) {
                   <input type="number" value={form.duration_sec} onChange={e => set('duration_sec', e.target.value)} placeholder="312" style={inputCss} />
                 </div>
               )}
-              {form.format === 'article' && (
+              {(form.format === 'article' || form.format === 'tribune') && (
                 <div>
                   <label style={labelCss}>Temps de lecture estimé (en minutes)</label>
                   <input type="number" value={form.reading_time} onChange={e => set('reading_time', e.target.value)} placeholder="8" style={inputCss} />
@@ -419,21 +439,22 @@ function MediaPage({ adminMode, onAuth }) {
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [subscribed, setSubscribed] = useState(() => { try { return localStorage.getItem('mn_newsletter_sub') === '1'; } catch { return false; } });
 
-  const formats = ['Tous', 'Articles', 'Vidéos', 'Podcasts', 'Lives', 'Dessins', 'Brèves'];
-  const formatMap = { 'Articles':'article', 'Vidéos':'video', 'Podcasts':'podcast', 'Lives':'live', 'Dessins':'dessin', 'Brèves':'breve' };
+  const formats = ['Tous', 'Articles', 'Tribunes', 'Vidéos', 'Podcasts', 'Lives', 'Dessins', 'Brèves'];
+  const formatMap = { 'Articles':'article', 'Tribunes':'tribune', 'Vidéos':'video', 'Podcasts':'podcast', 'Lives':'live', 'Dessins':'dessin', 'Brèves':'breve' };
 
   const q = search.trim().toLowerCase();
   const filtered = data.filter(a => {
     const fok = format === 'Tous' || a.format === formatMap[format];
-    const sok = !q || [a.title, a.excerpt, a.author, a.category, ...(a.tags || [])]
+    const sok = !q || [a.title, a.excerpt, a.author, a.author_role, a.category, ...(a.tags || [])]
       .some(s => typeof s === 'string' && s.toLowerCase().includes(q));
     return fok && sok;
   });
 
   const lives    = filtered.filter(a => a.format === 'live');
   const featured = filtered.filter(a => a.featured && a.format !== 'live');
+  const tribunes = filtered.filter(a => a.format === 'tribune');
   const breves   = filtered.filter(a => a.format === 'breve');
-  const others   = filtered.filter(a => !a.featured && a.format !== 'live' && a.format !== 'breve');
+  const others   = filtered.filter(a => !a.featured && a.format !== 'live' && a.format !== 'breve' && a.format !== 'tribune');
 
   const handleSubscribe = () => {
     if (!newsletterEmail.trim() || !/.+@.+\..+/.test(newsletterEmail)) {
@@ -457,7 +478,7 @@ function MediaPage({ adminMode, onAuth }) {
             Maintenant ! <span style={{ color: T.brand }}>Média</span>
           </h1>
           <p style={{ fontSize: 14, color: T.text3, margin: '8px 0 0', lineHeight: 1.55, maxWidth: 560 }}>
-            Articles, vidéos, podcasts, lives, dessins de presse. Journalisme militant indépendant, gratuit, financé par les adhérent·es.
+            Articles, tribunes libres, vidéos, podcasts, lives, dessins de presse. Journalisme militant indépendant, gratuit, financé par les adhérent·es.
           </p>
         </div>
         {adminMode && <Btn variant="success" size="sm" icon={ICONS.plus} onClick={() => setCreateOpen(true)}>Nouveau contenu</Btn>}
@@ -575,6 +596,21 @@ function MediaPage({ adminMode, onAuth }) {
         </div>
       )}
 
+      {/* TRIBUNES LIBRES — voix extérieures à la rédaction */}
+      {tribunes.length > 0 && (
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: FORMAT_META.tribune.color, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>━ Tribunes libres</div>
+              <div style={{ fontSize: 12, color: T.text4 }}>Voix extérieures à la rédaction · les opinions n'engagent que leurs auteur·rices</div>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 16 }}>
+            {tribunes.map(a => <MediaCard key={a.id} item={a} onClick={() => setDetail(a)} adminMode={adminMode} onEdit={setEditItem} />)}
+          </div>
+        </div>
+      )}
+
       {/* BRÈVES — colonne dédiée si présentes */}
       {breves.length > 0 && (
         <div style={{ marginBottom: 32 }}>
@@ -619,7 +655,7 @@ function MediaPage({ adminMode, onAuth }) {
 
       <MCreateModal open={createOpen} onClose={() => setCreateOpen(false)} onSubmit={item => setData(d => [item, ...d])} />
 
-      {editItem && <EditModal open onClose={() => setEditItem(null)} title="Contenu média" data={editItem} onSave={f => { setData(d => d.map(a => a.id === editItem.id ? { ...a, ...f } : a)); setEditItem(null); }} fields={[{ key: 'title', label: 'Titre' }, { key: 'category', label: 'Catégorie' }, { key: 'format', label: 'Format', type: 'select', options: ['article','video','podcast','live','dessin','breve'] }, { key: 'excerpt', label: 'Chapeau', type: 'textarea' }, { key: 'body', label: 'Corps de l\'article (paragraphes séparés par retour ligne)', type: 'textarea' }, { key: 'quote', label: 'Citation pull-quote' }, { key: 'author_bio', label: 'Bio auteur·rice', type: 'textarea' }, { key: 'author', label: 'Auteur·rice' }, { key: 'image', label: 'URL photo' }, { key: 'reading_time', label: 'Temps de lecture (min)', type: 'number' }]} />}
+      {editItem && <EditModal open onClose={() => setEditItem(null)} title="Contenu média" data={editItem} onSave={f => { setData(d => d.map(a => a.id === editItem.id ? { ...a, ...f } : a)); setEditItem(null); }} fields={[{ key: 'title', label: 'Titre' }, { key: 'category', label: 'Catégorie' }, { key: 'format', label: 'Format', type: 'select', options: ['article','tribune','video','podcast','live','dessin','breve'] }, { key: 'excerpt', label: 'Chapeau', type: 'textarea' }, { key: 'body', label: 'Corps (paragraphes séparés par retour ligne)', type: 'textarea' }, { key: 'quote', label: 'Citation pull-quote' }, { key: 'author_bio', label: 'Bio auteur·rice', type: 'textarea' }, { key: 'author', label: 'Auteur·rice' }, { key: 'author_role', label: 'Rôle auteur·rice (tribune)' }, { key: 'image', label: 'URL photo' }, { key: 'reading_time', label: 'Temps de lecture (min)', type: 'number' }]} />}
     </PageContainer>
   );
 }
