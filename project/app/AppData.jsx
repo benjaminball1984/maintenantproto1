@@ -336,7 +336,7 @@ const AppData = {
       id: 2, title: "Camp de résistance écologique du Larzac — édition 2026", category: "Solidaires",
       raised_t99cp: 6200, goal_t99cp: 10000, contributors: 287, days_left: 42,
       description: "Pour accueillir 8 000 militant·es cet été : infrastructures, cuisine solidaire, animations.",
-      organizer: "THE99COINPROJECT", organizer_avatar: '🏕', featured: true,
+      organizer: "Camp Climat Larzac (collectif)", organizer_avatar: '🏕', featured: true,
       cover: 'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=1200&q=70',
       story: "Le camp climat du Larzac réunit chaque été 8 000 militant·es venu·es de toute l'Europe. Pendant 5 jours, on partage savoirs, on monte des actions, on tisse des liens entre luttes locales. C'est un moment fondateur pour une génération de militant·es écologistes.\n\nPour 2026, nous voulons doubler la capacité d'accueil et garantir un événement à prix libre, accessible à toutes et tous. Cette cagnotte finance les infrastructures (douches, sanitaires, scène, sono), la cuisine entièrement bio et bas carbone, et les ateliers gratuits.",
       fundUsage: [

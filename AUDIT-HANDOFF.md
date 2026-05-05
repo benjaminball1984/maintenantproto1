@@ -40,7 +40,8 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | `b40ed3c` | Bloc 2 | Refonte HomePage complète selon Q1-Q11 (hero T99CP/noir, 3 stats, sections actu, services colorés, newsletter, T99CP blanc) |
 | `ec23c94` | Bloc 3 étapes 1-3 | AppData enrichi (3 pétitions featured) + helpers Theme (`generateMockNames`, `getStatusTag`, `ShareModal`, `SignAnonymousModal`) + ce HANDOFF |
 | `1121f7b` | Bloc 3 étapes 4-6 | Refonte PetitionCard + PetitionDetail + PetitionsPage selon Q1-Q12 — câblage helpers, signature anonyme, FAB mobile, search/tri étendus |
-| _(à venir)_ | Bloc 4 | AppData mobs enrichi (5 mobs) + helpers `exportICS`, `ParticipateAnonymousModal` + refonte MobilizationsPage (Card + Detail + List) selon Q1-Q10 |
+| `ff30699` | Bloc 4 | AppData mobs enrichi (5 mobs) + helpers `exportICS`, `ParticipateAnonymousModal` + refonte MobilizationsPage (Card + Detail + List) selon Q1-Q10 |
+| _(à venir)_ | Bloc 5 | Refonte Crowdfunding : CFCard + CFFeaturedCard + CFDetailPage (modal → page) + CrowdfundingPage selon Q1-Q4 — tags statut dynamiques, similaires, ShareModal, FAB mobile |
 
 ---
 
@@ -52,7 +53,7 @@ L'utilisateur (Benjamin Ball) a demandé : *« peux tu reprendre ce code pour qu
 | 2 | Home (HomePage) | `Pages_Home.jsx:255-440` | ✅ **Fait** (1 commit) |
 | 3 | Pétitions (List + Card + Detail) | `Pages_Services.jsx:5-389` | ✅ **Fait** (2 commits — étapes 1-3 puis 4-6) |
 | 4 | Mobilisations | `Pages_Media_Profile.jsx:441-...` (MobilizationsPage + extraction Card/Detail) | ✅ **Fait** (1 commit) |
-| 5 | Cagnottes (crowdfunding) | À localiser | ⏳ |
+| 5 | Cagnottes (crowdfunding) | `Pages_Commerce.jsx:253-871` (CFCard + CFFeaturedCard + CFDetailPage + CFCreateModal + CrowdfundingPage) | ✅ **Fait** (1 commit) |
 | 6 | Sondages | `PollsPage.jsx` (1367 lignes) | ⏳ |
 | 7 | Médias | `Pages_Media_Profile.jsx` | ⏳ |
 | 8 | Réseau social | `ReseauPage.jsx` (635 lignes) | ⏳ |
@@ -472,6 +473,55 @@ Pages_Media_Profile.jsx :
 window.ParticipateAnonymousModal({ open, onClose, onParticipate, mobTitle, mobDate })
 window.exportICS(mob)  // télécharge mobilisation-${mob.id}.ics au format RFC 5545
 ```
+
+---
+
+### 6.5 BLOC 5 — Cagnottes / Crowdfunding ✅ FAIT
+
+**Audit** : 18 incohérences/bugs (CFCard, CFFeaturedCard, CFDetailModal, CrowdfundingPage), 4 écarts brief, 11 points UX, 4 décisions clés.
+
+#### Décisions Q-arbitrées (4 questions)
+
+| Q | Choix utilisateur | Implémentation | Statut |
+|---|---|---|---|
+| **Q1** | Page dédiée (cohérence Pétitions/Mobs) | `CFDetailModal` → `CFDetailPage` (modal → page route via `setDetail`) | ✅ |
+| **Q2** | Compte requis pour donner (statu quo, pas de don anonyme) | `handleContribute` garde `if (!user) onAuth()` — pas de modal anonyme | ✅ |
+| **Q3** | Tags statut visuels Atteint / Clôturée | `cfStatus()` helper : pct≥1 → ✨ Atteint (gradient), days_left≤0 → Clôturée (warning) | ✅ |
+| **Q4** | Bloc « Cagnottes similaires » en bas | 3 cagnottes filtrées par catégorie OU organizer | ✅ |
+
+#### Bonus / cohérence Bloc 3-4
+
+- Cards (CFCard + CFFeaturedCard) : `<div onClick>` → `<a href="#cagnottes/{id}">` + `mn-card-hover` (suppression onMouseEnter/Leave JS)
+- Tag `variant="warn"` (n'existe pas) → tag dynamique via `CF_CAT_VARIANT` (Luttes/Solidaires/Participatif/Grandes Caisses)
+- `cfStatus()` helper exposé localement : pct≥100 → 'won' / days_left≤0 → 'closed' / sinon null
+- Cover : fallback `picsum.photos/seed/...` aléatoire → fond `T.text1` + image opacity 0.92
+- ShareModal câblé sur le détail (permalink `#cagnottes/{id}`, cohérence Bloc 3/4)
+- FAB mobile `.mn-detail-fab` : « Contribuer · X T99CP » si !past
+- Footer contribution : si past → message « Cagnotte clôturée » + remerciement contributeur·ices, sinon presets + bouton + mention frais
+- Stats globales : `active` ne compte plus que les cagnottes avec `days_left > 0`
+- Featured filtrées par catégorie (avant : ignorait le filtre)
+- Search étendue : titre + description + organizer + category + story (avant : titre + description seulement)
+- Cagnotte #2 organizer « THE99COINPROJECT » → « Camp Climat Larzac (collectif) »
+- AdminBtn déjà preventDefault depuis Bloc 3 — fonctionne dans `<a>`
+- EditModal : ajout du champ `cover` (URL de la cover) + sync de `detail` si l'item édité est ouvert
+
+#### Composants extraits / refactorés
+
+```
+Pages_Commerce.jsx (cagnottes) :
+- CFCard            (<a> + mn-card-hover + tag statut + variants par cat)
+- CFFeaturedCard    (<a> + mn-card-hover + tag statut sur top-right + variants)
+- CFDetailPage      (NEW — remplace CFDetailModal, page complète + ShareModal + similaires + FAB)
+- CFCreateModal     (inchangé — wizard 4 steps)
+- CrowdfundingPage  (search étendue + featured filtré + routing detail page)
+```
+
+#### Décisions techniques
+
+- Statut calculé dynamiquement (pas de champ `status` ajouté à AppData) — formule pure
+- Le footer contribution n'est pas dans une sidebar sticky (différent de PetitionDetail) car le contenu cagnotte est moins long et la consultation linéaire (story → fonds → équipe → updates) se prête mieux à un footer accumulé en bas
+- Past est dérivé de `c.days_left <= 0` — pas de `Date` calc nécessaire
+- `cfStatus` non exposé sur `window` (utilisé localement à Pages_Commerce.jsx)
 
 ---
 

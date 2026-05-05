@@ -252,8 +252,9 @@ window.SELPage = SELPage;
 
 // ── CROWDFUNDING v3 ────────────────────────────────────────
 // Page Cagnottes : hero + stats + filtres + vedette + grille +
-// modale détail (story / utilisation des fonds / équipe / news)
+// page détail (story / utilisation des fonds / équipe / news)
 const CF_CATEGORIES = ['Toutes', 'Luttes', 'Solidaires', 'Participatif', 'Grandes Caisses'];
+const CF_CAT_VARIANT = { 'Luttes': 'brand', 'Solidaires': 'success', 'Participatif': 'info', 'Grandes Caisses': 'warning' };
 const CF_SORTS = [
   { id: 'recent',  label: 'Plus récentes' },
   { id: 'urgent',  label: 'Urgentes (fin proche)' },
@@ -261,24 +262,34 @@ const CF_SORTS = [
   { id: 'amount',  label: 'Plus gros montants' },
 ];
 
+// Statut dynamique : pct >= 100 → 'won' / days_left <= 0 → 'closed' / sinon 'active'
+const cfStatus = (c) => {
+  const pct = c.raised_t99cp / c.goal_t99cp;
+  if (pct >= 1) return { id: 'won',    label: '✨ Atteint',  variant: 'gradient' };
+  if (c.days_left <= 0) return { id: 'closed', label: 'Clôturée', variant: 'warning' };
+  return null;
+};
+
 // Carte mini (grille)
 function CFCard({ c, onClick, adminMode, onEdit }) {
   const pct = Math.min(100, Math.round(c.raised_t99cp / c.goal_t99cp * 100));
-  const urgent = c.days_left <= 14;
+  const urgent = c.days_left > 0 && c.days_left <= 14;
+  const status = cfStatus(c);
   return (
-    <div onClick={onClick} style={{ background: T.surface, borderRadius: 20, border: `1px solid ${T.border}`, overflow: 'hidden', position: 'relative', cursor:'pointer', transition: 'all 0.22s' }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 18px 48px rgba(0,0,0,0.10)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-      {adminMode && <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 3 }} onClick={e => { e.stopPropagation(); onEdit(); }}><AdminBtn onEdit={onEdit} /></div>}
+    <a href={`#cagnottes/${c.id}`} onClick={e => { e.preventDefault(); onClick?.(); }} className="mn-card-hover"
+      aria-label={`${c.title} — ${pct}% atteint`}
+      style={{ background: T.surface, borderRadius: 20, border: `1px solid ${T.border}`, overflow: 'hidden', position: 'relative', display: 'block', textDecoration: 'none', color: 'inherit', transition: 'all 0.22s' }}>
+      {adminMode && <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 3 }} onClick={e => { e.stopPropagation(); e.preventDefault(); onEdit(); }}><AdminBtn onEdit={onEdit} /></div>}
       {c._userCreated && <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 3 }}><window.UserBadge /></div>}
-      <div style={{ height: 170, position: 'relative', overflow: 'hidden', background: T.surface2 }}>
-        <img src={c.cover || `https://picsum.photos/seed/crowd${c.id}/600/300`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
+      <div style={{ height: 170, position: 'relative', overflow: 'hidden', background: T.text1 }}>
+        {c.cover && <img src={c.cover} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.92 }} onError={e => e.target.style.display = 'none'} />}
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent 60%)' }}></div>
         <div style={{ position:'absolute', top:12, right:12, display:'flex', gap:6 }}>
-          {urgent && <span style={{ padding:'4px 9px', borderRadius:9999, background:'#FEE2E2', color:'#DC2626', fontSize:10, fontWeight:800, letterSpacing:'0.05em' }}>⏰ {c.days_left}J</span>}
+          {status && <Tag variant={status.variant} size="xs">{status.label}</Tag>}
+          {!status && urgent && <span style={{ padding:'4px 9px', borderRadius:9999, background:'#FEE2E2', color:'#DC2626', fontSize:10, fontWeight:800, letterSpacing:'0.05em' }}>⏰ {c.days_left}J</span>}
         </div>
         <div style={{ position: 'absolute', bottom: 14, left: 16, right: 16, display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
-          <Tag variant={c.category === 'Luttes' ? 'brand' : c.category === 'Solidaires' ? 'success' : c.category === 'Participatif' ? 'info' : 'warn'}>{c.category}</Tag>
+          <Tag variant={CF_CAT_VARIANT[c.category] || 'default'}>{c.category}</Tag>
           <span style={{ fontSize:11, color:'#fff', fontWeight:700, background:'rgba(0,0,0,0.5)', padding:'4px 8px', borderRadius:9999 }}>{pct}%</span>
         </div>
       </div>
@@ -295,21 +306,26 @@ function CFCard({ c, onClick, adminMode, onEdit }) {
           <span>{c.contributors} contributeur·ices</span>
         </div>
       </div>
-    </div>
+    </a>
   );
 }
 
 // Carte vedette (large, format paysage)
 function CFFeaturedCard({ c, onClick }) {
   const pct = Math.min(100, Math.round(c.raised_t99cp / c.goal_t99cp * 100));
+  const status = cfStatus(c);
   return (
-    <div onClick={onClick} style={{ background: T.surface, borderRadius: 24, border: `1px solid ${T.border}`, overflow: 'hidden', cursor:'pointer', display:'grid', gridTemplateColumns:'minmax(0, 1.2fr) minmax(0, 1fr)', minHeight: 280, transition: 'all 0.25s' }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 24px 60px rgba(0,0,0,0.12)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-      <div style={{ position:'relative', minHeight:240, overflow:'hidden', background:T.surface2 }}>
-        <img src={c.cover || `https://picsum.photos/seed/crowd${c.id}/800/600`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
+    <a href={`#cagnottes/${c.id}`} onClick={e => { e.preventDefault(); onClick?.(); }} className="mn-card-hover"
+      aria-label={`${c.title} — vedette, ${pct}% atteint`}
+      style={{ background: T.surface, borderRadius: 24, border: `1px solid ${T.border}`, overflow: 'hidden', display:'grid', gridTemplateColumns:'minmax(0, 1.2fr) minmax(0, 1fr)', minHeight: 280, transition: 'all 0.25s', textDecoration: 'none', color: 'inherit' }}>
+      <div style={{ position:'relative', minHeight:240, overflow:'hidden', background:T.text1 }}>
+        {c.cover && <img src={c.cover} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.92 }} onError={e => e.target.style.display = 'none'} />}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.45), transparent 60%)' }}></div>
         <div style={{ position:'absolute', top:14, left:14, padding:'5px 11px', borderRadius:9999, background:'rgba(0,0,0,0.55)', color:'#fff', fontSize:10, fontWeight:800, letterSpacing:'0.08em', textTransform:'uppercase' }}>★ Vedette</div>
-        <div style={{ position:'absolute', bottom:14, left:14 }}><Tag variant={c.category === 'Luttes' ? 'brand' : 'success'}>{c.category}</Tag></div>
+        <div style={{ position:'absolute', top:14, right:14, display:'flex', gap:6 }}>
+          {status && <Tag variant={status.variant} size="xs">{status.label}</Tag>}
+        </div>
+        <div style={{ position:'absolute', bottom:14, left:14 }}><Tag variant={CF_CAT_VARIANT[c.category] || 'default'}>{c.category}</Tag></div>
       </div>
       <div style={{ padding:'24px 28px', display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
         <div>
@@ -329,49 +345,62 @@ function CFFeaturedCard({ c, onClick }) {
             </div>
             <div style={{ textAlign:'right', fontSize:11, color:T.text3 }}>
               <div><strong style={{ color:T.text2, fontSize:13 }}>{c.contributors}</strong> contributeur·ices</div>
-              <div>⏰ {c.days_left} jours restants</div>
+              {c.days_left > 0 && <div>⏰ {c.days_left} jours restants</div>}
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </a>
   );
 }
 
-// Modale détail — onglets : Projet · Fonds · Équipe · Mises à jour · Contributeur·ices
-function CFDetailModal({ cagnotte: c, user, onClose, onContribute }) {
+// Page détail — onglets : Projet · Fonds · Équipe · Mises à jour
+function CFDetailPage({ c, user, onBack, onContribute, onSelectCagnotte, adminMode, onEdit }) {
   const [tab, setTab] = useState('story');
   const [contribAmount, setContribAmount] = useState(20);
+  const [shareOpen, setShareOpen] = useState(false);
   if (!c) return null;
   const pct = Math.min(100, Math.round(c.raised_t99cp / c.goal_t99cp * 100));
   const totalAlloc = (c.fundUsage || []).reduce((s, f) => s + f.amount, 0);
+  const status = cfStatus(c);
+  const past = c.days_left <= 0;
+  const permalink = (typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '') + '#cagnottes/' + c.id;
+  const similar = (window.AppData?.crowdfunding || [])
+    .filter(o => o.id !== c.id && (o.category === c.category || o.organizer === c.organizer))
+    .slice(0, 3);
   const tabs = [
     { id:'story',  label:'Le projet',          icon:'📖' },
     { id:'funds',  label:'Utilisation des fonds', icon:'💰' },
     { id:'team',   label:'L\'équipe',           icon:'👥' },
     { id:'updates',label:'Mises à jour',         icon:'🔔', count: c.updates?.length || 0 },
   ];
-  return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', backdropFilter:'blur(4px)', zIndex:1500, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'40px 16px', overflowY:'auto' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background:T.surface, borderRadius:24, maxWidth:920, width:'100%', overflow:'hidden', boxShadow:'0 30px 80px rgba(0,0,0,0.3)', position:'relative' }}>
-        <button onClick={onClose} style={{ position:'absolute', top:14, right:14, width:36, height:36, borderRadius:'50%', background:'rgba(255,255,255,0.95)', border:'none', cursor:'pointer', fontSize:18, color:'#333', zIndex:5, fontWeight:700 }}>×</button>
 
-        {/* Cover */}
-        <div style={{ height:240, position:'relative', overflow:'hidden', background:T.surface2 }}>
-          <img src={c.cover || `https://picsum.photos/seed/crowd${c.id}/1200/600`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e => e.target.style.display='none'} />
-          <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(0,0,0,0.85), transparent 50%)' }}></div>
-          <div style={{ position:'absolute', bottom:18, left:24, right:24, color:'#fff' }}>
-            <div style={{ display:'flex', gap:8, marginBottom:10 }}>
-              <Tag variant={c.category === 'Luttes' ? 'brand' : 'success'}>{c.category}</Tag>
-              {c.featured && <span style={{ padding:'4px 10px', borderRadius:9999, background:'rgba(255,255,255,0.2)', color:'#fff', fontSize:10, fontWeight:800, letterSpacing:'0.06em' }}>★ VEDETTE</span>}
-            </div>
-            <h2 style={{ fontFamily:"'Sora',sans-serif", fontSize:24, fontWeight:800, margin:'0 0 6px', lineHeight:1.25 }}>{c.title}</h2>
-            <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:13 }}>
-              <span style={{ width:24, height:24, borderRadius:'50%', background:'rgba(255,255,255,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13 }}>{c.organizer_avatar}</span>
-              <span style={{ fontWeight:600 }}>{c.organizer}</span>
+  return (
+    <div style={{ background: T.bg, minHeight: '100vh' }}>
+      <div style={{ maxWidth: 920, margin: '0 auto', padding: '24px 20px 100px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+          <button onClick={onBack} aria-label="Retour à la liste des cagnottes" style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, fontSize: 14, fontWeight: 600, fontFamily: 'Inter,sans-serif', padding: '8px 0' }}>{ICONS.arrow_l} Cagnottes</button>
+          {adminMode && <AdminBtn onEdit={onEdit} />}
+        </div>
+
+        <div style={{ background: T.surface, borderRadius: 24, border: `1px solid ${T.border}`, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.06)' }}>
+          {/* Cover */}
+          <div style={{ height:240, position:'relative', overflow:'hidden', background: T.text1 }}>
+            {c.cover && <img src={c.cover} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', opacity: 0.92 }} onError={e => e.target.style.display='none'} />}
+            <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(0,0,0,0.85), transparent 50%)' }}></div>
+            <div style={{ position:'absolute', bottom:18, left:24, right:24, color:'#fff' }}>
+              <div style={{ display:'flex', gap:8, marginBottom:10, flexWrap:'wrap' }}>
+                <Tag variant={CF_CAT_VARIANT[c.category] || 'default'}>{c.category}</Tag>
+                {status && <Tag variant={status.variant} size="xs">{status.label}</Tag>}
+                {c.featured && <span style={{ padding:'4px 10px', borderRadius:9999, background:'rgba(255,255,255,0.2)', color:'#fff', fontSize:10, fontWeight:800, letterSpacing:'0.06em' }}>★ VEDETTE</span>}
+              </div>
+              <h2 style={{ fontFamily:"'Sora',sans-serif", fontSize:24, fontWeight:800, margin:'0 0 6px', lineHeight:1.25 }}>{c.title}</h2>
+              <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:13 }}>
+                <span style={{ width:24, height:24, borderRadius:'50%', background:'rgba(255,255,255,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13 }}>{c.organizer_avatar}</span>
+                <span style={{ fontWeight:600 }}>{c.organizer}</span>
+              </div>
             </div>
           </div>
-        </div>
 
         {/* Stats bar */}
         <div style={{ padding:'20px 28px', borderBottom:`1px solid ${T.border}`, background:T.surface2 }}>
@@ -380,7 +409,7 @@ function CFDetailModal({ cagnotte: c, user, onClose, onContribute }) {
             <div><div style={{ fontSize:18, fontWeight:800, color:T.hub.crowdfunding, fontFamily:"'Sora',sans-serif" }}>{c.raised_t99cp.toLocaleString('fr-FR')}</div><div style={{ fontSize:10, color:T.text3, textTransform:'uppercase', letterSpacing:'0.06em' }}>T99CP collectés</div></div>
             <div><div style={{ fontSize:18, fontWeight:800, color:T.text1, fontFamily:"'Sora',sans-serif" }}>{c.goal_t99cp.toLocaleString('fr-FR')}</div><div style={{ fontSize:10, color:T.text3, textTransform:'uppercase', letterSpacing:'0.06em' }}>objectif</div></div>
             <div><div style={{ fontSize:18, fontWeight:800, color:T.text1, fontFamily:"'Sora',sans-serif" }}>{c.contributors}</div><div style={{ fontSize:10, color:T.text3, textTransform:'uppercase', letterSpacing:'0.06em' }}>contributeur·ices</div></div>
-            <div><div style={{ fontSize:18, fontWeight:800, color:c.days_left <= 14 ? '#DC2626' : T.text1, fontFamily:"'Sora',sans-serif" }}>{c.days_left}j</div><div style={{ fontSize:10, color:T.text3, textTransform:'uppercase', letterSpacing:'0.06em' }}>restants</div></div>
+            <div><div style={{ fontSize:18, fontWeight:800, color: past ? T.text3 : (c.days_left <= 14 ? '#DC2626' : T.text1), fontFamily:"'Sora',sans-serif" }}>{past ? '—' : `${c.days_left}j`}</div><div style={{ fontSize:10, color:T.text3, textTransform:'uppercase', letterSpacing:'0.06em' }}>{past ? 'terminée' : 'restants'}</div></div>
           </div>
           {/* Paliers */}
           {c.milestones && (
@@ -493,20 +522,57 @@ function CFDetailModal({ cagnotte: c, user, onClose, onContribute }) {
         </div>
 
         {/* Footer contribution */}
-        <div style={{ padding:'18px 28px', borderTop:`1px solid ${T.border}`, background:T.surface2, display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
-          <div style={{ flex:1, minWidth:200 }}>
-            <div style={{ fontSize:11, color:T.text3, marginBottom:4 }}>Ta contribution (T99CP)</div>
-            <div style={{ display:'flex', gap:6 }}>
-              {[5, 10, 20, 50, 100].map(v => (
-                <button key={v} onClick={() => setContribAmount(v)} style={{ padding:'8px 12px', borderRadius:8, border:`1.5px solid ${contribAmount===v ? T.hub.crowdfunding : T.border}`, background: contribAmount===v ? `${T.hub.crowdfunding}15` : T.surface, color: contribAmount===v ? T.hub.crowdfunding : T.text2, fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'Inter,sans-serif' }}>{v}</button>
-              ))}
-              <input type="number" value={contribAmount} onChange={e => setContribAmount(+e.target.value || 0)} min="1" style={{ width:80, height:34, border:`1.5px solid ${T.border}`, borderRadius:8, padding:'0 10px', fontSize:13, color:T.text1, background:T.surface, outline:'none', textAlign:'center' }} />
+        <div style={{ padding:'18px 28px', borderTop:`1px solid ${T.border}`, background:T.surface2 }}>
+          {past ? (
+            <div style={{ textAlign:'center', padding:'8px 0' }}>
+              <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:15, color:T.text2, marginBottom:4 }}>Cagnotte clôturée</div>
+              <div style={{ fontSize:13, color:T.text3 }}>Cette collecte n'accepte plus de contributions. Merci aux {c.contributors} contributeur·ices.</div>
             </div>
+          ) : (
+            <>
+              <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap', marginBottom:12 }}>
+                <div style={{ flex:1, minWidth:200 }}>
+                  <div style={{ fontSize:11, color:T.text3, marginBottom:6 }}>Ta contribution (T99CP)</div>
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                    {[5, 10, 20, 50, 100].map(v => (
+                      <button key={v} onClick={() => setContribAmount(v)} style={{ padding:'8px 12px', borderRadius:8, border:`1.5px solid ${contribAmount===v ? T.hub.crowdfunding : T.border}`, background: contribAmount===v ? `${T.hub.crowdfunding}15` : T.surface, color: contribAmount===v ? T.hub.crowdfunding : T.text2, fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'Inter,sans-serif' }}>{v}</button>
+                    ))}
+                    <input type="number" value={contribAmount} onChange={e => setContribAmount(+e.target.value || 0)} min="1" style={{ width:80, height:34, border:`1.5px solid ${T.border}`, borderRadius:8, padding:'0 10px', fontSize:13, color:T.text1, background:T.surface, outline:'none', textAlign:'center' }} />
+                  </div>
+                </div>
+                <Btn variant="gradient" size="md" icon={ICONS.wallet} onClick={() => onContribute(c, contribAmount)}>Contribuer · {contribAmount} T99CP</Btn>
+              </div>
+              <div style={{ fontSize:11, color:T.text4, lineHeight:1.5 }}>
+                Paiement T99CP avec alternative euros. Le bénéficiaire reçoit ses fonds sous 24h. Aucune commission, 100 % redistribué.
+              </div>
+            </>
+          )}
+          <div style={{ display:'flex', gap:8, marginTop:14, paddingTop:14, borderTop:`1px solid ${T.border}` }}>
+            <Btn full variant="ghost" size="sm" icon={ICONS.share} onClick={() => setShareOpen(true)}>Partager cette cagnotte</Btn>
           </div>
-          <Btn variant="gradient" size="md" icon={ICONS.wallet} onClick={() => onContribute(c, contribAmount)}>Contribuer · {contribAmount} T99CP</Btn>
         </div>
       </div>
+
+      {/* Bloc « Cagnottes similaires » */}
+      {similar.length > 0 && (
+        <div style={{ marginTop: 40 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.text4, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>D'autres cagnottes qui pourraient t'intéresser</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+            {similar.map(o => <CFCard key={o.id} c={o} onClick={() => onSelectCagnotte?.(o)} />)}
+          </div>
+        </div>
+      )}
     </div>
+
+    {/* FAB mobile */}
+    {!past && (
+      <div className="mn-detail-fab">
+        <Btn full variant="gradient" size="lg" icon={ICONS.wallet} onClick={() => onContribute(c, contribAmount)}>Contribuer · {contribAmount} T99CP</Btn>
+      </div>
+    )}
+
+    <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} title={c.title} url={permalink} text={`${c.title} — Cagnotte solidaire sur Maintenant !`} />
+  </div>
   );
 }
 
@@ -706,26 +772,44 @@ function CrowdfundingPage({ user, adminMode, onAuth }) {
   const [sort, setSort] = useState('recent');
   const [search, setSearch] = useState('');
 
-  // Stats globales
+  // Stats globales (calcul sur les cagnottes actives)
   const stats = data.reduce((acc, c) => ({
     raised: acc.raised + c.raised_t99cp,
     contributors: acc.contributors + c.contributors,
-    active: acc.active + 1,
+    active: acc.active + (c.days_left > 0 ? 1 : 0),
   }), { raised:0, contributors:0, active:0 });
 
   // Filtre + tri
-  let filtered = data.filter(c => cat === 'Toutes' || c.category === cat);
-  if (search) filtered = filtered.filter(c => (c.title + c.description).toLowerCase().includes(search.toLowerCase()));
+  const q = search.trim().toLowerCase();
+  let filtered = data.filter(c => {
+    const ms = !q || [c.title, c.description, c.organizer, c.category, c.story]
+      .some(s => typeof s === 'string' && s.toLowerCase().includes(q));
+    const mc = cat === 'Toutes' || c.category === cat;
+    return ms && mc;
+  });
   if (sort === 'urgent')   filtered.sort((a,b) => a.days_left - b.days_left);
   if (sort === 'progress') filtered.sort((a,b) => (b.raised_t99cp/b.goal_t99cp) - (a.raised_t99cp/a.goal_t99cp));
   if (sort === 'amount')   filtered.sort((a,b) => b.raised_t99cp - a.raised_t99cp);
 
-  const featured = data.filter(c => c.featured).slice(0, 3);
+  // Vedettes filtrées par la même catégorie active
+  const featured = filtered.filter(c => c.featured).slice(0, 3);
 
   const handleContribute = (c, amt) => {
     if (!user) { onAuth(); return; }
-    setAmount(amt); setPayItem(c); setDetail(null);
+    setAmount(amt); setPayItem(c);
   };
+
+  if (detail) return (
+    <CFDetailPage
+      c={detail}
+      user={user}
+      onBack={() => setDetail(null)}
+      onContribute={handleContribute}
+      onSelectCagnotte={cf => setDetail(cf)}
+      adminMode={adminMode}
+      onEdit={() => setEditItem(detail)}
+    />
+  );
 
   return (
     <PageContainer>
@@ -774,7 +858,7 @@ function CrowdfundingPage({ user, adminMode, onAuth }) {
             <button key={c} onClick={() => setCat(c)} style={{ padding:'7px 14px', borderRadius:9999, border:`1px solid ${cat===c ? T.hub.crowdfunding : T.border}`, background: cat===c ? T.hub.crowdfunding : T.surface, color: cat===c ? '#fff' : T.text2, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Inter,sans-serif', transition:'all 0.18s' }}>{c}</button>
           ))}
         </div>
-        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Rechercher…" style={{ height:36, padding:'0 12px', border:`1px solid ${T.border}`, borderRadius:9999, fontSize:13, color:T.text1, background:T.surface2, outline:'none', fontFamily:'Inter,sans-serif', width:200 }} />
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)} aria-label="Rechercher une cagnotte" placeholder="Titre, projet, organisateur·rice..." style={{ height:36, padding:'0 14px', border:`1px solid ${T.border}`, borderRadius:9999, fontSize:13, color:T.text1, background:T.surface2, outline:'none', fontFamily:'Inter,sans-serif', width:240 }} />
         <select value={sort} onChange={e => setSort(e.target.value)} style={{ height:36, padding:'0 12px', border:`1px solid ${T.border}`, borderRadius:9999, fontSize:12, color:T.text2, background:T.surface2, outline:'none', cursor:'pointer', fontFamily:'Inter,sans-serif' }}>
           {CF_SORTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
@@ -794,9 +878,8 @@ function CrowdfundingPage({ user, adminMode, onAuth }) {
 
       {/* MODALES */}
       <CFCreateModal open={createOpen} onClose={() => setCreateOpen(false)} user={user} onSubmit={item => setData(d => [item, ...d])} />
-      {detail && <CFDetailModal cagnotte={detail} user={user} onClose={() => setDetail(null)} onContribute={handleContribute} />}
       {payItem && <PayModal open onClose={() => setPayItem(null)} amount={amount} item={payItem.title} description={`Contribution solidaire · ${payItem.organizer}`} seller={payItem.organizer} />}
-      {editItem && <EditModal open onClose={() => setEditItem(null)} title="Cagnotte" data={editItem} onSave={f => { setData(d => d.map(c => c.id === editItem.id ? { ...c, ...f } : c)); setEditItem(null); }} fields={[{ key: 'title', label: 'Titre' }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'goal_t99cp', label: 'Objectif T99CP', type: 'number' }, { key: 'days_left', label: 'Jours restants', type: 'number' }]} />}
+      {editItem && <EditModal open onClose={() => setEditItem(null)} title="Cagnotte" data={editItem} onSave={f => { setData(d => d.map(c => c.id === editItem.id ? { ...c, ...f } : c)); if (detail?.id === editItem.id) setDetail(d => ({ ...d, ...f })); setEditItem(null); }} fields={[{ key: 'title', label: 'Titre' }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'goal_t99cp', label: 'Objectif T99CP', type: 'number' }, { key: 'days_left', label: 'Jours restants', type: 'number' }, { key: 'cover', label: 'URL de la cover' }]} />}
     </PageContainer>
   );
 }
