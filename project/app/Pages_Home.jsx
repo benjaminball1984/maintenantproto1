@@ -254,182 +254,286 @@ window.BottomNav = BottomNav;
 
 // ── HOME PAGE ──────────────────────────────────────────────
 function HomePage({ setPage, user, onAuth }) {
+  // ── Stats live (calculées depuis AppData) ────────────────
   const totalSigs = AppData.petitions.reduce((a, p) => a + p.signatures, 0);
+  const activePetitions = AppData.petitions.filter(p => p.status === 'active');
   const stats = [
-    { value: AppData.petitions.length, label: 'Pétitions actives', icon: ICONS.trending },
-    { value: totalSigs.toLocaleString('fr-FR'), label: 'Signatures', icon: ICONS.users },
-    { value: '10 583', label: 'Abonnés', icon: ICONS.bell },
-    { value: '946', label: 'Membres', icon: ICONS.heart },
+    { value: '946', label: 'Membres du mouvement', icon: ICONS.users, hint: 'adhérent·es actif·ves' },
+    { value: '10 583', label: 'Abonnés newsletter', icon: ICONS.bell, hint: 'rendez-vous hebdomadaire' },
+    { value: totalSigs.toLocaleString('fr-FR'), label: 'Signatures cumulées', icon: ICONS.heart, hint: `sur ${activePetitions.length} pétitions actives` },
   ];
 
+  // ── Services avec icône + couleur (palette T.hub.*) ──────
   const services = [
-    { id: 'petitions', label: 'Pétitions', desc: 'Signez et créez des pétitions citoyennes' },
-    { id: 'mobilizations', label: 'Mobilisations', desc: 'Marches, assemblées, actions directes' },
-    { id: 'crowdfunding', label: 'Cagnottes', desc: 'Collectes solidaires et caisses de lutte' },
-    { id: 'housing', label: 'Hébergement', desc: 'Logement solidaire · style Airbnb' },
-    { id: 'carpooling', label: 'Covoiturage', desc: 'Trajets partagés · style BlaBlaCar' },
-    { id: 'lending', label: 'Ki Prête Tout', desc: 'Objets à emprunter entre voisins' },
-    { id: 'marketplace', label: 'Marketplace', desc: 'Achats solidaires en T99CP' },
-    { id: 'sel', label: 'SEL', desc: '1 heure = 60 T99CP · compétences & temps' },
-    { id: 'garden', label: 'Surplus Jardin', desc: 'Fruits, légumes, plants, miel' },
-    { id: 'media', label: 'Média', desc: 'Journalisme militant indépendant' },
+    { id: 'petitions',     label: 'Pétitions',      desc: 'Signez et créez des pétitions citoyennes',      icon: ICONS.trending, color: T.hub.petitions },
+    { id: 'mobilizations', label: 'Mobilisations',  desc: 'Marches, assemblées, actions directes',         icon: ICONS.users,    color: T.hub.mobilizations },
+    { id: 'crowdfunding',  label: 'Cagnottes',      desc: 'Collectes solidaires et caisses de lutte',      icon: ICONS.heart,    color: T.hub.crowdfunding },
+    { id: 'housing',       label: 'Hébergement',    desc: 'Logement solidaire · style Airbnb',             icon: ICONS.home,     color: T.hub.housing },
+    { id: 'carpooling',    label: 'Covoiturage',    desc: 'Trajets partagés · style BlaBlaCar',            icon: ICONS.car,      color: T.hub.carpooling },
+    { id: 'lending',       label: 'Ki Prête Tout',  desc: 'Objets à emprunter entre voisins',              icon: ICONS.grid,     color: T.accent },
+    { id: 'marketplace',   label: 'Marketplace',    desc: 'Achats solidaires en T99CP',                    icon: ICONS.wallet,   color: T.hub.marketplace },
+    { id: 'sel',           label: 'SEL',            desc: '1 heure = 60 T99CP · compétences & temps',      icon: ICONS.clock,    color: T.hub.sel },
+    { id: 'garden',        label: 'Surplus Jardin', desc: 'Fruits, légumes, plants, miel',                 icon: ICONS.sparkle,  color: T.hub.garden },
+    { id: 'media',         label: 'Média',          desc: 'Journalisme militant indépendant',              icon: ICONS.photo,    color: T.hub.media },
   ];
 
-  const featuredPetitions = AppData.petitions.filter(p => p.featured).slice(0, 3);
-  const latestMedia = AppData.media.slice(0, 3);
+  // ── Sélections featured (avec fallback robuste) ──────────
+  const featuredPetitions = (() => {
+    const f = AppData.petitions.filter(p => p.featured);
+    return (f.length >= 3 ? f : AppData.petitions).slice(0, 3);
+  })();
+  const featuredMobs = (() => {
+    const arr = [...AppData.mobilizations];
+    arr.sort((a, b) => new Date(a.date) - new Date(b.date)); // prochaines en tête
+    return arr.slice(0, 3);
+  })();
+  const featuredCagnottes = (() => {
+    const f = AppData.crowdfunding.filter(c => c.featured);
+    return (f.length >= 3 ? f : AppData.crowdfunding).slice(0, 3);
+  })();
+  const sortedMedia = [...AppData.media]
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 3);
+
+  // ── CTA secondaire (déconnecté → /join, connecté → /creer) ─
+  const ctaSecondary = user
+    ? { label: 'Créer une action', onClick: () => setPage('creer') }
+    : { label: '★ Adhérer au mouvement', onClick: () => setPage('join') };
+
+  // ── Newsletter form state ────────────────────────────────
+  const [nlEmail, setNlEmail] = useState('');
+  const [nlSent, setNlSent] = useState(false);
+  const submitNewsletter = (e) => {
+    e.preventDefault();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nlEmail)) return;
+    setNlSent(true);
+    if (window.showToast) window.showToast(`Inscription confirmée à la newsletter`, { type: 'success' });
+    setNlEmail('');
+  };
+
+  // ── Helper : photo card avec fallback gradient + opacity ──
+  const cardPhoto = (src, height = 180) => (
+    <div style={{ height, background: T.text1, position: 'relative', overflow: 'hidden' }}>
+      {src && <img src={src} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.85 }} onError={e => e.target.style.display = 'none'} />}
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent 60%)' }}></div>
+    </div>
+  );
+
+  // ── Style commun pour cards <a> hoverable ────────────────
+  const cardLinkStyle = {
+    background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`,
+    overflow: 'hidden', cursor: 'pointer', transition: 'all 0.22s',
+    textDecoration: 'none', color: 'inherit', display: 'block',
+  };
 
   return (
     <div style={{ background: T.bg }}>
-      {/* ── Hero ─────────────────────────────────────────── */}
-      <section style={{ position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, #1a0535 0%, #3b0a28 40%, #4a1408 100%)', color: '#fff', minHeight: '92vh', display: 'flex', alignItems: 'center' }}>
-        {/* Halos lumineux flous */}
-        <div style={{ position: 'absolute', bottom: -120, right: -120, width: 480, height: 480, background: 'radial-gradient(circle, rgba(244,114,30,0.22) 0%, transparent 70%)', pointerEvents: 'none', filter: 'blur(8px)' }}></div>
-        <div style={{ position: 'absolute', top: -100, left: -100, width: 360, height: 360, background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 70%)', pointerEvents: 'none', filter: 'blur(8px)' }}></div>
-        {/* Background photo */}
-        <div style={{ position: 'absolute', inset: 0 }}>
-          <img src="https://images.unsplash.com/photo-1591848478625-de43268e6fb8?w=1600&q=80" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.22 }} />
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(91,33,182,0.82) 0%, rgba(225,29,116,0.78) 52%, rgba(234,78,27,0.84) 100%)' }}></div>
+      {/* ───────── HERO — 70vh, T99CP pur sur fond noir ─────────── */}
+      <section data-mn-hero style={{ position: 'relative', overflow: 'hidden', background: T.text1, color: '#fff', minHeight: '70vh', display: 'flex', alignItems: 'center' }}>
+        {/* Halos lumineux T99CP */}
+        <div aria-hidden="true" style={{ position: 'absolute', bottom: -140, right: -140, width: 520, height: 520, background: `radial-gradient(circle, ${T.brand}33 0%, transparent 70%)`, pointerEvents: 'none', filter: 'blur(10px)' }}></div>
+        <div aria-hidden="true" style={{ position: 'absolute', top: -120, left: -120, width: 420, height: 420, background: `radial-gradient(circle, ${T.accent}33 0%, transparent 70%)`, pointerEvents: 'none', filter: 'blur(10px)' }}></div>
+        {/* Photo de fond + overlay gradient T99CP pur */}
+        <div aria-hidden="true" style={{ position: 'absolute', inset: 0 }}>
+          <img src="https://images.unsplash.com/photo-1591848478625-de43268e6fb8?w=1600&q=80" alt="" loading="eager" fetchpriority="high" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.18 }} onError={e => e.target.style.display = 'none'} />
+          <div style={{ position: 'absolute', inset: 0, background: T.grad, opacity: 0.78 }}></div>
         </div>
 
-        <div style={{ position: 'relative', maxWidth: 1200, margin: '0 auto', padding: 'clamp(60px,10vw,120px) 24px', width: '100%' }}>
-          <div style={{ maxWidth: 700 }}>
-            {/* Eyebrow */}
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 16px', background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 9999, fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.85)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 28 }}>
+        <div style={{ position: 'relative', maxWidth: 1200, margin: '0 auto', padding: 'clamp(48px,8vw,96px) 24px', width: '100%' }}>
+          <div style={{ maxWidth: 720 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 16px', background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 9999, fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.85)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 24 }}>
               {ICONS.sparkle} Plateforme de mobilisation citoyenne
             </div>
 
-            {/* Headline */}
-            <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(36px,6vw,80px)', fontWeight: 800, lineHeight: 1.0, letterSpacing: '-0.04em', margin: '0 0 20px', color: '#fff' }}>
+            <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(36px,6vw,76px)', fontWeight: 800, lineHeight: 1.0, letterSpacing: '-0.04em', margin: '0 0 18px', color: '#fff' }}>
               Maintenant !<br />
-              <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 'clamp(22px,3.5vw,48px)', fontWeight: 700 }}>La voix des 99%</span>
+              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 'clamp(22px,3.5vw,46px)', fontWeight: 700 }}>La voix des 99%</span>
             </h1>
 
-            <p style={{ fontSize: 'clamp(15px,2vw,19px)', color: 'rgba(255,255,255,0.78)', lineHeight: 1.6, margin: '0 0 18px', maxWidth: 620, fontWeight: 500 }}>
+            <p style={{ fontSize: 'clamp(15px,2vw,19px)', color: 'rgba(255,255,255,0.78)', lineHeight: 1.6, margin: '0 0 16px', maxWidth: 620, fontWeight: 500 }}>
               Pour une vie digne et heureuse pour toutes et tous, face aux oppressions systémiques nos luttes doivent devenir systémiques.
             </p>
-            <p style={{ fontSize: 'clamp(14px,1.7vw,17px)', color: 'rgba(255,255,255,0.65)', lineHeight: 1.65, margin: '0 0 36px', maxWidth: 560 }}>
+            <p style={{ fontSize: 'clamp(14px,1.7vw,17px)', color: 'rgba(255,255,255,0.65)', lineHeight: 1.65, margin: '0 0 32px', maxWidth: 560 }}>
               La plateforme citoyenne et solidaire pour mobiliser, s'informer, échanger, partager, s'organiser, agir.
             </p>
 
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <Btn variant="white" size="lg" onClick={() => setPage('petitions')} icon={ICONS.trending}>Découvrir les pétitions</Btn>
-              <Btn variant="outline" size="lg" style={{ borderColor: 'rgba(255,255,255,0.3)', color: '#fff', background: 'rgba(255,255,255,0.08)' }} onClick={() => user ? setPage('creer') : onAuth()} icon={ICONS.plus}>
-                {user ? 'Créer une action' : 'Rejoindre le mouvement'}
+              <Btn variant="outline" size="lg" style={{ borderColor: 'rgba(255,255,255,0.3)', color: '#fff', background: 'rgba(255,255,255,0.08)' }} onClick={ctaSecondary.onClick} icon={user ? ICONS.plus : null}>
+                {ctaSecondary.label}
               </Btn>
             </div>
           </div>
 
-          {/* Stats */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 12, marginTop: 60, maxWidth: 640 }}>
+          {/* 3 stats live */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12, marginTop: 48, maxWidth: 720 }}>
             {stats.map(s => (
-              <div key={s.label} style={{ background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16, padding: '18px 16px', textAlign: 'center' }}>
-                <div style={{ color: 'rgba(255,255,255,0.4)', display: 'flex', justifyContent: 'center', marginBottom: 8 }}>{s.icon}</div>
-                <div style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(20px,2.5vw,28px)', fontWeight: 800, color: '#fff', lineHeight: 1 }}>{s.value}</div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</div>
+              <div key={s.label} style={{ background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16, padding: '16px 18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, color: 'rgba(255,255,255,0.5)' }}>{s.icon} <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</span></div>
+                <div style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(22px,2.6vw,30px)', fontWeight: 800, color: '#fff', lineHeight: 1, marginBottom: 4 }}>{s.value}</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>{s.hint}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Bottom fade */}
-        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80, background: `linear-gradient(to bottom, transparent, ${T.bg})` }}></div>
+        <div aria-hidden="true" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, background: `linear-gradient(to bottom, transparent, ${T.bg})` }}></div>
       </section>
 
-      {/* ── Services Grid ─────────────────────────────────── */}
-      <section style={{ maxWidth: 1200, margin: '0 auto', padding: '60px 24px 0' }}>
-        <SectionTitle label="Plateforme" title="Tous les services solidaires" action={<Btn variant="outline" size="sm" onClick={() => setPage('services')}>Voir tout</Btn>} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 12 }}>
-          {services.map(s => (
-            <div key={s.id} onClick={() => setPage(s.id)}
-              style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '18px 20px', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'flex-start', gap: 14 }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = T.brand; e.currentTarget.style.boxShadow = '0 8px 28px rgba(225,29,116,0.1)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: 15, color: T.text1, marginBottom: 4 }}>{s.label}</div>
-                <div style={{ fontSize: 12, color: T.text3, lineHeight: 1.45 }}>{s.desc}</div>
-              </div>
-              <div style={{ color: T.border, flexShrink: 0, marginTop: 2 }}>{ICONS.arrow_r}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Featured Petitions ─────────────────────────────── */}
+      {/* ───────── PÉTITIONS À LA UNE ───────── */}
       <section style={{ maxWidth: 1200, margin: '0 auto', padding: '60px 24px 0' }}>
         <SectionTitle label="En ce moment" title="Pétitions qui mobilisent" action={<Btn variant="outline" size="sm" onClick={() => setPage('petitions')}>Toutes les pétitions {ICONS.arrow_r}</Btn>} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 20 }}>
-          {featuredPetitions.map((p, i) => (
-            <div key={p.id} onClick={() => setPage('petitions')} style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden', cursor: 'pointer', transition: 'all 0.22s' }}
-              onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 16px 48px rgba(0,0,0,0.09)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
-              onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-              <div style={{ height: 180, background: `linear-gradient(135deg,${['#1A1A18','#2A1518','#182018'][i]},${['#2A2A27','#3A2020','#203020'][i]})`, position: 'relative', overflow: 'hidden' }}>
-                <img src={`https://images.unsplash.com/photo-${['1529156069898-49953e39b3ac','1584515933487-779824d29309','1571019613454-1cb2f99b2d8b'][i]}?w=600&q=70`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.4 }} onError={e => e.target.style.display = 'none'} />
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.7),transparent)' }}></div>
-                <div style={{ position: 'absolute', bottom: 12, left: 14, right: 14 }}>
-                  <Tag variant="brand" size="xs">{p.category}</Tag>
-                </div>
-              </div>
+          {featuredPetitions.map(p => (
+            <a key={p.id} href={`#petitions/${p.id}`} onClick={e => { e.preventDefault(); setPage('petitions'); }} className="mn-card-hover" style={cardLinkStyle}>
+              {cardPhoto(p.image)}
               <div style={{ padding: '16px 20px 20px' }}>
-                <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 16, fontWeight: 700, color: T.text1, margin: '0 0 10px', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.title}</h3>
+                <Tag variant="brand" size="xs" style={{ marginBottom: 10 }}>{p.category}</Tag>
+                <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 16, fontWeight: 700, color: T.text1, margin: '0 0 12px', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.title}</h3>
                 <ProgressBar value={p.signatures} max={p.goal} height={4} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: T.brand }}>{p.signatures.toLocaleString('fr-FR')} signatures</span>
-                  <Btn variant="gradient" size="xs" onClick={() => setPage('petitions')}>Signer</Btn>
+                  <Btn variant="gradient" size="xs" onClick={e => { e.stopPropagation(); e.preventDefault(); setPage('petitions'); }}>Signer</Btn>
                 </div>
               </div>
-            </div>
+            </a>
           ))}
         </div>
       </section>
 
-      {/* ── Latest Media (déplacé AVANT le bloc T99CP) ────── */}
+      {/* ───────── MOBILISATIONS À VENIR ───────── */}
+      <section style={{ maxWidth: 1200, margin: '0 auto', padding: '60px 24px 0' }}>
+        <SectionTitle label="À l'agenda" title="Prochaines mobilisations" action={<Btn variant="outline" size="sm" onClick={() => setPage('mobilizations')}>Toutes les mobilisations {ICONS.arrow_r}</Btn>} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 20 }}>
+          {featuredMobs.map(m => (
+            <a key={m.id} href={`#mobs/${m.id}`} onClick={e => { e.preventDefault(); setPage('mobilizations'); }} className="mn-card-hover" style={cardLinkStyle}>
+              {cardPhoto(m.image, 160)}
+              <div style={{ padding: '16px 20px 20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <Tag variant="info" size="xs">{m.type}</Tag>
+                  <span style={{ fontSize: 12, color: T.text3, display: 'flex', alignItems: 'center', gap: 4 }}>{ICONS.calendar} {new Date(m.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} · {m.time}</span>
+                </div>
+                <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 16, fontWeight: 700, color: T.text1, margin: '0 0 8px', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{m.title}</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: T.text4 }}>
+                  {ICONS.pin} <span>{m.location}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
+                  <span style={{ fontSize: 12, color: T.text3 }}>par <strong style={{ color: T.text2 }}>{m.organizer}</strong></span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: T.brand }}>{m.participants?.toLocaleString('fr-FR') || 0} participant·es</span>
+                </div>
+              </div>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      {/* ───────── CAGNOTTES EN COURS ───────── */}
+      <section style={{ maxWidth: 1200, margin: '0 auto', padding: '60px 24px 0' }}>
+        <SectionTitle label="Solidarité" title="Cagnottes en cours" action={<Btn variant="outline" size="sm" onClick={() => setPage('crowdfunding')}>Toutes les cagnottes {ICONS.arrow_r}</Btn>} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 20 }}>
+          {featuredCagnottes.map(c => (
+            <a key={c.id} href={`#cagnottes/${c.id}`} onClick={e => { e.preventDefault(); setPage('crowdfunding'); }} className="mn-card-hover" style={cardLinkStyle}>
+              {cardPhoto(c.cover, 160)}
+              <div style={{ padding: '16px 20px 20px' }}>
+                <Tag variant="brand" size="xs" style={{ marginBottom: 10 }}>{c.category}</Tag>
+                <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 16, fontWeight: 700, color: T.text1, margin: '0 0 10px', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{c.title}</h3>
+                <ProgressBar value={c.raised_t99cp} max={c.goal_t99cp} height={4} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, fontSize: 12 }}>
+                  <span style={{ color: T.text3 }}>{c.contributors?.toLocaleString('fr-FR')} contributeur·rices</span>
+                  <span style={{ fontWeight: 700, color: T.warning }}>{c.days_left}j restants</span>
+                </div>
+              </div>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      {/* ───────── SERVICES GRID — icônes colorées (T.hub.*) ───────── */}
+      <section style={{ maxWidth: 1200, margin: '0 auto', padding: '72px 24px 0' }}>
+        <SectionTitle label="Plateforme" title="Tous les services solidaires" action={<Btn variant="outline" size="sm" onClick={() => setPage('services')}>Voir tous les services {ICONS.arrow_r}</Btn>} />
+        <div data-mn-grid="services" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 12 }}>
+          {services.map(s => (
+            <a key={s.id} href={`#${s.id}`} onClick={e => { e.preventDefault(); setPage(s.id); }} className="mn-card-hover" style={{ ...cardLinkStyle, padding: '18px 20px', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+              <div aria-hidden="true" style={{ width: 38, height: 38, borderRadius: 10, background: `${s.color}1A`, color: s.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{s.icon}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: 15, color: T.text1, marginBottom: 4 }}>{s.label}</div>
+                <div style={{ fontSize: 12, color: T.text3, lineHeight: 1.45 }}>{s.desc}</div>
+              </div>
+              <div aria-hidden="true" style={{ color: T.border, flexShrink: 0, marginTop: 10 }}>{ICONS.arrow_r}</div>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      {/* ───────── DERNIÈRES ACTUALITÉS ───────── */}
       <section style={{ maxWidth: 1200, margin: '0 auto', padding: '60px 24px 0' }}>
         <SectionTitle label="Média militant" title="Dernières actualités" action={<Btn variant="outline" size="sm" onClick={() => setPage('media')}>Lire tout {ICONS.arrow_r}</Btn>} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 16 }}>
-          {latestMedia.map(a => (
-            <div key={a.id} onClick={() => setPage('media')} style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden', cursor: 'pointer', transition: 'all 0.2s' }}
-              onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 12px 36px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
-              onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-              <div style={{ height: 160, overflow: 'hidden', position: 'relative' }}>
-                <img src={`https://picsum.photos/seed/media${a.id}/600/300`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.4),transparent)' }}></div>
-                <Tag variant="brand" size="xs" style={{ position: 'absolute', top: 12, left: 12 }}>{a.category}</Tag>
-              </div>
+          {sortedMedia.map(a => (
+            <a key={a.id} href={`#media/${a.id}`} onClick={e => { e.preventDefault(); setPage('media'); }} className="mn-card-hover" style={cardLinkStyle}>
+              {cardPhoto(a.image, 160)}
               <div style={{ padding: '16px 18px 18px' }}>
+                <Tag variant="brand" size="xs" style={{ marginBottom: 8 }}>{a.category}</Tag>
                 <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 15, fontWeight: 700, color: T.text1, margin: '0 0 8px', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.title}</h3>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: T.text4 }}>
                   <span>{a.author}</span>
-                  <span>·</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{ICONS.clock} {a.reading_time} min</span>
+                  {a.reading_time && <><span>·</span><span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{ICONS.clock} {a.reading_time} min</span></>}
                 </div>
               </div>
-            </div>
+            </a>
           ))}
         </div>
       </section>
 
-      {/* ── T99CP Section (déplacé APRÈS les actualités) ───── */}
+      {/* ───────── BANDEAU NEWSLETTER (mi-page) ───────── */}
+      <section style={{ maxWidth: 1200, margin: '72px auto 0', padding: '0 24px' }}>
+        <div style={{ background: T.gradSoft, border: `1px solid ${T.border}`, borderRadius: 24, padding: 'clamp(28px,4vw,48px)', display: 'grid', gridTemplateColumns: '1fr auto', gap: 28, alignItems: 'center' }} className="mn-newsletter">
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: T.brand, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Newsletter hebdomadaire</div>
+            <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(22px,3vw,30px)', fontWeight: 800, color: T.text1, margin: '0 0 8px', letterSpacing: '-0.02em' }}>Restez informé·e du mouvement</h2>
+            <p style={{ fontSize: 14, color: T.text3, margin: 0, lineHeight: 1.55, maxWidth: 520 }}>
+              Chaque dimanche : les pétitions, mobilisations et actualités qui comptent. Pas de spam, désinscription en 1 clic.
+            </p>
+          </div>
+          {nlSent ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 20px', borderRadius: 14, background: T.successLight, border: `1px solid ${T.success}`, color: T.success, fontWeight: 700 }}>
+              {ICONS.check} Inscription confirmée
+            </div>
+          ) : (
+            <form onSubmit={submitNewsletter} style={{ display: 'flex', gap: 8, minWidth: 320 }}>
+              <input type="email" required placeholder="votre@email.fr" value={nlEmail} onChange={e => setNlEmail(e.target.value)}
+                style={{ flex: 1, height: 48, border: `1.5px solid ${T.border}`, borderRadius: 12, padding: '0 14px', fontSize: 14, fontFamily: 'Inter,sans-serif', color: T.text1, background: T.surface, outline: 'none', boxSizing: 'border-box' }} />
+              <Btn variant="gradient" size="md" onClick={submitNewsletter}>S'abonner</Btn>
+            </form>
+          )}
+        </div>
+      </section>
+
+      {/* ───────── T99CP SECTION — blanc + accents gradient ───────── */}
       <section style={{ maxWidth: 1200, margin: '60px auto 0', padding: '0 24px 80px' }}>
-        <div className="mn-wallet-card" style={{ background: 'linear-gradient(135deg, #1a0535 0%, #3b0a28 40%, #4a1408 100%)', borderRadius: 24, padding: 'clamp(32px,5vw,56px)', display: 'grid', gridTemplateColumns: '1fr auto', gap: 32, alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', bottom: -120, right: -120, width: 480, height: 480, background: 'radial-gradient(circle, rgba(244,114,30,0.22) 0%, transparent 70%)', pointerEvents: 'none', filter: 'blur(8px)' }}></div>
-          <div style={{ position: 'absolute', top: -100, left: -100, width: 360, height: 360, background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 70%)', pointerEvents: 'none', filter: 'blur(8px)' }}></div>
+        <div className="mn-wallet-card" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 24, padding: 'clamp(32px,5vw,56px)', display: 'grid', gridTemplateColumns: '1fr auto', gap: 32, alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
+          {/* Halo gradient subtil top-right */}
+          <div aria-hidden="true" style={{ position: 'absolute', top: -100, right: -100, width: 360, height: 360, background: `radial-gradient(circle, ${T.brand}1A 0%, transparent 70%)`, pointerEvents: 'none', filter: 'blur(8px)' }}></div>
           <div>
             <Tag variant="gradient" style={{ marginBottom: 16 }}>₮ Écosystème T99CP · Réseau Polygon</Tag>
-            <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(22px,4vw,38px)', fontWeight: 800, color: '#fff', margin: '0 0 14px', letterSpacing: '-0.03em', lineHeight: 1.15 }}>
-              1 T99CP = 1 € = 1 minute de travail
+            <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 'clamp(22px,4vw,38px)', fontWeight: 800, color: T.text1, margin: '0 0 14px', letterSpacing: '-0.03em', lineHeight: 1.15 }}>
+              1 T99CP = <span style={{ background: T.gradR, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>1 €</span> = <span style={{ background: T.gradR, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>1 minute</span> de travail
             </h2>
-            <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.6)', lineHeight: 1.65, margin: '0 0 28px', maxWidth: 520 }}>
+            <p style={{ fontSize: 15, color: T.text3, lineHeight: 1.65, margin: '0 0 28px', maxWidth: 560 }}>
               La monnaie solidaire du mouvement. Tous les échanges de services, locations, achats et dons se font en T99CP sur le réseau Polygon. Chaque transaction valorise équitablement le temps humain.
             </p>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <Btn variant="white" size="md" onClick={() => window.open('https://the99coinproject.org', '_blank')} icon={ICONS.wallet}>Accéder au Wallet</Btn>
-              {!user && <Btn variant="ghost" size="md" style={{ color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.15)' }} onClick={onAuth}>Créer un compte</Btn>}
+              <Btn variant="gradient" size="md" onClick={() => window.open('https://the99coinproject.org', '_blank')} icon={ICONS.wallet}>Accéder au Wallet ↗</Btn>
+              {!user && <Btn variant="outline" size="md" onClick={() => setPage('join')}>★ Adhérer au mouvement</Btn>}
             </div>
           </div>
           <div style={{ flexShrink: 0 }} className="mn-desk">
-            <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.05)', borderRadius: 20, padding: '24px 28px', border: '1px solid rgba(255,255,255,0.1)' }}>
-              <div style={{ fontFamily: "'Sora',sans-serif", fontSize: 52, fontWeight: 800, color: '#fff', lineHeight: 1 }}>₮</div>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 8 }}>T99CP</div>
+            <div style={{ textAlign: 'center', background: T.gradSoft, borderRadius: 20, padding: '24px 28px', border: `1px solid ${T.border}` }}>
+              <div style={{ width: 64, height: 64, borderRadius: '50%', background: T.gradR, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', boxShadow: '0 8px 24px rgba(225,29,116,0.3)' }}>
+                <span style={{ fontFamily: "'Sora',sans-serif", fontSize: 32, fontWeight: 800, color: '#fff', lineHeight: 1 }}>₮</span>
+              </div>
+              <div style={{ fontFamily: "'Sora',sans-serif", fontSize: 22, fontWeight: 800, color: T.text1, lineHeight: 1, marginBottom: 4 }}>450 000</div>
+              <div style={{ fontSize: 11, color: T.text3, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>T99CP en circulation</div>
             </div>
           </div>
         </div>

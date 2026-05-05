@@ -191,6 +191,11 @@
 
       /* Cards mobilisations : cache la photo en dessous de 480px (priorité au texte) */
       .mn-mob-card-img { display: none !important; }
+
+      /* Bandeau newsletter Home : stack vertical en mobile */
+      .mn-newsletter { grid-template-columns: 1fr !important; gap: 16px !important; padding: 24px !important; }
+      .mn-newsletter form { min-width: 0 !important; flex-direction: column !important; }
+      .mn-newsletter form > * { width: 100% !important; }
     }
 
     /* Tablette portrait spécifique */
@@ -218,6 +223,11 @@
       to   { opacity: 1; transform: translateY(0); }
     }
     .page-enter { animation: fadeUp 0.24s cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+    /* ── Card hover (CSS, pas JS — fonctionne sur tactile aussi) ── */
+    .mn-card-hover { will-change: transform, box-shadow; }
+    .mn-card-hover:hover { box-shadow: 0 12px 36px rgba(0,0,0,0.08); transform: translateY(-3px); border-color: rgba(225,29,116,0.2); }
+    .mn-card-hover:focus-visible { outline: 2px solid #E11D74; outline-offset: 2px; }
 
     /* ── Tweaks panel ───────────────────────────────────── */
     #tweaks-panel {
