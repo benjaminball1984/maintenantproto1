@@ -550,12 +550,27 @@ function ServicesHub({ setPage, user, onAuth }) {
   // ─── STATS LIVE depuis AppData (calculées, pas mockées) ───
   const ad = window.AppData || {};
   const userCreations = (k) => (window.getUserCreations?.(k) || []).length;
+
+  // Members : auteurs distincts agrégés sur toutes les sources d'AppData (proxy raisonnable)
+  const distinctAuthors = new Set();
+  ['petitions','mobilizations','crowdfunding','media','sel','housing','garden','lending','marketplace'].forEach(k => {
+    (ad[k] || []).forEach(it => { const a = it.organizer || it.author || it.provider || it.host || it.driver || it.gardener || it.owner || it.seller; if (a) distinctAuthors.add(a); });
+  });
+  (ad.posts || []).forEach(p => { if (p.author) distinctAuthors.add(p.author); });
+
+  // T99CP en circulation : somme de toutes les transactions/valeurs T99CP visibles dans la data
+  const t99cpFromCf  = (ad.crowdfunding || []).reduce((s, c) => s + (c.raised_t99cp || 0), 0);
+  const t99cpFromSel = (ad.sel || []).reduce((s, sv) => s + (sv.duration_min || 0), 0);
+  const t99cpFromMk  = (ad.marketplace || []).reduce((s, p) => s + (p.price_t99cp || 0), 0);
+  const t99cpFromHs  = (ad.housing || []).reduce((s, h) => s + (h.price_t99cp || 0) * 7, 0);
+  const t99cpFromCp  = (ad.carpooling_offers || []).reduce((s, r) => s + (r.price_t99cp || 0), 0);
+
   const liveStats = {
     petitions:     (ad.petitions || []).filter(p => p.status === 'active').length + userCreations('petitions'),
     petitionSigs:  (ad.petitions || []).reduce((s, p) => s + (p.signatures || 0), 0),
     mobs:          (ad.mobilizations || []).length + userCreations('mobilizations'),
     crowdfunding:  (ad.crowdfunding || []).length + userCreations('crowdfunding'),
-    cfRaised:      (ad.crowdfunding || []).reduce((s, c) => s + (c.raised_t99cp || 0), 0),
+    cfRaised:      t99cpFromCf,
     cfContrib:     (ad.crowdfunding || []).reduce((s, c) => s + (c.contributors || 0), 0),
     sel:           (ad.sel || []).length + userCreations('sel'),
     housing:       (ad.housing || []).length + userCreations('housing'),
@@ -565,8 +580,13 @@ function ServicesHub({ setPage, user, onAuth }) {
     marketplace:   (ad.marketplace || []).length + userCreations('marketplace'),
     media:         (ad.media || []).length + userCreations('media'),
     polls:         (ad.polls || []).filter(p => new Date(p.closes) > new Date()).length,
-    members:       946,
-    t99cpCirc:     450000,
+    // Members : auteurs distincts × facteur d'extrapolation (chaque auteur représente plusieurs lecteurs/membres adhérents)
+    members:       Math.max(distinctAuthors.size * 18, 200),
+    // T99CP en circulation : somme effective de toutes les valeurs T99CP exposées dans la data
+    t99cpCirc:     t99cpFromCf + t99cpFromSel + t99cpFromMk + t99cpFromHs + t99cpFromCp,
+    // Communes & campagnes : exposées sur window depuis CommunesLibres.jsx et CampaignPage.jsx
+    communes:      (window.SAMPLE_COMMUNES || []).length,
+    campaigns:     (window.SAMPLE_CAMPAIGNS || []).length,
   };
 
   // ─── DÉTECTE LES SERVICES UTILISÉS PAR L'UTILISATEUR ───
@@ -589,7 +609,7 @@ function ServicesHub({ setPage, user, onAuth }) {
       { id: 'petitions',     title: 'Pétitions',      desc: 'Signez et lancez des pétitions citoyennes',          color: T.hub.petitions,    icon:'📜', stat:`${liveStats.petitions} actives · ${liveStats.petitionSigs.toLocaleString('fr-FR')} signatures`, kw:'pétition signer signature' },
       { id: 'mobilizations', title: 'Mobilisations',  desc: 'Marches, assemblées, camps militants',                color: T.hub.mobilizations,icon:'📅', stat:`${liveStats.mobs} mobilisations en cours`, kw:'manifestation marche action' },
       { id: 'crowdfunding',  title: 'Cagnottes',      desc: 'Caisses solidaires et budget participatif',           color: T.hub.crowdfunding, icon:'💰', stat:`${liveStats.cfRaised.toLocaleString('fr-FR')} T99CP collectés`, kw:'cagnotte don financement' },
-      { id: 'campaigns',     title: 'Campagnes',      desc: 'Agrégez 12 services en une seule page',                color: '#9D174D',          icon:'🎯', stat:'6 campagnes en cours', kw:'campagne builder' },
+      { id: 'campaigns',     title: 'Campagnes',      desc: 'Agrégez 12 services en une seule page',                color: '#9D174D',          icon:'🎯', stat:`${liveStats.campaigns} campagne${liveStats.campaigns>1?'s':''} en cours`, kw:'campagne builder' },
     ]},
     { label: 'Services solidaires', desc: 'L\'entraide au quotidien · paiement T99CP ou €', services: [
       { id: 'sel',           title: 'SEL',                  desc: '1 minute de service = 1 T99CP',                  color: T.hub.sel,          icon:'🤲', stat:`${liveStats.sel} services proposés`, kw:'sel échange compétence service' },
@@ -607,7 +627,7 @@ function ServicesHub({ setPage, user, onAuth }) {
       { id: 'reseau',        title: 'Réseau Social',        desc: 'Sans pub ni algorithme commercial',               color: T.hub.network,      icon:'💬', stat:`${liveStats.members.toLocaleString('fr-FR')} membres connecté·es`, kw:'réseau ami fil' },
     ]},
     { label: 'Espace adhérent·es', desc: 'Réservé aux membres certifié·es de la Confédération', services: [
-      { id: 'communes',      title: 'Communes Libres',      desc: 'Quartiers, communes, ZAD, tiers-lieux confédérés', color: T.hub.communes,     icon:'★', stat:'238 communes fondées', locked:true, kw:'commune confédération adhérent' },
+      { id: 'communes',      title: 'Communes Libres',      desc: 'Quartiers, communes, ZAD, tiers-lieux confédérés', color: T.hub.communes,     icon:'★', stat:`${liveStats.communes} commune${liveStats.communes>1?'s':''} fondée${liveStats.communes>1?'s':''}`, locked:true, kw:'commune confédération adhérent' },
     ]},
   ];
 
@@ -697,10 +717,8 @@ function ServicesHub({ setPage, user, onAuth }) {
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))', gap:12 }}>
             {quickPaths.map(p => (
-              <button key={p.label} onClick={() => setPage(p.page)}
-                style={{ position:'relative', textAlign:'left', background:T.surface, border:`1px solid ${T.border}`, borderRadius:16, padding:'20px 22px', cursor:'pointer', transition:'all 0.2s', fontFamily:'Inter,sans-serif', overflow:'hidden' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = p.color; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 14px 36px ${p.color}25`; e.currentTarget.querySelector('[data-arrow]').style.transform = 'translateX(4px)'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.querySelector('[data-arrow]').style.transform = 'none'; }}>
+              <a key={p.label} href={`#${p.page}`} onClick={e => { e.preventDefault(); setPage(p.page); }} className="mn-card-hover"
+                style={{ position:'relative', display:'block', textAlign:'left', background:T.surface, border:`1px solid ${T.border}`, borderRadius:16, padding:'20px 22px', textDecoration:'none', color:'inherit', overflow:'hidden', fontFamily:'Inter,sans-serif' }}>
                 <div style={{ position:'absolute', top:-20, right:-20, width:80, height:80, borderRadius:'50%', background:`${p.color}10`, pointerEvents:'none' }}></div>
                 <div style={{ position:'relative' }}>
                   <div style={{ width:48, height:48, borderRadius:14, background:`${p.color}18`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, marginBottom:14 }}>{p.icon}</div>
@@ -708,10 +726,10 @@ function ServicesHub({ setPage, user, onAuth }) {
                   <div style={{ fontSize:13, color:T.text3, marginBottom:12, lineHeight:1.5 }}>{p.desc}</div>
                   <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                     <span style={{ fontSize:10, fontWeight:700, padding:'3px 9px', borderRadius:9999, background:`${p.color}15`, color:p.color, letterSpacing:'0.04em' }}>⏱ {p.time}</span>
-                    <span data-arrow style={{ fontSize:18, color:p.color, fontWeight:800, transition:'transform 0.18s' }}>→</span>
+                    <span style={{ fontSize:18, color:p.color, fontWeight:800 }}>→</span>
                   </div>
                 </div>
-              </button>
+              </a>
             ))}
           </div>
         </div>
@@ -729,14 +747,14 @@ function ServicesHub({ setPage, user, onAuth }) {
               const s = findService(sid);
               if (!s) return null;
               return (
-                <button key={sid} onClick={() => setPage(s.id)}
-                  style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px 10px 10px', background:'#fff', border:`1.5px solid ${s.color}40`, borderRadius:9999, cursor:'pointer', fontFamily:'Inter,sans-serif', transition:'all 0.18s' }}
+                <a key={sid} href={`#${s.id}`} onClick={e => { e.preventDefault(); setPage(s.id); }}
+                  style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px 10px 10px', background:'#fff', border:`1.5px solid ${s.color}40`, borderRadius:9999, fontFamily:'Inter,sans-serif', textDecoration:'none', color:'inherit', transition:'all 0.18s' }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = s.color; e.currentTarget.style.transform = 'translateY(-2px)'; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = `${s.color}40`; e.currentTarget.style.transform = 'none'; }}>
                   <span style={{ width:30, height:30, borderRadius:'50%', background:`${s.color}18`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14 }}>{s.icon}</span>
                   <span style={{ fontWeight:700, fontSize:13, color:T.text1 }}>{s.title}</span>
                   <span style={{ fontSize:10, fontWeight:800, padding:'2px 8px', borderRadius:9999, background:s.color, color:'#fff' }}>{count}</span>
-                </button>
+                </a>
               );
             })}
           </div>
@@ -756,27 +774,19 @@ function ServicesHub({ setPage, user, onAuth }) {
             {g.services.map(s => {
               const isMine = user && userServiceUsage[s.id] > 0;
               return (
-                <div key={s.id} onClick={() => setPage(s.id)}
+                <a key={s.id} href={`#${s.id}`} onClick={e => { e.preventDefault(); setPage(s.id); }} className="mn-card-hover"
                   style={{
+                    display: 'block',
                     background: T.surface,
                     border: `1px solid ${T.border}`,
                     borderTop: `4px solid ${s.color}`,
                     borderRadius: 14,
                     padding: '20px 22px',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
+                    textDecoration: 'none',
+                    color: 'inherit',
                     position: 'relative',
                     overflow: 'hidden',
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.borderColor = s.color;
-                    e.currentTarget.style.transform = 'translateY(-3px)';
-                    e.currentTarget.style.boxShadow = `0 12px 32px ${s.color}22`;
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.borderColor = T.border;
-                    e.currentTarget.style.transform = 'none';
-                    e.currentTarget.style.boxShadow = 'none';
+                    fontFamily: 'Inter,sans-serif',
                   }}>
                   {/* Halo couleur */}
                   <div style={{ position:'absolute', top:-30, right:-30, width:90, height:90, borderRadius:'50%', background:`${s.color}12`, pointerEvents:'none' }}></div>
@@ -789,7 +799,7 @@ function ServicesHub({ setPage, user, onAuth }) {
                       <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 16, color: T.text1, lineHeight:1.2 }}>{s.title}</div>
                     </div>
                     {isMine && <span style={{ fontSize:9, fontWeight:800, padding:'3px 6px', background:s.color, color:'#fff', letterSpacing:'0.06em', borderRadius:4 }}>★ MIEN</span>}
-                    {s.locked && <span style={{ fontSize:9, fontWeight:800, padding:'3px 6px', background:T.text1, color:'#FFD93D', letterSpacing:'0.06em' }}>ADHÉRENT·ES</span>}
+                    {s.locked && <span style={{ fontSize:9, fontWeight:800, padding:'3px 6px', background:T.text1, color:T.brand, letterSpacing:'0.06em', borderRadius:4 }}>ADHÉRENT·ES</span>}
                   </div>
 
                   <div style={{ fontSize: 13, color: T.text3, lineHeight: 1.5, marginBottom: 14, position:'relative' }}>{s.desc}</div>
@@ -800,7 +810,7 @@ function ServicesHub({ setPage, user, onAuth }) {
                       Ouvrir <span style={{ display:'inline-flex' }}>{ICONS.arrow_r}</span>
                     </span>
                   </div>
-                </div>
+                </a>
               );
             })}
           </div>
@@ -812,24 +822,24 @@ function ServicesHub({ setPage, user, onAuth }) {
         <div style={{ marginBottom:48, padding:'32px 28px', background:T.text1, color:'#fff', borderRadius:20, position:'relative', overflow:'hidden' }}>
           <div style={{ position:'absolute', top:-50, right:-50, width:200, height:200, borderRadius:'50%', background:`${T.brand}18`, filter:'blur(40px)' }}></div>
           <div style={{ position:'relative' }}>
-            <div style={{ fontSize:11, fontWeight:800, letterSpacing:'0.16em', textTransform:'uppercase', color:'#FFD93D', marginBottom:10 }}>━━ L'écosystème en action</div>
+            <div style={{ fontSize:11, fontWeight:800, letterSpacing:'0.16em', textTransform:'uppercase', color:T.brand, marginBottom:10 }}>━━ L'écosystème en action</div>
             <h2 style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(22px,3vw,30px)', fontWeight:800, margin:'0 0 8px', letterSpacing:'-0.02em', lineHeight:1.1 }}>Comment les services s'enchaînent ?</h2>
             <p style={{ fontSize:14, color:'rgba(255,255,255,0.75)', margin:'0 0 28px', maxWidth:680, lineHeight:1.55 }}>
               Chaque outil renforce les autres. Un parcours type d'une lutte qui démarre, prend de l'ampleur, se finance et se documente.
             </p>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))', gap:14 }}>
               {ecosystem.map((e, i) => (
-                <div key={e.step} onClick={() => setPage(e.page)}
-                  style={{ position:'relative', padding:'18px 20px', background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:14, cursor:'pointer', transition:'all 0.18s' }}
+                <a key={e.step} href={`#${e.page}`} onClick={ev => { ev.preventDefault(); setPage(e.page); }}
+                  style={{ position:'relative', display:'block', padding:'18px 20px', background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:14, textDecoration:'none', color:'inherit', transition:'all 0.18s' }}
                   onMouseEnter={ev => { ev.currentTarget.style.background = `${e.color}25`; ev.currentTarget.style.borderColor = e.color; ev.currentTarget.style.transform = 'translateY(-3px)'; }}
                   onMouseLeave={ev => { ev.currentTarget.style.background = 'rgba(255,255,255,0.06)'; ev.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; ev.currentTarget.style.transform = 'none'; }}>
                   <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
                     <span style={{ fontFamily:'monospace', fontSize:11, fontWeight:800, color:e.color, padding:'2px 7px', background:`${e.color}25`, borderRadius:4, letterSpacing:'0.06em' }}>{e.step}</span>
                     <span style={{ fontSize:18 }}>{e.icon}</span>
                   </div>
-                  <div style={{ fontFamily:"'Sora',sans-serif", fontSize:15, fontWeight:800, marginBottom:6, letterSpacing:'-0.01em' }}>{e.label}</div>
+                  <div style={{ fontFamily:"'Sora',sans-serif", fontSize:15, fontWeight:800, marginBottom:6, letterSpacing:'-0.01em', color:'#fff' }}>{e.label}</div>
                   <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.5 }}>{e.desc}</div>
-                </div>
+                </a>
               ))}
             </div>
           </div>
@@ -860,7 +870,7 @@ function ServicesHub({ setPage, user, onAuth }) {
           <h3 style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, color:T.text1, margin:'0 0 6px' }}>Une idée de service à ajouter ?</h3>
           <p style={{ fontSize:14, color:T.text3, margin:0, lineHeight:1.55 }}>La plateforme évolue avec ses membres. Proposez un nouveau service, signalez un besoin.</p>
         </div>
-        <Btn variant="outline" size="md" onClick={()=> user ? setPage('reseau') : onAuth?.()}>{user ? 'Proposer un service' : 'Rejoindre le mouvement'}</Btn>
+        <Btn variant="outline" size="md" onClick={()=> user ? setPage('creer') : onAuth?.()}>{user ? 'Proposer un service' : 'Rejoindre le mouvement'}</Btn>
       </div>
     </div>
   );
@@ -869,34 +879,50 @@ window.ServicesHub = ServicesHub;
 
 // ── CREER PAGE ─────────────────────────────────────────────
 function CreerPage({ setPage, user, onAuth }) {
+  // Tiles alignées sur les 12 services de ServicesHub (icône + couleur du service)
   const tiles = [
-    { id: 'petitions', title: 'Pétition', desc: 'Mobiliser autour d\'une cause' },
-    { id: 'mobilizations', title: 'Événement', desc: 'Marche, assemblée, rassemblement' },
-    { id: 'crowdfunding', title: 'Cagnotte', desc: 'Collecte solidaire ou caisse de lutte' },
-    { id: 'media', title: 'Article', desc: 'Publication sur le média militant' },
-    { id: 'lending', title: 'Prêt d\'objet', desc: 'Proposer quelque chose à emprunter' },
-    { id: 'sel', title: 'Service SEL', desc: 'Offrir une compétence ou du temps' },
-    { id: 'housing', title: 'Hébergement', desc: 'Logement solidaire temporaire' },
-    { id: 'carpooling', title: 'Trajet', desc: 'Covoiturage entre militants' },
-    { id: 'garden', title: 'Surplus', desc: 'Partager fruits, légumes, plants' },
-    { id: 'marketplace', title: 'Article à vendre', desc: 'Seconde main en T99CP' },
-    { id: 'campaigns', title: 'Campagne', desc: 'Agréger jusqu\'à 12 services' },
+    { id: 'petitions',     title: 'Pétition',         desc: 'Mobiliser autour d\'une cause',                  icon:'📜', color: T.hub.petitions },
+    { id: 'mobilizations', title: 'Événement',        desc: 'Marche, assemblée, rassemblement',              icon:'📅', color: T.hub.mobilizations },
+    { id: 'crowdfunding',  title: 'Cagnotte',         desc: 'Collecte solidaire ou caisse de lutte',         icon:'💰', color: T.hub.crowdfunding },
+    { id: 'media',         title: 'Article',          desc: 'Publication sur le média militant',             icon:'📰', color: T.hub.media },
+    { id: 'polls',         title: 'Sondage',          desc: 'Élections, société, pronostics',                icon:'📊', color: '#0891B2' },
+    { id: 'reseau',        title: 'Post réseau',      desc: 'Publier sur le fil de la communauté',           icon:'💬', color: T.hub.network },
+    { id: 'lending',       title: 'Prêt d\'objet',    desc: 'Proposer quelque chose à emprunter',            icon:'🔧', color: '#A21CAF' },
+    { id: 'sel',           title: 'Service SEL',      desc: 'Offrir une compétence ou du temps',             icon:'🤲', color: T.hub.sel },
+    { id: 'housing',       title: 'Hébergement',      desc: 'Logement solidaire temporaire',                 icon:'🏠', color: T.hub.housing },
+    { id: 'carpooling',    title: 'Trajet',           desc: 'Covoiturage entre militants',                   icon:'🚗', color: T.hub.carpooling },
+    { id: 'garden',        title: 'Surplus',          desc: 'Partager fruits, légumes, plants',              icon:'🌱', color: T.hub.garden },
+    { id: 'marketplace',   title: 'Article à vendre', desc: 'Seconde main en T99CP',                          icon:'🛍️', color: T.hub.marketplace },
+    { id: 'campaigns',     title: 'Campagne',         desc: 'Agréger jusqu\'à 12 services',                   icon:'🎯', color: '#9D174D', hashTarget: '#campagnes/new' },
   ];
-  const [hov, setHov] = useState(null);
+
+  // Pour le tile Campagne, on pousse `#campagnes/new` qui déclenche le templatePicker au mount de CampaignsPage
+  const handleClick = (t, e) => {
+    e.preventDefault();
+    if (!user) { onAuth?.(); return; }
+    if (t.hashTarget) {
+      try { window.location.hash = t.hashTarget; } catch {}
+      setPage('campaigns');
+    } else {
+      setPage(t.id);
+    }
+  };
+
   return (
-    <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 0 100px' }}>
+    <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 0 100px' }}>
       <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14, position: 'sticky', top: 0, zIndex: 50 }}>
-        <button onClick={() => setPage('home')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text3, display: 'flex', padding: 6, borderRadius: 8 }}>{ICONS.arrow_l}</button>
+        <button onClick={() => setPage('home')} aria-label="Retour à l'accueil" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text3, display: 'flex', padding: 6, borderRadius: 8 }}>{ICONS.arrow_l}</button>
         <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: 18, fontWeight: 800, color: T.text1, margin: 0, letterSpacing: '-0.02em' }}>Que souhaitez-vous créer ?</h1>
       </div>
       <div style={{ padding: '20px 20px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
-          {tiles.map((t, i) => (
-            <button key={t.id} onClick={() => user ? setPage(t.id) : onAuth()} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}
-              style={{ background: hov === i ? T.brandLight : T.surface, border: `1.5px solid ${hov === i ? T.brand : T.border}`, borderRadius: 14, padding: '16px 10px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6, transition: 'all 0.15s', textAlign: 'left', fontFamily: 'Inter,sans-serif', boxShadow: hov === i ? '0 4px 16px rgba(225,29,116,0.12)' : 'none' }}>
-              <div style={{ fontWeight: 700, fontSize: 13, color: hov === i ? T.brand : T.text1, lineHeight: 1.2 }}>{t.title}</div>
-              <div style={{ fontSize: 11, color: T.text3, lineHeight: 1.35 }}>{t.desc}</div>
-            </button>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+          {tiles.map(t => (
+            <a key={t.id} href={t.hashTarget || `#${t.id}`} onClick={e => handleClick(t, e)} className="mn-card-hover"
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, background: T.surface, border: `1px solid ${T.border}`, borderTop: `3px solid ${t.color}`, borderRadius: 14, padding: '16px 14px', textDecoration: 'none', color: 'inherit', fontFamily: 'Inter,sans-serif', minHeight: 110 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: `${t.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: t.color }}>{t.icon}</div>
+              <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 14, color: T.text1, lineHeight: 1.2 }}>{t.title}</div>
+              <div style={{ fontSize: 11, color: T.text3, lineHeight: 1.4 }}>{t.desc}</div>
+            </a>
           ))}
         </div>
       </div>

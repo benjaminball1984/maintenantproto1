@@ -1,7 +1,7 @@
 // CampaignPage.jsx — Constructeur de campagnes avec drag & drop
 // Jusqu'à 12 modules issus de tous les services de la plateforme
 // Sélection multi-items concrets par module + création inline si besoin
-const { useState, useRef, useCallback } = React;
+const { useState, useEffect, useRef, useCallback } = React;
 
 // ── Modules disponibles ─────────────────────────────────
 const ALL_MODULES = [
@@ -1201,6 +1201,21 @@ function CampaignsPage({ user, adminMode, onOpenAuth, setActivePage }) {
     setTemplatePicker(true); // ouvre d'abord la sélection de template
   };
 
+  // Hash deep-link : #campagnes/new → ouvre directement le templatePicker (cohérence CreerPage Bloc 10)
+  useEffect(() => {
+    const checkHash = () => {
+      const h = (typeof window !== 'undefined' ? window.location.hash : '') || '';
+      if (h === '#campagnes/new' && user) {
+        setTemplatePicker(true);
+        // Reset le hash pour ne pas re-déclencher si on revient
+        try { history.replaceState(null, '', window.location.pathname); } catch {}
+      }
+    };
+    checkHash();
+    window.addEventListener('hashchange', checkHash);
+    return () => window.removeEventListener('hashchange', checkHash);
+  }, [user]);
+
   // Suppression (admin only) — confirmation native, retire de l'array et ferme le détail
   const handleDelete = (c) => {
     if (!window.confirm(`Supprimer définitivement la campagne « ${c.title} » ?\n\nCette action est irréversible.`)) return;
@@ -1342,3 +1357,5 @@ function CampaignsPage({ user, adminMode, onOpenAuth, setActivePage }) {
   );
 }
 window.CampaignsPage = CampaignsPage;
+// Exposition pour stats globales (ServicesHub Bloc 10)
+window.SAMPLE_CAMPAIGNS = SAMPLE_CAMPAIGNS;

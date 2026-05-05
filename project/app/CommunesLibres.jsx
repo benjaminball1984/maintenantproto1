@@ -1425,3 +1425,5 @@ function EspaceAdherents({ user, onAuth, setPage }) {
 
 window.EspaceAdherents = EspaceAdherents;
 window.CommunesLibresPage = EspaceAdherents;
+// Exposition pour stats globales (ServicesHub Bloc 10)
+window.SAMPLE_COMMUNES = SAMPLE_COMMUNES;
