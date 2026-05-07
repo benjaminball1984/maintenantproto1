@@ -3,6 +3,7 @@ import Layout from '@/components/Layout';
 import HomePage from '@/pages/HomePage';
 import SignPage from '@/pages/SignPage';
 import ThanksPage from '@/pages/ThanksPage';
+import OrderPage from '@/pages/OrderPage';
 import LegalPage from '@/pages/LegalPage';
 import PrivacyPage from '@/pages/PrivacyPage';
 import ContactPage from '@/pages/ContactPage';
@@ -15,6 +16,7 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/signer" element={<SignPage />} />
         <Route path="/merci" element={<ThanksPage />} />
+        <Route path="/commander" element={<OrderPage />} />
         <Route path="/mentions-legales" element={<LegalPage />} />
         <Route path="/politique-confidentialite" element={<PrivacyPage />} />
         <Route path="/contact" element={<ContactPage />} />
