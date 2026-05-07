@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Présentation — Pas de pesticides pour nos enfants</title>
+<meta name="description" content="Présentation du site pasdepesticidespournosenfants.fr — pétition portée par Bio Consom'acteurs." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Caveat+Brush&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --green-dark: #1F3F2C;
+    --green-light: #9DBE6F;
+    --logo-green: #8FBE3D;
+    --yellow: #F2C53D;
+    --orange: #E76F4A;
+    --cream: #FAF7F0;
+    --ink: #1A1A1A;
+    --muted: #666666;
+    --alert: #C53030;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--cream);
+    color: var(--ink);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { font-family: 'Bagel Fat One', system-ui, sans-serif; line-height: 1.05; letter-spacing: -0.01em; margin: 0; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--green-dark); text-decoration-color: rgba(31,63,44,0.3); }
+  a:hover { text-decoration-color: var(--green-dark); }
+
+  /* HEADER */
+  .topbar {
+    position: sticky; top: 0; z-index: 30;
+    background: var(--green-dark); color: var(--cream);
+    padding: 14px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  }
+  .topbar .container { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .brand { display: flex; flex-direction: column; line-height: 1; }
+  .brand .l1 { font-family: 'Bagel Fat One'; font-size: 18px; }
+  .brand .l2 { font-family: 'Bagel Fat One'; font-size: 18px; color: var(--yellow); margin-top: 2px; }
+  .topbar nav { display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px; }
+  .topbar nav a { color: var(--cream); text-decoration: none; opacity: 0.8; }
+  .topbar nav a:hover { opacity: 1; color: var(--yellow); }
+
+  /* HERO */
+  .hero { background: var(--green-dark); color: var(--cream); padding: 80px 0 100px; position: relative; overflow: hidden; }
+  .hero h1 { font-size: clamp(40px, 6vw, 72px); }
+  .hero h1 .y { color: var(--yellow); }
+  .hero .slogan { font-family: 'Caveat Brush'; font-size: 24px; color: rgba(250,247,240,0.9); margin: 20px 0 0; }
+  .hero .meta { margin-top: 28px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 14px; opacity: 0.85; }
+  .hero .meta strong { color: var(--yellow); }
+  .leaf, .flag, .triangle { position: absolute; }
+  .leaf { top: 50px; left: 30px; width: 80px; height: 80px; opacity: 0.85; }
+  .triangle { top: 90px; right: 30px; width: 60px; height: 60px; opacity: 0.7; }
+  .flag { bottom: 40px; left: 50px; width: 70px; height: 70px; opacity: 0.85; }
+
+  /* SECTIONS */
+  section.block { padding: 70px 0; }
+  section.block.alt { background: white; }
+  .eyebrow { text-transform: uppercase; letter-spacing: 0.16em; font-size: 12px; color: var(--orange); font-weight: 600; }
+  h2.section { font-size: clamp(28px, 4vw, 42px); color: var(--green-dark); margin-top: 6px; margin-bottom: 8px; }
+  .lead { color: var(--muted); font-size: 18px; max-width: 720px; }
+
+  /* GRID */
+  .grid { display: grid; gap: 20px; }
+  @media (min-width: 700px) { .grid.cols-2 { grid-template-columns: 1fr 1fr; } .grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; } }
+  @media (min-width: 1000px) { .grid.cols-4 { grid-template-columns: repeat(4, 1fr); } }
+
+  .card { background: white; border: 1px solid rgba(31,63,44,0.1); border-radius: 18px; padding: 22px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
+  .card.dark { background: var(--green-dark); color: var(--cream); border-color: transparent; }
+  .card.dark h3 { color: var(--yellow); }
+  .card .icon { width: 40px; height: 40px; border-radius: 10px; background: var(--yellow); color: var(--green-dark); display: inline-flex; align-items: center; justify-content: center; font-size: 22px; margin-bottom: 14px; }
+  .card.dark .icon { background: rgba(242,197,61,0.15); color: var(--yellow); }
+  .card h3 { font-family: 'Bagel Fat One'; font-size: 20px; margin-bottom: 10px; color: var(--green-dark); }
+  .card p { margin: 0 0 6px; color: var(--ink); }
+  .card.dark p { color: rgba(250,247,240,0.9); }
+  .card small { color: var(--muted); font-size: 13px; }
+  .card .tag { display: inline-block; background: var(--yellow); color: var(--green-dark); font-size: 11px; padding: 2px 8px; border-radius: 99px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* FLOWCHART */
+  .flow { display: grid; gap: 14px; margin-top: 32px; }
+  @media (min-width: 800px) {
+    .flow {
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      align-items: stretch;
+    }
+  }
+  .flow .step { background: white; border: 2px solid var(--green-dark); border-radius: 14px; padding: 18px; text-align: center; }
+  .flow .step .num { display: inline-block; width: 28px; height: 28px; background: var(--yellow); color: var(--green-dark); font-weight: 700; border-radius: 50%; line-height: 28px; margin-bottom: 8px; }
+  .flow .step h4 { margin: 0; font-family: 'Bagel Fat One'; font-size: 18px; color: var(--green-dark); }
+  .flow .step p { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+  .flow .arrow { font-size: 22px; color: var(--green-dark); align-self: center; text-align: center; }
+  .flow .branch { background: var(--cream); border-style: dashed; }
+
+  /* PAGES MOCKUP */
+  .mock { background: white; border-radius: 14px; overflow: hidden; border: 1px solid rgba(31,63,44,0.15); margin-top: 14px; box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
+  .mock-bar { background: rgba(31,63,44,0.08); padding: 8px 12px; font-size: 11px; color: var(--muted); display: flex; gap: 6px; align-items: center; border-bottom: 1px solid rgba(31,63,44,0.1); }
+  .mock-bar .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(0,0,0,0.15); }
+  .mock-bar .dot.r { background: #FF5F57; }
+  .mock-bar .dot.y { background: #FEBC2E; }
+  .mock-bar .dot.g { background: #28C840; }
+  .mock-bar .url { margin-left: 8px; background: white; padding: 3px 10px; border-radius: 6px; font-family: ui-monospace, monospace; }
+  .mock-body { background: var(--cream); padding: 14px; min-height: 130px; }
+
+  .m-hero { background: linear-gradient(135deg, var(--green-dark), rgba(31,63,44,0.7)); color: var(--cream); border-radius: 8px; padding: 16px; min-height: 110px; position: relative; overflow: hidden; }
+  .m-hero h5 { font-family: 'Bagel Fat One'; font-size: 18px; margin: 0; line-height: 1; }
+  .m-hero h5 .y { color: var(--yellow); display: block; margin-top: 2px; }
+  .m-hero p { font-family: 'Caveat Brush'; font-size: 13px; margin: 6px 0; opacity: 0.85; }
+  .m-cta { background: var(--yellow); color: var(--green-dark); font-weight: 700; padding: 6px 14px; border-radius: 8px; display: inline-block; font-size: 12px; margin-top: 4px; }
+  .m-form { background: white; border-radius: 8px; padding: 12px; }
+  .m-form .row { background: rgba(31,63,44,0.05); height: 18px; border-radius: 4px; margin-bottom: 6px; }
+  .m-form .row.s { width: 60%; }
+  .m-form .row.t { width: 40%; }
+  .m-cta-block { text-align: center; margin-top: 8px; }
+  .m-buttons { display: flex; gap: 8px; }
+  .m-btn { flex: 1; background: var(--green-dark); color: var(--cream); padding: 10px; border-radius: 8px; font-size: 11px; font-weight: 700; text-align: center; }
+  .m-btn.alt { background: var(--green-light); color: var(--green-dark); }
+  .m-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .m-card-mini { background: white; border: 1px solid rgba(31,63,44,0.1); border-radius: 6px; padding: 8px; font-size: 10px; }
+  .m-card-mini .h { font-weight: 700; color: var(--green-dark); margin-bottom: 2px; }
+  .m-card-mini .s { color: var(--muted); }
+  .m-map { background: linear-gradient(135deg, #cde0c4, #a8c89b); border-radius: 8px; min-height: 110px; position: relative; }
+  .m-map .pin { position: absolute; width: 10px; height: 10px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+  .m-stat { background: var(--green-dark); color: var(--cream); padding: 12px; border-radius: 8px; text-align: center; }
+  .m-stat .num { font-family: 'Bagel Fat One'; font-size: 22px; color: var(--yellow); display: block; }
+  .m-stat .lbl { font-size: 10px; opacity: 0.85; }
+  .m-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+  .m-petition { background: white; padding: 12px; border-radius: 8px; }
+  .m-petition .ti { font-family: 'Bagel Fat One'; color: var(--green-dark); font-size: 15px; margin-bottom: 4px; }
+  .m-petition .ti.alert { background: var(--green-dark); color: var(--yellow); display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 13px; }
+  .m-petition .lne { background: rgba(0,0,0,0.07); height: 6px; border-radius: 3px; margin: 4px 0; }
+  .m-petition .lne.s { width: 75%; }
+
+  .m-search { background: white; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(31,63,44,0.15); display: flex; gap: 8px; align-items: center; font-size: 11px; color: var(--muted); }
+  .m-search::before { content: "🔍"; }
+  .m-results { background: white; border-radius: 8px; padding: 6px; margin-top: 4px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); }
+  .m-result { padding: 6px 8px; border-bottom: 1px solid rgba(0,0,0,0.04); font-size: 11px; }
+  .m-result:last-child { border: 0; }
+  .m-result .h { font-weight: 600; color: var(--ink); }
+  .m-result .s { color: var(--muted); font-size: 10px; }
+
+  /* TIMELINE */
+  .timeline { position: relative; margin-top: 32px; padding-left: 36px; }
+  .timeline::before { content: ""; position: absolute; left: 12px; top: 8px; bottom: 8px; width: 3px; background: var(--green-dark); border-radius: 2px; }
+  .phase { position: relative; padding: 0 0 24px 0; }
+  .phase::before { content: ""; position: absolute; left: -33px; top: 4px; width: 22px; height: 22px; border-radius: 50%; background: var(--green-light); border: 4px solid white; box-shadow: 0 0 0 2px var(--green-dark); }
+  .phase.done::before { background: var(--green-light); }
+  .phase.paused::before { background: var(--orange); }
+  .phase.todo::before { background: white; box-shadow: inset 0 0 0 3px var(--green-dark); }
+  .phase h3 { font-family: 'Bagel Fat One'; font-size: 22px; color: var(--green-dark); margin-bottom: 4px; }
+  .phase .badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; margin-left: 8px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.04em; }
+  .phase .badge.done { background: var(--green-light); color: var(--green-dark); }
+  .phase .badge.paused { background: var(--orange); color: white; }
+  .phase .badge.todo { background: rgba(0,0,0,0.08); color: var(--muted); }
+  .phase ul { margin: 8px 0 0; padding-left: 18px; color: var(--ink); }
+  .phase ul li { margin-bottom: 4px; }
+
+  /* STACK */
+  .stack { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+  .pill { background: white; border: 1px solid rgba(31,63,44,0.1); border-radius: 99px; padding: 8px 14px; font-size: 13px; font-weight: 600; color: var(--green-dark); }
+  .pill .role { color: var(--muted); font-weight: 500; margin-left: 8px; padding-left: 8px; border-left: 1px solid rgba(0,0,0,0.1); }
+
+  /* CALLOUT */
+  .callout { background: var(--yellow); color: var(--green-dark); border-radius: 18px; padding: 28px; margin-top: 28px; }
+  .callout h3 { font-family: 'Bagel Fat One'; font-size: 22px; margin-bottom: 6px; }
+  .callout p { margin: 0; font-size: 16px; }
+
+  /* FOOTER */
+  footer { background: var(--green-dark); color: var(--cream); padding: 40px 0 30px; margin-top: 40px; font-size: 14px; }
+  footer .container { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+  footer a { color: var(--yellow); text-decoration: none; }
+
+  /* PRINT */
+  @media print {
+    .topbar { position: static; }
+    section.block { page-break-inside: avoid; padding: 30px 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="topbar">
+  <div class="container">
+    <div class="brand">
+      <span class="l1">PAS DE PESTICIDES</span>
+      <span class="l2">POUR NOS ENFANTS&nbsp;!</span>
+    </div>
+    <nav>
+      <a href="#projet">Le projet</a>
+      <a href="#parcours">Parcours</a>
+      <a href="#pages">Pages</a>
+      <a href="#emails">Emails</a>
+      <a href="#rgpd">RGPD</a>
+      <a href="#stack">Stack</a>
+      <a href="#avancement">Avancement</a>
+    </nav>
+  </div>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <svg class="leaf" viewBox="0 0 64 64" fill="none">
+    <path d="M14 38c0-13 11-24 24-24-2 11-9 19-19 22-3 1-5 2-5 2Z" fill="#9DBE6F"/>
+    <path d="M30 32c5-6 13-9 20-9-2 9-9 16-18 18-3 1-5 1-5 1l3-10Z" fill="#8FBE3D"/>
+  </svg>
+  <svg class="triangle" viewBox="0 0 64 64" fill="none">
+    <path d="M32 12 56 52H8L32 12Z" fill="#A6B6BB"/>
+  </svg>
+  <svg class="flag" viewBox="0 0 64 64" fill="none">
+    <path d="M8 18c8-4 14 4 22 0s14-4 22 0v14c-8-4-14 4-22 0s-14-4-22 0V18Z" fill="#E76F4A"/>
+  </svg>
+  <div class="container">
+    <p class="eyebrow" style="color: var(--yellow);">Présentation du projet</p>
+    <h1>
+      Pas de pesticides
+      <span class="y">pour nos enfants&nbsp;!</span>
+    </h1>
+    <p class="slogan">Une petite signature pour vous, un grand pas pour leur santé.</p>
+    <div class="meta">
+      <span>📍 <strong>Pétition citoyenne</strong> portée par Bio Consom'acteurs</span>
+      <span>🎯 Cantines scolaires sans pesticides</span>
+      <span>🌐 pasdepesticidespournosenfants.fr</span>
+    </div>
+  </div>
+</section>
+
+<!-- LE PROJET -->
+<section id="projet" class="block">
+  <div class="container">
+    <p class="eyebrow">Le projet</p>
+    <h2 class="section">Un site qui ne se contente pas de récolter des signatures.</h2>
+    <p class="lead">
+      L'objectif n'est pas un simple formulaire&nbsp;: c'est un <strong>circuit fermé d'engagement croisé</strong>
+      qui pousse les signataires à passer à l'action — soit en commandant gratuitement du matériel (flyers,
+      affiches, pétitions papier), soit en organisant une distribution devant un établissement scolaire.
+      Quel que soit le point d'entrée, l'utilisateur·rice est invité·e à faire les deux.
+    </p>
+
+    <div class="grid cols-3" style="margin-top: 32px;">
+      <div class="card">
+        <span class="icon">📜</span>
+        <h3>Signer</h3>
+        <p>Un texte précis, sourcé (INSERM, PestiRiv, EGalim), qui pose des demandes concrètes aux élu·es à toutes les échelles.</p>
+      </div>
+      <div class="card">
+        <span class="icon">📦</span>
+        <h3>Diffuser</h3>
+        <p>Recevoir gratuitement chez soi du matériel imprimé pour passer le mot — flyers, affiches, pétitions papier.</p>
+      </div>
+      <div class="card">
+        <span class="icon">📍</span>
+        <h3>Mobiliser</h3>
+        <p>Tenir une table de signature devant une école et apparaître sur la carte publique pour rejoindre d'autres mobilisé·es.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PARCOURS UTILISATEUR -->
+<section id="parcours" class="block alt">
+  <div class="container">
+    <p class="eyebrow">Parcours utilisateur</p>
+    <h2 class="section">Le circuit d'engagement croisé</h2>
+    <p class="lead">
+      Chaque signature peut déclencher deux actions concrètes. Et chaque action concrète ramène vers la signature.
+    </p>
+
+    <div class="flow">
+      <div class="step">
+        <span class="num">1</span>
+        <h4>Accueil&nbsp;/</h4>
+        <p>Texte intégral de la pétition + gros bouton jaune "Signer".</p>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step">
+        <span class="num">2</span>
+        <h4>Signer</h4>
+        <p>Formulaire 5 champs + RGPD (newsletter décochée).</p>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step">
+        <span class="num">3</span>
+        <h4>Merci</h4>
+        <p>Page épurée, deux CTA d'engagement uniquement.</p>
+      </div>
+    </div>
+
+    <div class="flow" style="margin-top: 16px;">
+      <div class="step branch">
+        <h4>📦 Commander matériel</h4>
+        <p>Gratuit, frais de port au coût.</p>
+      </div>
+      <div class="arrow">↘ ou ↙</div>
+      <div class="step branch">
+        <h4>📍 Organiser une distribution</h4>
+        <p>Date + lieu + visibilité.</p>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step">
+        <span class="num">4</span>
+        <h4>Confirmation + relances</h4>
+        <p>Mail récap, fiche pratique, rappels J-1 / J-0.</p>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top: 36px;">
+      <h3>L'idée maîtresse</h3>
+      <p>
+        Si vous commandez du matériel, on vous demande&nbsp;: <em>«&nbsp;maintenant, où le distribuez-vous&nbsp;?&nbsp;»</em>
+        Si vous organisez une distribution sans avoir de matériel, on vous le rappelle&nbsp;:
+        <em>«&nbsp;commandez vos flyers maintenant — c'est gratuit&nbsp;».</em>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- PAGES -->
+<section id="pages" class="block">
+  <div class="container">
+    <p class="eyebrow">Le site, page par page</p>
+    <h2 class="section">14 routes, un seul fil rouge</h2>
+    <p class="lead">
+      Voici les pages principales. Toutes sont responsive, accessibles au clavier, optimisées mobile.
+    </p>
+
+    <div class="grid cols-2" style="margin-top: 32px;">
+
+      <!-- Accueil -->
+      <article class="card">
+        <span class="tag">Accueil</span>
+        <h3 style="margin-top: 12px;">/ — Page d'accueil</h3>
+        <p>Hero plein écran avec le visuel BCA, slogan manuscrit, gros bouton CTA jaune. Compteur de signataires (s'affiche au-delà de 100). Texte intégral de la pétition v4 (~1 500 mots) en 7 sections avec ancres. Sticky CTA mobile au scroll.</p>
+        <div class="mock">
+          <div class="mock-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">pasdepesticidespournosenfants.fr</span></div>
+          <div class="mock-body">
+            <div class="m-hero">
+              <h5>PAS DE PESTICIDES <span class="y">POUR NOS ENFANTS&nbsp;!</span></h5>
+              <p>Une petite signature pour vous, un grand pas pour leur santé.</p>
+              <span class="m-cta">Signer la pétition →</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Signer -->
+      <article class="card">
+        <span class="tag">Signer</span>
+        <h3 style="margin-top: 12px;">/signer — Formulaire</h3>
+        <p>Validation Zod côté client + serveur. Champs prénom, nom, email, code postal, téléphone (facultatif). Case <strong>newsletter décochée par défaut</strong> (RGPD strict), case campagne pré-cochée (intérêt légitime). Honeypot anti-bot. Mention RGPD complète.</p>
+        <div class="mock">
+          <div class="mock-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">/signer</span></div>
+          <div class="mock-body">
+            <div class="m-form">
+              <div class="row"></div>
+              <div style="display: flex; gap: 6px;">
+                <div class="row" style="flex:1;"></div>
+                <div class="row" style="flex:1;"></div>
+              </div>
+              <div class="row s"></div>
+              <div class="row t"></div>
+              <div style="margin-top: 10px; text-align: center;"><span class="m-cta">Je signe la pétition</span></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Merci -->
+      <article class="card">
+        <span class="tag">Engagement</span>
+        <h3 style="margin-top: 12px;">/merci — Deux CTA, rien d'autre</h3>
+        <p>Volontairement <strong>ultra-épurée</strong>. Aucun bouton de partage social ni distraction qui concurrencerait les deux choix d'engagement. C'est un point de friction productif&nbsp;: «&nbsp;maintenant, lequel des deux ?&nbsp;»</p>
+        <div class="mock">
+          <div class="mock-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">/merci</span></div>
+          <div class="mock-body" style="text-align: center;">
+            <h5 style="font-family: 'Bagel Fat One'; color: var(--green-dark); font-size: 18px; margin-bottom: 12px;">Merci, votre signature compte.</h5>
+            <div class="m-buttons">
+              <span class="m-btn">📦 Commander matériel</span>
+              <span class="m-btn alt">📍 Organiser distribution</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Commander -->
+      <article class="card">
+        <span class="tag" style="background: var(--orange); color: white;">Phase 2 — reportée</span>
+        <h3 style="margin-top: 12px;">/commander — Bientôt disponible</h3>
+        <p>Sélecteur 4 formats (flyer A6/A5, affiche A3, pétition papier), calcul temps réel du poids et des frais de port, plafond 500 unités, paiement Stripe. <strong>Code complet livré, livraison reportée par décision projet</strong>. Page actuelle&nbsp;: placeholder propre invitant à organiser une distribution.</p>
+        <div class="mock">
+          <div class="mock-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">/commander</span></div>
+          <div class="mock-body" style="text-align: center;">
+            <p style="font-size: 28px; margin: 8px 0;">⏰</p>
+            <p style="font-family: 'Bagel Fat One'; color: var(--green-dark); font-size: 16px;">Bientôt disponible</p>
+            <p style="font-size: 11px; color: var(--muted); margin: 4px 0;">En attendant, organisez une distribution.</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- Organiser -->
+      <article class="card">
+        <span class="tag">Mobilisation</span>
+        <h3 style="margin-top: 12px;">/organiser — Action terrain</h3>
+        <p>Autocomplétion sur <strong>58 972 cantines scolaires françaises</strong> (recherche tolérante aux accents, par nom + code postal + commune). Date + horaires. Visibilité publique pré-cochée, contact organisateur·rice opt-in. Mail de confirmation immédiat avec fiche pratique.</p>
+        <div class="mock">
+          <div class="mock-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">/organiser</span></div>
+          <div class="mock-body">
+            <div class="m-search">école jules ferry argenteuil</div>
+            <div class="m-results">
+              <div class="m-result"><div class="h">École élémentaire Jules Ferry</div><div class="s">École · 95100 Argenteuil</div></div>
+              <div class="m-result"><div class="h">École maternelle Jules Ferry</div><div class="s">École · 95870 Bezons</div></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Carte -->
+      <article class="card">
+        <span class="tag">Mobilisation</span>
+        <h3 style="margin-top: 12px;">/carte — Carte interactive</h3>
+        <p>MapLibre GL JS + tuiles OpenStreetMap (souverain, gratuit). Marqueurs colorés selon proximité&nbsp;: vert (à venir), orange (aujourd'hui ou demain). Filtres par type d'établissement et période. Popup au clic. Agenda chronologique en dessous.</p>
+        <div class="mock">
+          <div class="mock-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">/carte</span></div>
+          <div class="mock-body">
+            <div class="m-map">
+              <span class="pin" style="background: var(--green-light); top: 30%; left: 25%;"></span>
+              <span class="pin" style="background: var(--orange); top: 50%; left: 50%;"></span>
+              <span class="pin" style="background: var(--green-light); top: 70%; left: 70%;"></span>
+              <span class="pin" style="background: var(--green-light); top: 25%; left: 65%;"></span>
+              <span class="pin" style="background: var(--green-light); top: 60%; left: 30%;"></span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Chiffres -->
+      <article class="card">
+        <span class="tag">Tableau de bord</span>
+        <h3 style="margin-top: 12px;">/chiffres — La mobilisation en chiffres</h3>
+        <p>Compteurs animés (signataires, distributions à venir, distributions au total, communes mobilisées). Top 10 départements en barres. Top 10 codes postaux. Vues SQL agrégées côté Supabase, aucune donnée personnelle exposée publiquement.</p>
+        <div class="mock">
+          <div class="mock-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">/chiffres</span></div>
+          <div class="mock-body">
+            <div class="m-stats-grid">
+              <div class="m-stat"><span class="num">12 487</span><span class="lbl">Signataires</span></div>
+              <div class="m-stat" style="background: var(--orange);"><span class="num" style="color: white;">38</span><span class="lbl">Distributions</span></div>
+              <div class="m-stat" style="background: var(--yellow); color: var(--green-dark);"><span class="num" style="color: var(--green-dark);">487</span><span class="lbl">Communes</span></div>
+              <div class="m-stat" style="background: var(--green-light); color: var(--green-dark);"><span class="num" style="color: var(--green-dark);">21</span><span class="lbl">Régions</span></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Qui sommes-nous -->
+      <article class="card">
+        <span class="tag">Crédibilité</span>
+        <h3 style="margin-top: 12px;">/qui-sommes-nous — BCA + signataires</h3>
+        <p>Présentation de Bio Consom'acteurs (30 antennes, 2 000 adhérent·es, 8 765 personnes touchées en 2025). Premier·ères signataires regroupé·es par catégorie (scientifiques, médical, paysan·nes, élu·es). Organisations partenaires.</p>
+        <div class="mock">
+          <div class="mock-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">/qui-sommes-nous</span></div>
+          <div class="mock-body">
+            <div class="m-cards">
+              <div class="m-card-mini"><div class="h">Marc Dufumier</div><div class="s">Ingénieur agronome</div></div>
+              <div class="m-card-mini"><div class="h">Pr Charles Sultan</div><div class="s">Endocrinologue</div></div>
+              <div class="m-card-mini"><div class="h">Jacques Caplat</div><div class="s">Agronome</div></div>
+              <div class="m-card-mini"><div class="h">Camille Étienne</div><div class="s">Activiste</div></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+    </div>
+
+    <p class="lead" style="margin-top: 32px; text-align: center;">
+      + Pages techniques&nbsp;: <strong>/comment-distribuer</strong> (fiche pratique 6 cartes), <strong>/organiser/confirmation</strong> (récap + partage), <strong>/contact</strong>, <strong>/mentions-legales</strong>, <strong>/politique-confidentialite</strong>.
+    </p>
+  </div>
+</section>
+
+<!-- EMAILS -->
+<section id="emails" class="block alt">
+  <div class="container">
+    <p class="eyebrow">Emails transactionnels</p>
+    <h2 class="section">4 mails automatiques pour entretenir l'élan</h2>
+    <p class="lead">
+      Tous envoyés via <strong>Resend</strong> depuis l'UE. HTML responsive, charte BCA, désinscription en pied.
+    </p>
+
+    <div class="grid cols-2" style="margin-top: 32px;">
+      <div class="card">
+        <span class="icon">✉️</span>
+        <h3>Merci d'avoir signé</h3>
+        <p><strong>Déclencheur&nbsp;:</strong> juste après la signature.</p>
+        <p><strong>Objectif&nbsp;:</strong> remercier, expliquer pourquoi une signature ne suffit pas, et proposer les deux mêmes CTA que /merci&nbsp;: commander matériel ou organiser une distribution.</p>
+      </div>
+      <div class="card">
+        <span class="icon">📦</span>
+        <h3>Ta commande est confirmée</h3>
+        <p><strong>Déclencheur&nbsp;:</strong> webhook Stripe <code>checkout.session.completed</code>.</p>
+        <p><strong>Objectif&nbsp;:</strong> récap (formats × quantités, frais de port, adresse), délai 5-7 jours ouvrés, et CTA «&nbsp;Organiser ma distribution&nbsp;».</p>
+        <small><em>(Phase 2 — reportée)</em></small>
+      </div>
+      <div class="card">
+        <span class="icon">📍</span>
+        <h3>Ta distribution est enregistrée</h3>
+        <p><strong>Déclencheur&nbsp;:</strong> juste après la création.</p>
+        <p><strong>Objectif&nbsp;:</strong> récap (date, horaires, lieu), conseils synthétiques, CTA fiche pratique complète.</p>
+      </div>
+      <div class="card">
+        <span class="icon">⏰</span>
+        <h3>Rappel J-1 puis J-0</h3>
+        <p><strong>Déclencheur&nbsp;:</strong> Scheduled Function quotidienne (cron <code>0 9 * * *</code>).</p>
+        <p><strong>Objectif&nbsp;:</strong> J-1 = checklist préparation. J-0 = encouragement, dernière relecture de la fiche pratique.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- RGPD & SÉCURITÉ -->
+<section id="rgpd" class="block">
+  <div class="container">
+    <p class="eyebrow">RGPD &amp; Sécurité</p>
+    <h2 class="section">Conformité, sobriété, défense en profondeur</h2>
+
+    <div class="grid cols-2" style="margin-top: 32px;">
+      <div class="card">
+        <h3>RGPD strict</h3>
+        <ul style="padding-left: 20px;">
+          <li>Newsletter <strong>décochée par défaut</strong> (CJUE Planet49)</li>
+          <li>Mentions de traitement à proximité du formulaire</li>
+          <li>Page politique de confidentialité dédiée</li>
+          <li>Aucun cookie traceur — ni analytics tiers</li>
+          <li>Supabase EU (Frankfurt), Resend EU, Stripe DPF</li>
+          <li>Visibilité carte&nbsp;: anonyme par défaut</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Sécurité applicative</h3>
+        <ul style="padding-left: 20px;">
+          <li>RLS Supabase&nbsp;: <code>insert</code> uniquement, contraintes serveur</li>
+          <li>Validation Zod côté client <strong>et</strong> côté serveur</li>
+          <li>Honeypot anti-bot sur signature et contact</li>
+          <li>Headers sécurité Netlify (X-Frame, Permissions-Policy…)</li>
+          <li>Webhook Stripe avec vérification de signature</li>
+          <li>Recalcul des montants côté serveur (zéro confiance client)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STACK -->
+<section id="stack" class="block alt">
+  <div class="container">
+    <p class="eyebrow">Stack technique</p>
+    <h2 class="section">Souverain, pérenne, frugal</h2>
+    <p class="lead">Choix techniques au service de la cause&nbsp;: souveraineté EU, coût d'exploitation faible, pérennité longue durée.</p>
+
+    <div class="stack">
+      <span class="pill">Vite + React 18 + TypeScript<span class="role">Front</span></span>
+      <span class="pill">Tailwind CSS<span class="role">Charte</span></span>
+      <span class="pill">Supabase<span class="role">Base de données EU</span></span>
+      <span class="pill">Resend<span class="role">Emails EU</span></span>
+      <span class="pill">Netlify<span class="role">Hébergement + Functions</span></span>
+      <span class="pill">MapLibre + OpenStreetMap<span class="role">Cartographie souveraine</span></span>
+      <span class="pill">Zod + React Hook Form<span class="role">Validation</span></span>
+      <span class="pill">Stripe<span class="role">Frais de port (Phase 2)</span></span>
+    </div>
+
+    <div class="grid cols-3" style="margin-top: 32px;">
+      <div class="card dark">
+        <span class="icon">⚡</span>
+        <h3>Performance</h3>
+        <p>Bundle initial 152 KB gzippé. MapLibre lazy-loadé sur sa route uniquement. Code splitting par page.</p>
+      </div>
+      <div class="card dark">
+        <span class="icon">🌍</span>
+        <h3>Souveraineté</h3>
+        <p>Données hébergées en Europe (Frankfurt). Tuiles cartographiques OSM gratuites et ouvertes.</p>
+      </div>
+      <div class="card dark">
+        <span class="icon">💰</span>
+        <h3>Coût</h3>
+        <p>Coût mensuel attendu&nbsp;: <strong>0 €</strong> sur les paliers gratuits jusqu'à plusieurs dizaines de milliers de signatures.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AVANCEMENT -->
+<section id="avancement" class="block">
+  <div class="container">
+    <p class="eyebrow">État d'avancement</p>
+    <h2 class="section">Où en sommes-nous&nbsp;?</h2>
+
+    <div class="timeline">
+      <div class="phase done">
+        <h3>Phase 1 — MVP signatures<span class="badge done">Livré</span></h3>
+        <ul>
+          <li>Site complet, charte BCA, navigation responsive</li>
+          <li>Page d'accueil + texte intégral pétition v4</li>
+          <li>Formulaire de signature + RGPD strict</li>
+          <li>Page de remerciement avec engagement croisé</li>
+          <li>Mail transactionnel de remerciement (Resend)</li>
+          <li>Pages mentions légales / politique de confidentialité / contact</li>
+        </ul>
+      </div>
+
+      <div class="phase paused">
+        <h3>Phase 2 — Commande matériel<span class="badge paused">Reportée</span></h3>
+        <ul>
+          <li>Code complet livré, isolé sur la branche <code>claude/phase-2-commande-materiel</code></li>
+          <li>Sélecteur 4 formats + calcul des frais de port La Poste</li>
+          <li>Stripe Checkout + webhook avec vérification de signature</li>
+          <li>Mail de confirmation de commande</li>
+          <li>Page <code>/commander</code> actuellement en placeholder « bientôt disponible »</li>
+        </ul>
+      </div>
+
+      <div class="phase done">
+        <h3>Phase 3 — Distributions<span class="badge done">Livré</span></h3>
+        <ul>
+          <li>Autocomplétion sur 58 972 cantines (recherche tolérante aux accents)</li>
+          <li>Formulaire avec date, horaires, visibilité opt-in</li>
+          <li>Fiche pratique « Comment réussir ta distribution »</li>
+          <li>Mail de confirmation + scheduled function rappels J-1 / J-0</li>
+        </ul>
+      </div>
+
+      <div class="phase done">
+        <h3>Phase 4 — Carte &amp; chiffres<span class="badge done">Livré</span></h3>
+        <ul>
+          <li>Carte MapLibre + OSM avec marqueurs et filtres</li>
+          <li>Agenda chronologique sous la carte</li>
+          <li>Tableau de bord public avec compteurs animés</li>
+          <li>Top 10 départements + top 10 codes postaux</li>
+        </ul>
+      </div>
+
+      <div class="phase done">
+        <h3>Phase 5 — Qui sommes-nous + finitions<span class="badge done">Livré</span></h3>
+        <ul>
+          <li>Page BCA avec chiffres clés et présentation</li>
+          <li>Sections premier·ères signataires et organisations partenaires (à compléter par BCA)</li>
+          <li>Lazy loading des routes lourdes (bundle initial divisé par 3)</li>
+          <li>Header avec navigation complète</li>
+        </ul>
+      </div>
+
+      <div class="phase todo">
+        <h3>À faire avant la mise en ligne<span class="badge todo">Côté infra</span></h3>
+        <ul>
+          <li>Création des comptes Supabase EU + Resend (vérification domaine)</li>
+          <li>Exécution des migrations SQL + seed des établissements</li>
+          <li>Dépôt des visuels (home-hero, petition-flyer, logo BCA SVG)</li>
+          <li>Compléter manuellement les premier·ères signataires</li>
+          <li>Connexion du domaine <code>pasdepesticidespournosenfants.fr</code> à Netlify</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top: 36px;">
+      <h3>Quelques chiffres</h3>
+      <p>
+        <strong>14 routes</strong> · <strong>4 mails automatiques</strong> · <strong>4 Netlify Functions</strong>
+        · <strong>2 migrations SQL</strong> · <strong>58 972 cantines</strong> indexées · <strong>152 KB gzippé</strong>
+        de bundle initial · <strong>0 cookie traceur</strong>.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div>
+      <strong>Pas de pesticides pour nos enfants</strong><br>
+      Pétition portée par <a href="https://bioconsomacteurs.org" target="_blank">Bio Consom'acteurs</a> — 10 rue Beaumarchais, 93100 Montreuil
+    </div>
+    <div style="text-align: right;">
+      Document de présentation · <span style="opacity: 0.7;">à imprimer en PDF si besoin</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
