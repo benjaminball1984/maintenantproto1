@@ -7,6 +7,10 @@
   node_bundler = "esbuild"
   external_node_modules = ["@supabase/supabase-js"]
 
+# Rappels J-1 / J-0 aux organisateur·rices de distributions — 9h UTC chaque jour
+[functions."cron-distribution-reminders"]
+  schedule = "0 9 * * *"
+
 # SPA fallback (toutes les routes React Router pointent vers index.html)
 [[redirects]]
   from = "/*"
