@@ -12,7 +12,7 @@ Site de mobilisation pour la pétition **Pas de pesticides pour nos enfants**, p
 | Phase | Périmètre | Statut |
 |---|---|---|
 | **1 — MVP signatures** | Site, pétition, signature, mail de remerciement, pages légales | ✅ Code livré |
-| **2 — Commande matériel** | Sélecteur, frais de port, Stripe Checkout, webhook | ⏳ À venir |
+| **2 — Commande matériel** | Sélecteur, frais de port, Stripe Checkout, webhook, mail confirmation | ✅ Code livré |
 | **3 — Distributions** | Autocomplétion établissements, formulaire, fiche pratique, rappels J-1/J-0 | ⏳ À venir |
 | **4 — Carte & chiffres** | Carte MapLibre, agenda, tableau de bord public | ⏳ À venir |
 | **5 — Qui sommes-nous + finitions** | Premiers signataires, partenaires, perf, a11y, tests E2E | ⏳ À venir |
@@ -94,6 +94,16 @@ netlify dev
 La table `signatures` a une RLS qui n'autorise que l'`insert` côté `anon`, avec
 contraintes serveur (longueur prénom/nom/email, regex code postal). La vue
 `public_signature_count` est lisible publiquement et n'expose aucune PII.
+
+## Configuration Stripe (Phase 2)
+
+1. Créer un compte sur [stripe.com](https://stripe.com), récupérer la clé **publishable** (`pk_live_…`) et la clé **secrète** (`sk_live_…`) dans le dashboard.
+2. Renseigner `VITE_STRIPE_PUBLISHABLE_KEY` (publique) et `STRIPE_SECRET_KEY` (privée Netlify) dans les variables d'environnement.
+3. Créer un endpoint webhook dans Stripe → Developers → Webhooks :
+   - URL : `https://pasdepesticidespournosenfants.fr/.netlify/functions/stripe-webhook`
+   - Événements : `checkout.session.completed`, `checkout.session.expired`, `payment_intent.payment_failed`
+   - Récupérer le **Signing secret** (`whsec_…`) → variable Netlify `STRIPE_WEBHOOK_SECRET`.
+4. En test : utiliser les clés `sk_test_…` / `pk_test_…` et la commande `stripe listen --forward-to http://localhost:8888/.netlify/functions/stripe-webhook` (Stripe CLI).
 
 ## Configuration Resend
 

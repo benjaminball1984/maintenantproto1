@@ -5,7 +5,7 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["@supabase/supabase-js"]
+  external_node_modules = ["@supabase/supabase-js", "stripe"]
 
 # SPA fallback (toutes les routes React Router pointent vers index.html)
 [[redirects]]
