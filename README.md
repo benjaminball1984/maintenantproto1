@@ -1,25 +1,189 @@
-# CODING AGENTS: READ THIS FIRST
+# pasdepesticidespournosenfants.fr
 
-This is a **handoff bundle** from Claude Design (claude.ai/design).
+Site de mobilisation pour la pétition **Pas de pesticides pour nos enfants**, portée par
+[Bio Consom'acteurs](https://bioconsomacteurs.org).
 
-A user mocked up designs in HTML/CSS/JS using an AI design tool, then exported this bundle so a coding agent can implement the designs for real.
+> Une initiative citoyenne pour la sortie des pesticides dans les cantines scolaires françaises.
 
-## What you should do — IMPORTANT
+---
 
-**Read the chat transcripts first.** There are 3 chat transcript(s) in `chats/`. The transcripts show the full back-and-forth between the user and the design assistant — they tell you **what the user actually wants** and **where they landed** after iterating. Don't skip them. The final HTML files are the output, but the chat is where the intent lives.
+## État d'avancement
 
-**Read `project/app/Maintenant.html` in full.** The user had this file open when they triggered the handoff, so it's almost certainly the primary design they want built. Read it top to bottom — don't skim. Then **follow its imports**: open every file it pulls in (shared components, CSS, scripts) so you understand how the pieces fit together before you start implementing.
+| Phase | Périmètre | Statut |
+|---|---|---|
+| **1 — MVP signatures** | Site, pétition, signature, mail de remerciement, pages légales | ✅ Code livré |
+| **2 — Commande matériel** | Sélecteur, frais de port, Stripe Checkout, webhook | ⏳ À venir |
+| **3 — Distributions** | Autocomplétion établissements, formulaire, fiche pratique, rappels J-1/J-0 | ⏳ À venir |
+| **4 — Carte & chiffres** | Carte MapLibre, agenda, tableau de bord public | ⏳ À venir |
+| **5 — Qui sommes-nous + finitions** | Premiers signataires, partenaires, perf, a11y, tests E2E | ⏳ À venir |
 
-**If anything is ambiguous, ask the user to confirm before you start implementing.** It's much cheaper to clarify scope up front than to build the wrong thing.
+---
 
-## About the design files
+## Stack
 
-The design medium is **HTML/CSS/JS** — these are prototypes, not production code. Your job is to **recreate them pixel-perfectly** in whatever technology makes sense for the target codebase (React, Vue, native, whatever fits). Match the visual output; don't copy the prototype's internal structure unless it happens to fit.
+- **Vite + React 18 + TypeScript** + React Router v6
+- **Tailwind CSS** (charte BCA dans `tailwind.config.ts` + `src/styles/theme.css`)
+- **Supabase** (Postgres EU) — `@supabase/supabase-js`
+- **Resend** pour les emails transactionnels (Netlify Functions)
+- **Netlify** : hébergement + serverless functions (TypeScript, esbuild)
+- **Validation** : Zod + React Hook Form
+- **Icônes** : lucide-react
 
-**Don't render these files in a browser or take screenshots unless the user asks you to.** Everything you need — dimensions, colors, layout rules — is spelled out in the source. Read the HTML and CSS directly; a screenshot won't tell you anything they don't.
+---
 
-## Bundle contents
+## Démarrer en local
 
-- `README.md` — this file
-- `chats/` — conversation transcripts (read these!)
-- `project/` — the `Maintenant! Design System` project files (HTML prototypes, assets, components)
+```bash
+# 1. Installer les dépendances
+npm install
+
+# 2. Copier les variables d'environnement
+cp .env.example .env
+# puis renseigner VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, RESEND_API_KEY, etc.
+
+# 3. Lancer le dev server
+npm run dev
+# → http://localhost:5173
+
+# 4. Pour tester les Netlify Functions en local : installer netlify-cli
+npm install -g netlify-cli
+netlify dev
+# → http://localhost:8888 (proxy Vite + functions)
+```
+
+### Scripts utiles
+
+| Commande | Description |
+|---|---|
+| `npm run dev` | Démarre Vite (front uniquement, pas de functions) |
+| `npm run build` | Build production (TS check + Vite bundle) |
+| `npm run preview` | Sert le build local |
+| `npm run typecheck` | Vérifie le typage |
+| `netlify dev` | Lance front + Netlify Functions ensemble |
+
+---
+
+## Structure du projet
+
+```
+.
+├── public/                  Assets servis tels quels (favicon, _redirects, /images)
+├── src/
+│   ├── components/          UI réutilisable (Header, Footer, Layout, decor SVG…)
+│   ├── pages/               Une route = un fichier
+│   ├── data/                Texte de la pétition (JSX), futurs firstSigners…
+│   ├── lib/                 supabase, validation Zod, storage local, cn utility
+│   ├── styles/              theme.css (Tailwind + variables charte BCA)
+│   └── App.tsx, main.tsx
+├── netlify/functions/       Functions serverless (Resend, Stripe, …)
+├── supabase/migrations/     Schéma SQL versionné
+├── data/raw/                CSV établissements (non versionné, ~38 Mo)
+├── netlify.toml             Config build + redirections + headers sécurité
+└── .env.example             Variables d'env (à copier en .env)
+```
+
+---
+
+## Configuration Supabase
+
+1. Créer un projet sur [supabase.com](https://supabase.com) en région EU (Frankfurt).
+2. Dans **SQL Editor**, exécuter `supabase/migrations/0001_init.sql`.
+3. Récupérer `Project URL` + `anon public key` → `.env` (`VITE_SUPABASE_*`).
+4. Récupérer `service_role secret` → variable d'env Netlify (jamais exposé au client).
+
+La table `signatures` a une RLS qui n'autorise que l'`insert` côté `anon`, avec
+contraintes serveur (longueur prénom/nom/email, regex code postal). La vue
+`public_signature_count` est lisible publiquement et n'expose aucune PII.
+
+## Configuration Resend
+
+1. Créer un compte sur [resend.com](https://resend.com).
+2. Vérifier le domaine `pasdepesticidespournosenfants.fr` (DNS DKIM + SPF).
+3. Créer une API key → variable d'env Netlify `RESEND_API_KEY`.
+4. Définir l'expéditeur : `RESEND_FROM_EMAIL=campagne@pasdepesticidespournosenfants.fr`.
+5. Définir l'adresse de réception du formulaire de contact : `CONTACT_TO_EMAIL=contact@bioconsomacteurs.org`.
+
+---
+
+## Charte graphique
+
+| Variable | Hex | Usage |
+|---|---|---|
+| `bca-green-dark` | `#1F3F2C` | Fond principal, header/footer |
+| `bca-green-light` | `#9DBE6F` | Feuilles, accents végétaux |
+| `bca-yellow` | `#F2C53D` | CTA principal, accents fort |
+| `bca-orange` | `#E76F4A` | Boutons secondaires, drapeaux |
+| `bca-cream` | `#FAF7F0` | Fond pages, texte sur fond foncé |
+| `alert` | `#C53030` | Messages d'erreur, sanctions |
+
+**Fonts** (Google Fonts) :
+- `Bagel Fat One` — titres principaux (display)
+- `Caveat Brush` — accent manuscrit (slogan hero)
+- `Inter` — corps de texte
+
+---
+
+## Assets manquants à fournir
+
+⚠️ Les visuels suivants ne sont pas encore dans le repo. Le client (BCA) doit les
+fournir avant la mise en ligne :
+
+| Chemin attendu | Description |
+|---|---|
+| `public/images/home-hero.jpg` | Bannière d'accueil (enfant + panier de légumes + titre) |
+| `public/images/petition-flyer.jpg` | Visuel partage social / OG image |
+| `public/images/logo-bca.svg` | Logo Bio Consom'acteurs |
+| `public/favicon.ico` | (optionnel) favicon ICO classique. Le `favicon.svg` est déjà fourni. |
+
+Tant que ces fichiers ne sont pas présents, l'app fonctionne mais le hero affiche
+un fond uni vert sans photo, et le footer masque automatiquement le logo BCA.
+
+---
+
+## Données établissements scolaires (Phase 3)
+
+Les CSV `etablissements_scolaires_FR.csv` (63 454 lignes, 20 Mo) et
+`cantines_scolaires_FR.csv` (59 217 lignes, 19 Mo) sont placés dans `data/raw/`
+**hors versioning Git** (voir `.gitignore`). Ils seront utilisés par le futur
+script `scripts/seed-establishments.ts` (Phase 3) pour peupler la table
+Supabase `establishments`.
+
+---
+
+## Sécurité & RGPD
+
+- Case **newsletter décochée par défaut** (exigence CNIL / arrêt CJUE Planet49) ;
+  case « campagne » pré-cochée car relevant de l'intérêt légitime, lié à l'objet
+  exact de la pétition.
+- Aucun cookie traceur. Stockage local technique uniquement (pré-remplissage
+  des étapes d'engagement post-signature), ne quitte jamais le navigateur.
+- En-têtes de sécurité par défaut dans `netlify.toml` (`X-Frame-Options`,
+  `Referrer-Policy`, `Permissions-Policy`).
+- Validation côté serveur sur toutes les Netlify Functions, jamais de confiance
+  aveugle aux paramètres URL.
+- Honeypot `hp` invisible sur les formulaires (signature et contact).
+
+À ajouter en Phase 2/3 : rate limiting (3 signatures par IP / heure), CAPTCHA
+invisible (hCaptcha) en cas de pic d'abus, vérification signature webhook
+Stripe.
+
+---
+
+## Déploiement Netlify
+
+1. Connecter le repo GitHub à Netlify.
+2. **Build settings** sont déjà dans `netlify.toml`, rien à ajouter.
+3. Renseigner les variables d'environnement dans **Site settings → Environment
+   variables** (clés du `.env.example`, partie privée + partie publique).
+4. Configurer le domaine custom `pasdepesticidespournosenfants.fr` (DNS pointant
+   sur Netlify).
+5. Push sur `main` → déploiement auto.
+
+---
+
+## Crédits
+
+Pétition portée par **Bio Consom'acteurs** — 10 rue Beaumarchais, 93100 Montreuil.
+
+Code initial scaffold par Claude Code (Anthropic) sur la base du brief produit
+fourni par le client.

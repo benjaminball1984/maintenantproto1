@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bca-green-dark: #1f3f2c;
+  --color-bca-green-light: #9dbe6f;
+  --color-bca-logo-green: #8fbe3d;
+  --color-bca-yellow: #f2c53d;
+  --color-bca-orange: #e76f4a;
+  --color-bca-cream: #faf7f0;
+  --color-text-dark: #1a1a1a;
+  --color-text-muted: #666666;
+  --color-alert: #c53030;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-bca-cream text-ink font-sans antialiased;
+    font-feature-settings: 'kern' 1, 'liga' 1;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-tight;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-bca-orange;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-bca-yellow px-6 py-4 text-lg font-bold uppercase tracking-wide text-bca-green-dark shadow-cta transition-transform hover:-translate-y-0.5 active:translate-y-0;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-bca-orange px-5 py-3 font-semibold text-white shadow-cta transition-transform hover:-translate-y-0.5 active:translate-y-0;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-bca-green-dark px-5 py-3 font-semibold text-bca-green-dark hover:bg-bca-green-dark hover:text-bca-cream transition-colors;
+  }
+  .prose-petition p {
+    @apply mb-4 leading-relaxed text-ink;
+  }
+  .prose-petition strong {
+    @apply font-semibold text-bca-green-dark;
+  }
+  .prose-petition h2 {
+    @apply mt-12 mb-4 text-2xl md:text-3xl text-bca-green-dark;
+  }
+  .prose-petition h2.appel {
+    @apply text-bca-yellow bg-bca-green-dark px-4 py-2 rounded-xl inline-block;
+  }
+  .prose-petition ul {
+    @apply list-disc pl-6 mb-4 space-y-2;
+  }
+}
