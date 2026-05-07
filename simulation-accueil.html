@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Simulation page d'accueil — Pas de pesticides pour nos enfants</title>
+<meta name="description" content="Simulation interactive de la page d'accueil pour la pétition Pas de pesticides pour nos enfants — Bio Consom'acteurs." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Caveat+Brush&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --green-dark: #1F3F2C;
+    --green-light: #9DBE6F;
+    --logo-green: #8FBE3D;
+    --yellow: #F2C53D;
+    --orange: #E76F4A;
+    --cream: #FAF7F0;
+    --ink: #1A1A1A;
+    --muted: #666666;
+    --alert: #C53030;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--cream);
+    color: var(--ink);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Bagel Fat One', system-ui, sans-serif;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  a { color: var(--green-dark); }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+  /* TOP BANDEAU INITIATIVE */
+  .topband {
+    background: rgba(0,0,0,0.25);
+    color: var(--cream);
+    text-align: center;
+    font-size: 12px;
+    padding: 6px 12px;
+  }
+  .topband a { color: var(--cream); }
+
+  /* HEADER */
+  .header {
+    position: sticky; top: 0; z-index: 30;
+    background: var(--green-dark); color: var(--cream);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  }
+  .header-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; }
+  .brand { display: flex; flex-direction: column; line-height: 1; text-decoration: none; color: inherit; }
+  .brand .l1 { font-family: 'Bagel Fat One'; font-size: 22px; }
+  .brand .l2 { font-family: 'Bagel Fat One'; font-size: 22px; color: var(--yellow); margin-top: 2px; }
+  .header nav { display: flex; gap: 22px; align-items: center; font-size: 14px; }
+  .header nav a { color: var(--cream); text-decoration: none; opacity: 0.85; }
+  .header nav a:hover { opacity: 1; color: var(--yellow); }
+  .header .sign-btn {
+    background: var(--orange); color: white !important; opacity: 1 !important;
+    padding: 8px 16px; border-radius: 12px; font-weight: 700; font-size: 13px;
+  }
+  .header .sign-btn:hover { background: #d65f3c; }
+  @media (max-width: 760px) { .header nav a:not(.sign-btn) { display: none; } }
+
+  /* HERO */
+  .hero {
+    position: relative;
+    min-height: 80vh;
+    background: var(--green-dark);
+    color: var(--cream);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    isolation: isolate;
+  }
+  .hero-photo {
+    position: absolute; inset: 0;
+    background-size: cover; background-position: center right;
+    background-image: url('./home-hero.jpg'), url('./public/images/home-hero.jpg');
+    background-color: var(--green-dark);
+  }
+  /* Fond CSS de secours si l'image n'est pas trouvée — recréation du visuel BCA */
+  .hero-photo::before {
+    content: "";
+    position: absolute; inset: 0;
+    /* Bokeh chaud à droite (lumière sur les légumes) */
+    background:
+      radial-gradient(ellipse 50% 60% at 75% 50%, rgba(245, 200, 80, 0.25), transparent 60%),
+      radial-gradient(circle 220px at 70% 35%, rgba(255, 225, 150, 0.2), transparent 70%),
+      radial-gradient(circle 180px at 80% 70%, rgba(231, 111, 74, 0.18), transparent 70%),
+      radial-gradient(circle 320px at 30% 30%, rgba(157, 190, 111, 0.15), transparent 70%),
+      linear-gradient(110deg, var(--green-dark) 0%, var(--green-dark) 30%, #2c5440 55%, #4a7758 75%, #6a8e6f 100%);
+  }
+  /* Silhouette stylisée de légumes (carottes + verdure) à droite */
+  .hero-photo::after {
+    content: "";
+    position: absolute; right: 4%; bottom: 5%;
+    width: 38%; height: 70%;
+    pointer-events: none;
+    background:
+      /* Verdure (haut) */
+      radial-gradient(ellipse 45% 25% at 30% 12%, rgba(143, 190, 61, 0.45), transparent 70%),
+      radial-gradient(ellipse 50% 30% at 60% 8%, rgba(100, 150, 60, 0.4), transparent 70%),
+      radial-gradient(ellipse 30% 18% at 80% 14%, rgba(143, 190, 61, 0.35), transparent 70%),
+      /* Carottes orange (milieu) */
+      linear-gradient(125deg, transparent 38%, rgba(231, 130, 60, 0.55) 42%, rgba(231, 111, 74, 0.65) 50%, transparent 58%),
+      linear-gradient(115deg, transparent 50%, rgba(231, 130, 60, 0.45) 53%, rgba(231, 130, 60, 0.55) 60%, transparent 66%),
+      linear-gradient(130deg, transparent 60%, rgba(220, 100, 50, 0.4) 64%, transparent 72%),
+      /* Tomate */
+      radial-gradient(circle 30px at 85% 55%, rgba(231, 90, 70, 0.55), transparent 70%),
+      /* Salade vert clair (bas) */
+      radial-gradient(ellipse 60% 25% at 30% 75%, rgba(157, 190, 111, 0.4), transparent 70%),
+      /* Panier en osier (forme courbe) */
+      radial-gradient(ellipse 80% 22% at 50% 95%, rgba(140, 100, 60, 0.55), transparent 70%);
+    filter: blur(0.5px);
+  }
+  .hero-content {
+    position: relative;
+    padding: 60px 0 80px;
+    z-index: 2;
+    width: 100%;
+  }
+  .hero h1 {
+    font-size: clamp(48px, 8vw, 92px);
+    line-height: 0.95;
+    text-shadow: 0 2px 16px rgba(0,0,0,0.35);
+  }
+  .hero h1 .y { color: var(--yellow); display: block; margin-top: 6px; }
+  .hero .slogan {
+    font-family: 'Caveat Brush';
+    font-size: clamp(22px, 3vw, 30px);
+    color: rgba(250,247,240,0.95);
+    margin: 24px 0 0;
+    max-width: 480px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  }
+  .hero .cta-block { margin-top: 38px; }
+  .hero .cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--yellow);
+    color: var(--green-dark);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 18px;
+    padding: 18px 32px;
+    border-radius: 18px;
+    text-decoration: none;
+    box-shadow: 0 6px 0 rgba(0,0,0,0.18), 0 12px 28px -6px rgba(0,0,0,0.4);
+    transition: transform 0.15s;
+  }
+  .hero .cta:hover { transform: translateY(-2px); }
+  .hero .cta:active { transform: translateY(0); box-shadow: 0 3px 0 rgba(0,0,0,0.18), 0 6px 14px -3px rgba(0,0,0,0.4); }
+  .hero .counter {
+    margin-top: 22px;
+    font-size: 16px;
+    color: rgba(250,247,240,0.92);
+  }
+  .hero .counter strong {
+    font-family: 'Bagel Fat One';
+    color: var(--yellow);
+    font-size: 26px;
+    font-weight: normal;
+  }
+
+  /* DECORS */
+  .leaf, .triangle, .flag {
+    position: absolute;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .leaf { top: 6%; left: 3%; width: 90px; height: 90px; opacity: 0.95; }
+  .triangle { top: 12%; right: 18%; width: 70px; height: 70px; opacity: 0.7; }
+  .flag { bottom: 8%; left: 4%; width: 80px; height: 80px; opacity: 0.95; }
+  @media (max-width: 760px) {
+    .leaf { top: 4%; width: 60px; height: 60px; }
+    .triangle { right: 8%; width: 50px; height: 50px; }
+    .flag { width: 60px; height: 60px; }
+  }
+
+  /* BCA badge en bas du hero */
+  .hero .bca-badge {
+    position: absolute;
+    right: 32px; bottom: 28px;
+    background: white;
+    border-radius: 14px;
+    padding: 10px 16px;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  }
+  .hero .bca-badge .pastille {
+    background: var(--logo-green);
+    color: white;
+    font-family: 'Bagel Fat One';
+    font-size: 14px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    line-height: 1;
+  }
+  .hero .bca-badge .name {
+    font-family: 'Bagel Fat One';
+    font-size: 14px;
+    color: var(--ink);
+    line-height: 1.05;
+  }
+  @media (max-width: 760px) { .hero .bca-badge { right: 16px; bottom: 16px; padding: 6px 12px; } .hero .bca-badge .pastille { font-size: 11px; } .hero .bca-badge .name { font-size: 11px; } }
+
+  /* SECTION PÉTITION */
+  .petition {
+    background: var(--cream);
+    padding: 80px 0;
+  }
+  .petition .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 12px;
+    color: var(--orange);
+    font-weight: 600;
+    margin: 0;
+  }
+  .petition h2.title {
+    font-size: clamp(32px, 5vw, 48px);
+    color: var(--green-dark);
+    margin: 8px 0 6px;
+  }
+  .petition .recipients {
+    color: var(--muted);
+    font-style: italic;
+    font-size: 15px;
+    margin-bottom: 36px;
+  }
+
+  .prose { max-width: 720px; }
+  .prose p { margin: 0 0 16px; font-size: 17px; }
+  .prose strong { color: var(--green-dark); font-weight: 600; }
+  .prose .pull {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--green-dark);
+    border-left: 4px solid var(--yellow);
+    padding-left: 16px;
+    margin: 24px 0;
+  }
+  .prose h3 {
+    font-size: clamp(24px, 3vw, 32px);
+    color: var(--green-dark);
+    margin: 48px 0 16px;
+  }
+  .prose h3.alert {
+    background: var(--green-dark);
+    color: var(--yellow);
+    display: inline-block;
+    padding: 8px 18px;
+    border-radius: 12px;
+    font-size: clamp(22px, 3vw, 28px);
+  }
+  .prose ol { padding-left: 22px; }
+  .prose ol li { margin-bottom: 10px; font-size: 16px; }
+
+  .cta-mid {
+    margin: 56px 0;
+    text-align: center;
+  }
+  .cta-mid .cta {
+    background: var(--yellow);
+    color: var(--green-dark);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 18px;
+    padding: 18px 36px;
+    border-radius: 18px;
+    text-decoration: none;
+    box-shadow: 0 6px 0 rgba(31,63,44,0.15), 0 12px 24px -6px rgba(0,0,0,0.2);
+    display: inline-block;
+  }
+
+  .references {
+    border-top: 1px solid rgba(31,63,44,0.15);
+    padding-top: 28px;
+    margin-top: 56px;
+    color: var(--muted);
+    font-size: 13px;
+    font-style: italic;
+    line-height: 1.7;
+  }
+  .references h4 {
+    font-family: 'Bagel Fat One';
+    color: var(--green-dark);
+    font-size: 18px;
+    margin-bottom: 10px;
+    font-style: normal;
+  }
+
+  .footer-meta {
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    margin-top: 48px;
+  }
+
+  /* FOOTER */
+  footer {
+    background: var(--green-dark);
+    color: var(--cream);
+    padding: 50px 0 24px;
+  }
+  footer .container { display: grid; gap: 32px; grid-template-columns: 1fr; }
+  @media (min-width: 760px) { footer .container { grid-template-columns: 1.2fr 1fr 1fr; } }
+  footer h3 { font-family: 'Bagel Fat One'; color: var(--yellow); font-size: 18px; margin-bottom: 12px; }
+  footer a { color: var(--cream); text-decoration: none; opacity: 0.85; font-size: 14px; }
+  footer a:hover { opacity: 1; color: var(--yellow); }
+  footer ul { list-style: none; padding: 0; margin: 0; }
+  footer ul li { margin-bottom: 6px; }
+  footer .socials { display: flex; gap: 8px; }
+  footer .socials a {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+  footer .copyright {
+    border-top: 1px solid rgba(255,255,255,0.1);
+    margin-top: 28px;
+    padding-top: 16px;
+    text-align: center;
+    font-size: 12px;
+    opacity: 0.7;
+  }
+
+  /* STICKY MOBILE CTA */
+  .sticky-mobile {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(31,63,44,0.96);
+    backdrop-filter: blur(8px);
+    padding: 12px 16px;
+    z-index: 40;
+    box-shadow: 0 -8px 24px -8px rgba(0,0,0,0.4);
+  }
+  .sticky-mobile.show { display: block; }
+  .sticky-mobile .cta {
+    display: block;
+    background: var(--yellow);
+    color: var(--green-dark);
+    font-weight: 700;
+    text-align: center;
+    padding: 14px;
+    border-radius: 14px;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  @media (min-width: 761px) { .sticky-mobile { display: none !important; } }
+
+  /* BANNIÈRE SIMULATION */
+  .sim-banner {
+    background: var(--orange);
+    color: white;
+    padding: 8px 16px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .sim-banner strong { font-weight: 700; }
+  .sim-banner a { color: white; text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<!-- Bandeau simulation -->
+<div class="sim-banner">
+  <strong>SIMULATION</strong> — Page d'accueil pasdepesticidespournosenfants.fr · pour rendu fidèle, déposer <code>home-hero.jpg</code> à côté de ce fichier.
+</div>
+
+<!-- Bandeau initiative BCA -->
+<div class="topband">
+  Une initiative de <a href="https://bioconsomacteurs.org" target="_blank" rel="noopener noreferrer">Bio Consom'acteurs</a>
+</div>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-inner">
+    <a href="#" class="brand">
+      <span class="l1">PAS DE PESTICIDES</span>
+      <span class="l2">POUR NOS ENFANTS&nbsp;!</span>
+    </a>
+    <nav>
+      <a href="#petition">La pétition</a>
+      <a href="#carte">La carte</a>
+      <a href="#chiffres">Les chiffres</a>
+      <a href="#qui-sommes-nous">Qui sommes-nous</a>
+      <a href="#sign" class="sign-btn">Signer</a>
+    </nav>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-photo" aria-hidden="true"></div>
+
+  <!-- Décors SVG signature -->
+  <svg class="leaf" viewBox="0 0 64 64" fill="none">
+    <path d="M14 38c0-13 11-24 24-24-2 11-9 19-19 22-3 1-5 2-5 2Z" fill="#9DBE6F"/>
+    <path d="M30 32c5-6 13-9 20-9-2 9-9 16-18 18-3 1-5 1-5 1l3-10Z" fill="#8FBE3D"/>
+  </svg>
+  <svg class="triangle" viewBox="0 0 64 64" fill="none">
+    <path d="M32 12 56 52H8L32 12Z" fill="#A6B6BB"/>
+  </svg>
+  <svg class="flag" viewBox="0 0 64 64" fill="none">
+    <path d="M8 18c8-4 14 4 22 0s14-4 22 0v14c-8-4-14 4-22 0s-14-4-22 0V18Z" fill="#E76F4A"/>
+    <path d="M8 32c8-4 14 4 22 0s14-4 22 0v14c-8-4-14 4-22 0s-14-4-22 0V32Z" fill="#E76F4A"/>
+  </svg>
+
+  <div class="container hero-content">
+    <h1>
+      PAS DE PESTICIDES
+      <span class="y">POUR NOS ENFANTS&nbsp;!</span>
+    </h1>
+    <p class="slogan">Une petite signature pour vous,<br/>un grand pas pour leur santé.</p>
+
+    <div class="cta-block">
+      <a href="#sign" class="cta">
+        Signer la pétition
+        <span aria-hidden="true">→</span>
+      </a>
+      <p class="counter"><strong>12 487</strong> signataires nous rejoignent déjà</p>
+    </div>
+  </div>
+
+  <!-- Badge BCA en bas à droite (comme sur le visuel imprimé) -->
+  <div class="bca-badge">
+    <span class="pastille">BIO</span>
+    <span class="name">consom'acteurs</span>
+  </div>
+</section>
+
+<!-- TEXTE INTÉGRAL DE LA PÉTITION -->
+<section id="petition" class="petition">
+  <div class="container">
+    <p class="eyebrow">Pétition</p>
+    <h2 class="title">Pas de pesticides pour nos enfants</h2>
+    <p class="recipients">
+      Adressée au gouvernement, aux député·es, aux maires, aux conseils départementaux et aux conseils régionaux
+    </p>
+
+    <div class="prose">
+      <p>
+        Chaque jour, dans les écoles, les collèges et les lycées de notre pays, des millions
+        d'enfants prennent un repas dont on sait qu'il les expose à des substances que la
+        science accuse depuis des années. Et chaque jour, l'État et trop de collectivités
+        regardent ailleurs.
+      </p>
+      <p class="pull">Cela suffit. Nos enfants ne sont pas une variable d'ajustement.</p>
+
+      <h3>Ce que dit la science</h3>
+      <p>
+        L'expertise collective de l'<strong>INSERM</strong> publiée en 2021 établit une
+        présomption forte de lien entre l'exposition aux pesticides chez l'enfant et la
+        survenue de cancers pédiatriques, en particulier les leucémies et les tumeurs du
+        système nerveux central. Pour certains insecticides, la présomption forte porte
+        aussi sur des troubles du développement neuropsychologique et moteur.
+      </p>
+      <p>
+        Or les enfants vont à la cantine très tôt — dès la maternelle, souvent dès trois
+        ans, parfois plus tôt encore. Sur ces tout-petits, dont les barrières
+        physiologiques sont immatures et dont les cellules sont en multiplication
+        intense, les pesticides agissent davantage. C'est pendant ces années-là que
+        l'exposition pèse le plus lourd, et que ce qu'on met dans leur assiette compte
+        le plus.
+      </p>
+      <p>
+        L'étude <strong>PestiRiv</strong>, publiée en 2025 par Santé publique France et
+        l'ANSES, confirme que vivre près des cultures expose davantage. L'étude
+        <strong>Esteban</strong> établit l'imprégnation de la population générale, enfants compris.
+      </p>
+      <p class="pull">Les preuves sont là. Le doute n'est plus permis. Ce qu'il manque, c'est le courage politique.</p>
+
+      <h3>La loi est claire. Elle n'est pas respectée.</h3>
+      <p>
+        La loi <strong>EGalim</strong> (30 octobre 2018), complétée par la loi
+        <strong>Climat et Résilience</strong> (22 août 2021), oblige depuis le
+        <strong>1er janvier 2022</strong> toutes les cantines scolaires, universitaires,
+        hospitalières et médico-sociales à proposer au moins
+        <strong>50 % de produits durables et de qualité</strong>, dont
+        <strong>20 % issus de l'agriculture biologique</strong>. Sept ans plus tard,
+        c'est encore largement lettre morte.
+      </p>
+      <p>
+        Selon l'enquête de l'Association des maires de France (2024), seules
+        <strong>18 % des communes</strong> respectent les deux seuils. Sur la plateforme
+        gouvernementale Ma cantine, les taux moyens en 2022 plafonnaient à
+        <strong>27,5 %</strong> de produits durables et <strong>13,1 %</strong> de bio.
+        La loi ne prévoit aucune sanction. Et pendant ce temps, nos enfants mangent.
+      </p>
+
+      <h3>La cantine qu'on veut pour nos enfants</h3>
+      <p>
+        Nos enfants ne méritent pas seulement « moins pire ». Ils méritent le meilleur.
+        Une cantine digne de ce nom, c'est une cantine
+        <strong>bio, gratuite, équitable, conviviale, faite maison, avec des produits locaux
+        et de saison, saine, équilibrée, à moindre impact environnemental — et bonne.</strong>
+        Oui, bonne, parce qu'il est temps de se rappeler qu'un repas se mange aussi avec plaisir.
+      </p>
+      <p>
+        Cela fait des décennies que la fabrication des repas scolaires a été
+        déshumanisée par les grands groupes de la restauration collective, qui livrent
+        des plats fades, surgelés, ultra-transformés, expédiés de très loin et servis
+        sans âme. Ce modèle est un échec sanitaire, écologique, social et culturel. Il
+        faut le quitter.
+      </p>
+      <p>
+        Une cuisine faite sur place, par des cuisinier·es payé·es dignement, avec des
+        aliments produits par des paysannes et paysans bio du territoire : c'est cela,
+        une vraie cantine. Une cantine qui apprend aux enfants le vrai goût des
+        aliments, qui les aide à apprendre, à grandir, à être en bonne santé. Bien
+        manger n'est pas un luxe : c'est la base. Et la santé, l'apprentissage et
+        l'éveil au goût se construisent dans l'enfance ou jamais.
+      </p>
+
+      <h3>Bon pour les enfants, la planète, les paysannes et paysans</h3>
+      <p>
+        Une cantine bio, locale, équitable et de saison ne s'oppose pas à celles et ceux
+        qui font notre nourriture : elle les soutient. Elle leur permet d'être justement
+        rémunéré·es pour un travail trop souvent étranglé par un système agro-industriel
+        qui les paie sous le coût de production. Choisir le bio local et équitable dans
+        les cantines publiques, c'est garantir un revenu paysan digne, c'est faire vivre
+        les fermes du territoire, c'est arrêter de subventionner avec l'argent public un
+        modèle qui détruit les sols, l'eau, l'air et la santé.
+      </p>
+      <p>
+        Comme l'a affirmé l'<strong>Appel de Lorient</strong> en octobre 2024, signé par
+        Bio Consom'acteurs et plus de 220 organisations, la bio coûte moins cher à la
+        collectivité que l'agriculture industrielle, dont les coûts cachés —
+        dépollution de l'eau, soins de santé, biodiversité détruite — sont massifs et
+        payés par les contribuables.
+      </p>
+
+      <h3 class="alert">Nos demandes</h3>
+      <p>
+        Aux élu·es et responsables politiques, à toutes les échelles — État, Parlement,
+        régions, départements, communes — qui ont, chacun·e dans le périmètre de leurs
+        compétences, la responsabilité directe ou indirecte des cantines de nos enfants,
+        nous demandons un engagement public, immédiat et chiffré sur les mesures suivantes :
+      </p>
+      <ol>
+        <li><strong>Respecter immédiatement</strong>, dans toutes les cantines scolaires (de la maternelle au lycée) et de la petite enfance, l'obligation légale de la loi EGalim — 50 % de produits durables et de qualité dont 20 % issus de l'agriculture biologique — et publier une trajectoire vers 100 % bio à horizon précisé&nbsp;;</li>
+        <li>Revenir à une <strong>cuisine faite sur place</strong> dans les cantines, avec des cuisinier·es formé·es et dignement rémunéré·es, plutôt que de déléguer à des grands groupes industriels&nbsp;;</li>
+        <li>Privilégier l'<strong>achat direct, local et de saison</strong> auprès des paysannes et paysans bio du territoire, garantir des prix qui couvrent les coûts de production et assurent un revenu paysan digne&nbsp;;</li>
+        <li>Proposer chaque jour une <strong>alternative végétarienne</strong> et réduire la part des produits carnés et d'origine animale&nbsp;;</li>
+        <li><strong>Réduire drastiquement les déchets</strong>, le plastique et le gaspillage alimentaire, et bannir les contenants plastiques de cuisson, de réchauffe et de service&nbsp;;</li>
+        <li>Garantir progressivement la <strong>gratuité de la cantine</strong> pour toutes les familles, en commençant par les familles aux revenus les plus modestes&nbsp;;</li>
+        <li><strong>Interdire l'usage de pesticides de synthèse</strong> dans tous les espaces publics, en particulier autour des crèches, des écoles et des lieux fréquentés par les enfants&nbsp;;</li>
+        <li><strong>Renforcer la loi EGalim</strong> en prévoyant des sanctions effectives en cas de non-respect&nbsp;;</li>
+        <li>Publier chaque année un <strong>bilan public, détaillé et accessible</strong> de la composition des repas servis et de l'avancement des engagements pris.</li>
+      </ol>
+
+      <h3>Nous sommes déterminé·es</h3>
+      <p>Parce que nos enfants ne paieront pas, dans leur santé, le prix d'un système agricole et alimentaire que la science alerte, que la loi tente de corriger, et que la société civile dénonce depuis des décennies.</p>
+      <p>Parce que les paysannes et paysans qui font le choix de la bio méritent un soutien à la hauteur de ce qu'ils apportent — à la santé publique, à l'environnement, aux territoires.</p>
+      <p>Parce qu'il est entre les mains des élu·es, à chaque échelon, de transformer concrètement la cantine de nos enfants — sans attendre.</p>
+      <p class="pull">Nous serons attentif·ves, attentives, à vos décisions, à leur calendrier, et à leurs effets concrets dans nos écoles, nos collèges, nos lycées et nos territoires.</p>
+    </div>
+
+    <div class="cta-mid">
+      <a href="#sign" class="cta">Signer la pétition →</a>
+    </div>
+
+    <div class="references">
+      <h4>Références</h4>
+      <p>INSERM, expertise collective <em>Pesticides et santé — Nouvelles données</em>, juin 2021. Santé publique France, étude <em>Esteban</em> (programme national de biosurveillance). Santé publique France et ANSES, étude <em>PestiRiv</em>, septembre 2025. Loi n° 2018-938 du 30 octobre 2018 (EGalim) ; loi n° 2021-1104 du 22 août 2021 (Climat et Résilience). Enquête Association des maires de France, restauration scolaire, 2024. Plateforme gouvernementale <em>Ma cantine</em>. Appel de Lorient — la Bio pour la Vie, 20 octobre 2024.</p>
+    </div>
+
+    <p class="footer-meta">
+      Pétition portée par <strong>Bio Consom'acteurs</strong> — 10 rue Beaumarchais, 93100 Montreuil
+    </p>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div>
+      <div style="background: white; display: inline-flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; margin-bottom: 14px;">
+        <span style="background: var(--logo-green); color: white; font-family: 'Bagel Fat One'; font-size: 14px; padding: 3px 10px; border-radius: 12px; line-height: 1;">BIO</span>
+        <span style="font-family: 'Bagel Fat One'; font-size: 14px; color: var(--ink);">consom'acteurs</span>
+      </div>
+      <p style="font-size: 14px; opacity: 0.85; line-height: 1.6;">
+        Pétition portée par <strong>Bio Consom'acteurs</strong><br>
+        10 rue Beaumarchais, 93100 Montreuil
+      </p>
+      <a href="https://www.helloasso.com/associations/bio-consom-acteurs/formulaires/1" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: var(--orange); color: white; padding: 8px 16px; border-radius: 12px; font-weight: 700; text-decoration: none; font-size: 13px; margin-top: 12px; opacity: 1;">Faire un don à BCA</a>
+    </div>
+
+    <div>
+      <h3>Suivre BCA</h3>
+      <div class="socials">
+        <a href="https://www.instagram.com/bioconsomacteurs/" aria-label="Instagram">📷</a>
+        <a href="https://www.facebook.com/bioconsomacteurs/" aria-label="Facebook">f</a>
+        <a href="https://bsky.app/profile/bioconsomacteurs.org" aria-label="Bluesky">🦋</a>
+        <a href="https://www.linkedin.com/company/bca-idf/" aria-label="LinkedIn">in</a>
+        <a href="https://www.youtube.com/@bioconsomacteursBCA" aria-label="YouTube">▶</a>
+      </div>
+    </div>
+
+    <div>
+      <h3>Liens utiles</h3>
+      <ul>
+        <li><a href="#">Mentions légales</a></li>
+        <li><a href="#">Politique de confidentialité</a></li>
+        <li><a href="#">Contact</a></li>
+        <li><a href="mailto:contact@bioconsomacteurs.org">contact@bioconsomacteurs.org</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="copyright">
+    © 2026 Bio Consom'acteurs — Tous droits réservés
+  </div>
+</footer>
+
+<!-- STICKY MOBILE CTA -->
+<div class="sticky-mobile" id="sticky-mobile">
+  <a href="#sign" class="cta">Signer la pétition</a>
+</div>
+
+<script>
+  // Sticky CTA mobile : apparaît au scroll
+  (function() {
+    var sticky = document.getElementById('sticky-mobile');
+    function check() {
+      if (window.scrollY > 500) {
+        sticky.classList.add('show');
+      } else {
+        sticky.classList.remove('show');
+      }
+    }
+    window.addEventListener('scroll', check, { passive: true });
+    check();
+  })();
+</script>
+</body>
+</html>
