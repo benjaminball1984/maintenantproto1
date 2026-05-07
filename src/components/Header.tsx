@@ -7,7 +7,9 @@ import { cn } from '@/lib/cn';
 const NAV = [
   { to: '/', label: 'Accueil' },
   { to: '/#petition', label: 'La pétition' },
-  { to: '/contact', label: 'Contact' },
+  { to: '/carte', label: 'La carte' },
+  { to: '/chiffres', label: 'Les chiffres' },
+  { to: '/qui-sommes-nous', label: 'Qui sommes-nous' },
 ];
 
 export default function Header() {

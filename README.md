@@ -12,20 +12,22 @@ Site de mobilisation pour la pétition **Pas de pesticides pour nos enfants**, p
 | Phase | Périmètre | Statut |
 |---|---|---|
 | **1 — MVP signatures** | Site, pétition, signature, mail de remerciement, pages légales | ✅ Code livré |
-| **2 — Commande matériel** | Sélecteur, frais de port, Stripe Checkout, webhook | ⏳ À venir |
-| **3 — Distributions** | Autocomplétion établissements, formulaire, fiche pratique, rappels J-1/J-0 | ⏳ À venir |
-| **4 — Carte & chiffres** | Carte MapLibre, agenda, tableau de bord public | ⏳ À venir |
-| **5 — Qui sommes-nous + finitions** | Premiers signataires, partenaires, perf, a11y, tests E2E | ⏳ À venir |
+| **2 — Commande matériel** | Sélecteur, frais de port, Stripe Checkout, webhook | 🔁 Reportée — code prêt sur la branche `claude/phase-2-commande-materiel`. Page `/commander` actuellement en placeholder « bientôt disponible ». |
+| **3 — Distributions** | Autocomplétion établissements (58 972), formulaire, fiche pratique, rappels J-1/J-0 | ✅ Code livré |
+| **4 — Carte & chiffres** | Carte MapLibre + OSM, agenda, tableau de bord public, top 10 départements | ✅ Code livré |
+| **5 — Qui sommes-nous + finitions** | Page BCA + premiers signataires + partenaires, lazy loading, code splitting | ✅ Code livré |
 
 ---
 
 ## Stack
 
-- **Vite + React 18 + TypeScript** + React Router v6
+- **Vite + React 18 + TypeScript** + React Router v6 (lazy loading par route)
 - **Tailwind CSS** (charte BCA dans `tailwind.config.ts` + `src/styles/theme.css`)
 - **Supabase** (Postgres EU) — `@supabase/supabase-js`
 - **Resend** pour les emails transactionnels (Netlify Functions)
-- **Netlify** : hébergement + serverless functions (TypeScript, esbuild)
+- **MapLibre GL JS** + tuiles OpenStreetMap — page `/carte` (chargé à la demande)
+- **date-fns** + locale `fr` pour le formatage français
+- **Netlify** : hébergement + functions serverless (TypeScript, esbuild) + scheduled function cron
 - **Validation** : Zod + React Hook Form
 - **Icônes** : lucide-react
 
@@ -144,9 +146,26 @@ un fond uni vert sans photo, et le footer masque automatiquement le logo BCA.
 
 Les CSV `etablissements_scolaires_FR.csv` (63 454 lignes, 20 Mo) et
 `cantines_scolaires_FR.csv` (59 217 lignes, 19 Mo) sont placés dans `data/raw/`
-**hors versioning Git** (voir `.gitignore`). Ils seront utilisés par le futur
-script `scripts/seed-establishments.ts` (Phase 3) pour peupler la table
-Supabase `establishments`.
+**hors versioning Git** (voir `.gitignore`).
+
+**Deux usages côté projet :**
+
+1. **Autocomplétion côté client** (page `/organiser`) — JSON allégé compact
+   `public/data/etablissements.min.json` (5,46 Mo / 1,66 Mo gzippé) contenant
+   58 972 établissements avec cantine. Régénération :
+   ```bash
+   npm run build:establishments
+   ```
+   (lit `data/raw/cantines_scolaires_FR.csv`, écrit `public/data/…`).
+
+2. **Table Supabase `establishments`** (utilisée par les vues publiques pour la
+   carte / agenda) — peuplée via :
+   ```bash
+   export VITE_SUPABASE_URL=...
+   export SUPABASE_SERVICE_ROLE_KEY=...
+   npm run seed:establishments
+   ```
+   Insertion par batches de 1 000 lignes. Idempotent (upsert sur la PK `uai`).
 
 ---
 
