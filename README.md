@@ -1,25 +1,58 @@
-# CODING AGENTS: READ THIS FIRST
+# Maintenant ! — La voix des 99%
 
-This is a **handoff bundle** from Claude Design (claude.ai/design).
+Plateforme citoyenne francophone : mobilisation civique, services solidaires, espace communautaire, adhésion.
 
-A user mocked up designs in HTML/CSS/JS using an AI design tool, then exported this bundle so a coding agent can implement the designs for real.
+## Démarrage rapide (prototype actuel)
 
-## What you should do — IMPORTANT
+```bash
+# Ouvrir directement dans un navigateur
+open app/Maintenant.html
+# ou servir un dossier statique
+npx serve app
+```
 
-**Read the chat transcripts first.** There are 3 chat transcript(s) in `chats/`. The transcripts show the full back-and-forth between the user and the design assistant — they tell you **what the user actually wants** and **where they landed** after iterating. Don't skip them. The final HTML files are the output, but the chat is where the intent lives.
+Aucune dépendance à installer — React et Babel sont chargés via CDN.
 
-**Read `project/app/Maintenant.html` in full.** The user had this file open when they triggered the handoff, so it's almost certainly the primary design they want built. Read it top to bottom — don't skim. Then **follow its imports**: open every file it pulls in (shared components, CSS, scripts) so you understand how the pieces fit together before you start implementing.
+## Documentation
 
-**If anything is ambiguous, ask the user to confirm before you start implementing.** It's much cheaper to clarify scope up front than to build the wrong thing.
+- **[HANDOFF.md](./HANDOFF.md)** — Dossier de passation complet (stack, archi, schéma DB, sprints, déploiement)
+- **[CLAUDE.md](./CLAUDE.md)** — Instructions pour Claude Code
+- **[.env.example](./.env.example)** — Variables d'environnement requises
+- **[db/schema.sql](./db/schema.sql)** — Schéma Supabase Postgres
+- **[package.template.json](./package.template.json)** — Template `package.json` pour la migration Vite
 
-## About the design files
+## Structure
 
-The design medium is **HTML/CSS/JS** — these are prototypes, not production code. Your job is to **recreate them pixel-perfectly** in whatever technology makes sense for the target codebase (React, Vue, native, whatever fits). Match the visual output; don't copy the prototype's internal structure unless it happens to fit.
+```
+.
+├── app/                  ← Prototype HTML/JSX (entrée : Maintenant.html)
+├── db/                   ← Schéma Postgres + migrations
+├── HANDOFF.md            ← Passation tech
+├── CLAUDE.md             ← Instructions agent
+├── README.md             ← Ce fichier
+├── .env.example          ← Variables d'env (à copier en .env.local)
+└── package.template.json ← Base package.json pour Vite+React+TS
+```
 
-**Don't render these files in a browser or take screenshots unless the user asks you to.** Everything you need — dimensions, colors, layout rules — is spelled out in the source. Read the HTML and CSS directly; a screenshot won't tell you anything they don't.
+## Stack cible (prod)
 
-## Bundle contents
+- **Frontend** : Vite + React 18 + TypeScript
+- **Backend** : Supabase (Postgres + Auth + Storage + Realtime + RLS)
+- **Paiements** : Stripe (adhésions + financement participatif)
+- **Email** : Resend ou Postmark
+- **Hébergement** : Vercel/Netlify (front) + Supabase (back) + Cloudflare (DNS/WAF)
+- **Monitoring** : Sentry + Plausible
 
-- `README.md` — this file
-- `chats/` — conversation transcripts (read these!)
-- `project/` — the `Maintenant! Design System` project files (HTML prototypes, assets, components)
+## Marque
+
+- Couleurs : rose `#E11D74`, violet `#7C3AED`, fond `#FAFAF9`
+- Typographies : Sora (titres), Inter (corps)
+- Pas de pub, pas de tracking, RGPD-first, EU-hosted
+
+## Licence
+
+À définir — recommandation AGPL v3 pour un projet à mission citoyenne (forks ouverts mais obligation d'ouverture).
+
+---
+
+**Voir [HANDOFF.md](./HANDOFF.md) pour tout le reste.**
