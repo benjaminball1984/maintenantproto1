@@ -9,4 +9,9 @@ vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'public-anon-test-key');
 
 afterEach(() => {
   cleanup();
+  try {
+    window.localStorage.clear();
+  } catch {
+    /* jsdom localStorage absente — ignore. */
+  }
 });

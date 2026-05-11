@@ -21,7 +21,8 @@
 | 10. Sprint 2 — Mobilisations CRUD côté front            |   ✅   |
 | 11. Sprint 2 — Sondages CRUD côté front                 |   ✅   |
 | 12. Sprint 2 — Campagnes CRUD côté front                |   ✅   |
-| 13. Fin Sprint 2 — Audit RGPD ou bascule Sprint 3       |   ⬜   |
+| 13. Fin Sprint 2 — Audit RGPD ou bascule Sprint 3       |   ✅   |
+| 14. Sprint 3 — Hébergement + Covoiturage CRUD côté front |   ⬜   |
 
 ---
 
@@ -3117,3 +3118,333 @@ psql maintenant_test -c "insert into public.polls(author_id, slug, question) val
 > sessions, mais elle est désormais **facultative** côté boucle
 > récursive — l'agent peut basculer sur la convention git-flow standard
 > du projet si l'utilisateur le souhaite.
+
+---
+
+## Étape 13 — Fin Sprint 2 / Audit RGPD ✅
+
+**Branche** : `claude/add-campaigns-module-FHBHA` (merge `claude/add-polls-module-lv84O`
+@ `9193afa` → étape 12 puis travail étape 13)
+**Commit cible** : `chore(rgpd): step 13 — bannière cookies + pages légales + audit RLS/Sentry`
+
+### Bannière cookies
+
+- `web/src/lib/consent.ts` — helpers typés `readConsent`, `writeConsent`,
+  `clearConsent` autour de la clé `mn:cookie-consent` (localStorage).
+  Schéma versionné `{ version, choice, categories, at }` : tout bump de
+  `CONSENT_VERSION` invalide automatiquement les choix passés (ré-affichage
+  forcé de la bannière). Pas de dépendance externe.
+- `web/src/components/CookieBanner.tsx` — bannière fixée en bas, conforme
+  CNIL :
+  - Catégorisation **strictement nécessaire** (toujours active) + **mesure
+    d'audience anonymisée** (opt-in). Pas de tracking publicitaire, pas de
+    profilage cross-site.
+  - Trois actions principales : « Tout accepter », « Tout refuser »,
+    « Personnaliser » (panneau inline avec checkboxes par catégorie).
+  - Le refus est aussi facile que l'acceptation (même hiérarchie de
+    bouton). La bannière disparaît après choix et persiste jusqu'à un bump
+    de version ou un reset utilisateur via `/legal/cookies`.
+  - Accessible clavier : tous les boutons natifs, `aria-expanded`,
+    `aria-controls`, `role="region"` avec `aria-labelledby`/`aria-describedby`.
+- Branchée dans `RootLayout` (sous `<Outlet />` + `Footer`) → s'affiche
+  partout au premier render si pas de consentement.
+
+### Pages légales
+
+- `web/src/pages/PrivacyPage.tsx` — route `/legal/privacy`. Sommaire avec
+  ancres : `#responsable`, `#finalites`, `#base-legale`, `#donnees`,
+  `#conservation`, `#sous-traitants`, `#droits`, `#dpo`. Couvre :
+  - Identité du responsable de traitement.
+  - Finalités (gestion compte, contenu militant, services, adhésions
+    T99CP, messagerie, audience anonymisée, modération).
+  - Triple base légale (contrat / consentement / intérêt légitime) avec
+    détail par finalité.
+  - Catégories de données collectées + précision sur signatures/votes
+    (transparence des soutiens publics).
+  - Durées de conservation (compte, contenus, messages 24 mois, logs
+    12 mois, comptabilité 10 ans).
+  - Sous-traitants : Supabase EU (Francfort), Vercel EU, Stripe (PCI-DSS
+    niveau 1), Sentry (scrub PII avant envoi).
+  - Droits RGPD + lien CNIL.
+- `web/src/pages/LegalNoticePage.tsx` — route `/legal/notice`. Éditeur
+  (forme juridique, siège, SIRET, directeur publication — placeholders à
+  compléter avant mise en prod), hébergeurs (Vercel + Supabase + Stripe),
+  propriété intellectuelle.
+- `web/src/pages/CookiesPage.tsx` — route `/legal/cookies`. Tableau des
+  cookies (`sb-auth-token`, `mn:cookie-consent`, `_mn_audience`) avec
+  finalité / durée / catégorie. Affichage de l'état courant
+  (« vous avez accepté tous les cookies » / « vous avez refusé… »).
+  Bouton « Modifier mes choix » qui purge le consentement et déclenche
+  la ré-apparition de la bannière au prochain chargement.
+- `web/src/components/Footer.tsx` — pied de page global accessible
+  (`aria-label="Pied de page"`, sous-nav `aria-label="Liens légaux"`)
+  avec les 3 liens `/legal/privacy`, `/legal/notice`, `/legal/cookies`.
+  Branché dans `RootLayout` au-dessus du `CookieBanner`.
+
+### Routes
+
+- `/legal` (nested) avec enfants `privacy`, `notice`, `cookies`. Public.
+
+### Audit RLS final — passage en revue table par table
+
+Légende des colonnes :
+
+- **R** = SELECT (lecture)
+- **W** = INSERT / UPDATE / DELETE (écriture)
+- `pub` = public / anon ; `auth` = utilisateur connecté ; `own` = propriétaire ;
+  `party` = partie prenante de la ligne ; `admin` = `is_admin(auth.uid())`.
+
+| Table                       | R                       | W                        | Verdict RGPD                                              |
+| --------------------------- | :---------------------- | :----------------------- | :-------------------------------------------------------- |
+| `users`                     | `pub` (profil)          | INS self / UP self+admin / DEL admin | **À durcir** : email présent dans la table → exposé via `select *`. Cf. action #1 ci-dessous. |
+| `petitions`                 | published / own / admin | INS self / UP+DEL own+admin | OK. Brouillons protégés.                                   |
+| `signatures`                | `pub` (compteur)        | INS self / DEL self+admin | OK (acceptable). user_id projeté = opinion politique liée → couvert par la politique de confidentialité (transparence des soutiens). |
+| `mobilizations`             | published / own / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `participations`            | `pub` (compteur)        | INS self / DEL self+admin | OK (idem signatures).                                     |
+| `housing`                   | is_published / own / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `housing_requests`          | requester+host+admin    | INS self / UP+DEL parties+admin | OK (strictement privé).                                    |
+| `carpooling`                | is_published / driver / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `lending`                   | `pub`                   | INS self / UP+DEL own+admin | OK (annonces objet — pas de PII sensible).                 |
+| `marketplace_items`         | `pub`                   | INS self / UP+DEL own+admin | OK.                                                       |
+| `garden_plots`              | `pub`                   | INS self / UP+DEL own+admin | OK.                                                       |
+| `sel_offers`                | is_active / own / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `sel_demands`               | is_active / own / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `crowdfunding_campaigns`    | published / own / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `contributions`             | contributor+organizer+admin | INS self (UP/DEL interdits) | OK (privé, intégrité comptable préservée).                 |
+| `articles`                  | published / author / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `comments`                  | `pub` sauf is_flagged   | INS self / UP+DEL own+admin | OK.                                                       |
+| `reactions`                 | `pub`                   | INS self / DEL self+admin | OK.                                                       |
+| `posts`                     | visibility-based        | INS self / UP+DEL own+admin | OK (`public` / `members` / `private` respectés).           |
+| `post_likes`                | `pub`                   | INS self / DEL self+admin | OK.                                                       |
+| `post_comments`             | `pub` sauf is_flagged   | INS self / UP+DEL own+admin | OK.                                                       |
+| `polls`                     | published / author / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `poll_options`              | `pub`                   | FOR ALL → author du poll + admin | OK.                                                       |
+| `votes`                     | `pub` (compteur)        | INS self+members_only / DEL self+admin | OK (idem signatures, transparence assumée).                |
+| `campaigns`                 | published / author / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `campaign_actions`          | `pub`                   | FOR ALL → author de la campaign + admin | OK.                                                       |
+| `communes`                  | `pub`                   | FOR ALL → admin uniquement | OK (politique éditoriale).                                 |
+| `commune_members`           | `pub`                   | INS self / UP admin+treasurer / DEL self+admin | OK.                                                       |
+| `conversations`             | user_a / user_b / admin | INS+UP party / DEL party+admin | OK (strictement privé).                                    |
+| `messages`                  | party / admin           | INS party / UP admin only | OK (body figé).                                            |
+| `notifications`             | recipient only          | INS admin / UP recipient / DEL recipient+admin | OK (admins exclus de la lecture — c'est volontaire).       |
+| `members`                   | `pub` (badge)           | FOR ALL → admin uniquement | À surveiller : badge adhérent public — affiliation à une association politique → couvert par la politique de confidentialité. |
+| `adhesions`                 | self / admin            | INS self / UP admin only  | OK.                                                       |
+| `t99cp_transactions`        | self / admin            | INS admin only (RPC SECURITY DEFINER) | OK (intégrité monétaire).                                 |
+| `admin_logs`                | admin only              | admin only                | OK.                                                       |
+| `email_campaigns`           | admin only              | admin only                | OK.                                                       |
+| `storage.objects` (avatars) | `pub` (bucket public)   | INS+UP+DEL owner sous `<uid>/` | OK (path-scoped, pas d'écrasement croisé).                 |
+
+#### Findings principaux
+
+1. **`users.email` exposé via `select *`** (table en lecture publique).
+   Aucune table privée n'est `using (true)` en SELECT — sauf `users`,
+   qui *est* publique par design, mais l'email s'y trouve. **À faire
+   avant mise en prod** : soit créer une vue `public_users` (id,
+   display_name, avatar, ville, badges) et révoquer `select` sur
+   `users` au rôle anon, soit utiliser `GRANT SELECT (cols…)` pour
+   masquer la colonne `email`. Suivi : ticket à ouvrir au Sprint 6
+   (« hardening final »).
+2. **`signatures` / `participations` / `votes`** : `user_id` projeté
+   publiquement = donnée d'opinion politique liée à l'identité. C'est
+   un trade-off RGPD assumé (transparence des soutiens militants),
+   désormais explicité dans `PrivacyPage` §4 (« données collectées »).
+3. **`members.user_id`** : badge adhérent public = donnée d'appartenance
+   à une organisation politique. Idem — assumé, documenté dans
+   `PrivacyPage`. Pas de listing public des membres directement,
+   seulement le badge sur le profil de la personne qui publie.
+4. **`is_admin()` est bien la seule porte d'entrée admin** sur toutes
+   les policies — vérifié visuellement, aucune table n'a un autre
+   raccourci (pas de `auth.role() = 'service_role'` direct dans une
+   policy front-facing).
+5. **Aucune table privée n'a `using (true)` en SELECT** : housing_requests,
+   conversations, messages, notifications, adhesions, t99cp_transactions,
+   contributions, admin_logs, email_campaigns sont toutes party-only ou
+   self-only ou admin-only.
+
+#### Décisions
+
+- L'audit ne modifie pas le schéma à cette étape — les findings #1, #2,
+  #3 sont documentés ici et dans `PrivacyPage`. La création d'une vue
+  `public_users` + retrait de `select` direct est planifiée pour le
+  Sprint 6 (hardening pré-prod).
+- Les policies utilisant `using (true)` sur des compteurs publics
+  (signatures, participations, votes, post_likes, reactions, campaign_actions,
+  poll_options) sont volontaires et alignées avec l'esprit transparence
+  du projet.
+
+### Audit Sentry no-PII
+
+- `web/src/lib/sentry.ts` — scaffold `scrubEvent(event)` à passer en
+  `beforeSend` quand le SDK Sentry sera branché. Pas de dépendance
+  `@sentry/browser` côté lib (autonome + 100 % testable).
+- Pattern `PII_KEY_PATTERN` couvre `email`, `phone`, `address`, `token`,
+  `password`, `authorization` (case-insensitive, match partiel sur
+  `streetAddress`, `userEmail`, `AuthorizationHeader`, etc.).
+- `scrubEvent` :
+  - `event.user` → `[Filtered]` complètement (pas même un id pseudonymisé
+    par défaut).
+  - `event.request.cookies` → `[Filtered]`.
+  - `event.request.headers` → scrub récursif.
+  - `event.extra`, `event.contexts`, `event.tags` → scrub récursif
+    (toute clé matchant le pattern).
+  - `event.breadcrumbs` → scrub récursif élément par élément.
+  - Immutable : ne mute pas l'événement d'origine (clone superficiel +
+    récursif des sous-objets).
+- Quand le SDK sera ajouté (clé DSN), l'init côté `main.tsx` ressemblera
+  à :
+  ```ts
+  Sentry.init({ dsn, beforeSend: scrubEvent });
+  ```
+
+### Tests
+
+- `src/lib/consent.test.ts` — **9 cas** : `readConsent` (5 : null,
+  JSON invalide, version obsolète, choice inconnu, valide),
+  `writeConsent` (2 : persistance + storage broken), `clearConsent`
+  (1), `MemoryStorage` impl test-only (intégrée dans le fichier).
+- `src/components/CookieBanner.test.tsx` — **8 cas** : affichage sans
+  consentement, masquage si déjà consenti, version obsolète →
+  réapparition, accept all, refuse all, personnaliser → ouvre panneau,
+  toggle analytics + enregistrement custom.
+- `src/pages/PrivacyPage.test.tsx` — **3 cas** : titre, toutes les
+  ancres présentes, sous-traitants listés.
+- `src/pages/LegalNoticePage.test.tsx` — **2 cas** : titre, éditeur +
+  hébergeurs.
+- `src/pages/CookiesPage.test.tsx` — **4 cas** : tableau cookies,
+  état « aucun choix », état « tout accepter », reset choix.
+- `src/lib/sentry.test.ts` — **6 cas** : pattern PII match/no-match,
+  scrub user, scrub cookies, scrub headers, scrub extra profond,
+  scrub breadcrumbs, immutabilité.
+- **Total : 32 nouveaux tests** (266 + 32 = **298 tests verts**).
+
+### Hygiène
+
+- `web/src/test/setup.ts` : ajout d'un `window.localStorage.clear()`
+  dans le `afterEach` global pour éviter que la bannière fuie entre
+  tests (RootLayout monte CookieBanner systématiquement). Wrapped
+  dans `try/catch` pour rester compatible avec les environnements où
+  `localStorage` est indisponible.
+
+### Checks finaux
+
+- `typecheck` : OK (TS 6 strict, pas de `any`).
+- `lint` : OK (ESLint flat, jsx-a11y + react-hooks).
+- `test` : **298 passed**.
+- `build` : 295 kB minified, 85 kB gzip (légère hausse vs étape 12 — pages
+  légales + bannière sont peu coûteuses).
+- `format:check` : OK (prettier 3).
+
+### Prochaines étapes
+
+- **Étape 14** : Sprint 3 — Hébergement + Covoiturage CRUD côté front.
+  Pattern habituel `lib + hooks + listing + fiche + création RequireAuth +
+  tests`. Tables déjà en place (`housing`, `housing_requests`, `carpooling`)
+  avec RLS validée à cette étape.
+- **À ouvrir en ticket avant mise en prod** : vue `public_users` masquant
+  l'email + grant SELECT colonne par colonne (cf. finding #1).
+- **À brancher quand DSN dispo** : `Sentry.init({ beforeSend: scrubEvent })`
+  dans `web/src/main.tsx`.
+
+---
+
+## Prompt pour la session N+8 (étape 14)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD).
+> 2. `HANDOFF.md` §10 Sprint 3 (services communautaires — Hébergement,
+>    Covoiturage).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 13 ✅ — étape 14 à faire).
+> 4. `db/schema.sql` §10-11 (`housing`, `housing_requests`, `carpooling`)
+>    + leurs policies RLS.
+> 5. `web/src/lib/campaigns.ts` + `web/src/lib/mobilizations.ts` — patterns
+>    de référence pour la lib (validation, slug, retry 23505, listing avec
+>    or-search échappée).
+> 6. `web/src/pages/CampaignDetailPage.tsx` + `MobilizationDetailPage.tsx` —
+>    patterns de fiche détaillée.
+>
+> **État actuel à la fin de l'étape 13** (tip `claude/add-campaigns-module-FHBHA`,
+> commit `chore(rgpd): step 13 — bannière cookies + pages légales + audit RLS/Sentry`) :
+>
+> - Sprint 2 complet (pétitions / mobilisations / sondages / campagnes).
+> - Bannière cookies + 3 pages légales (`/legal/privacy`, `/legal/notice`,
+>   `/legal/cookies`) opérationnelles.
+> - Footer global avec liens légaux dans `RootLayout`.
+> - Sentry no-PII scaffold (`web/src/lib/sentry.ts`) prêt — DSN à brancher.
+> - `web/` : 298 tests verts, build 295 kB.
+> - RLS auditée table par table, findings documentés (vue `public_users`
+>   à créer avant prod).
+>
+> **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
+>
+> 1. `git fetch origin claude/add-campaigns-module-FHBHA` (retry 2s/4s/8s/16s
+>    sur erreur réseau).
+> 2. `git merge --no-ff <SHA-étape-13>` pour intégrer
+>    `chore(rgpd): step 13 …`. Fallback :
+>    `git checkout origin/claude/add-campaigns-module-FHBHA -- .` + commit.
+> 3. `cd web && npm install --legacy-peer-deps`.
+> 4. `npm run typecheck && npm run lint && npx vitest run && npm run build`
+>    pour vérifier 298 tests verts au point de départ.
+>
+> **ÉTAPE 14 à exécuter — Sprint 3 / Hébergement + Covoiturage** :
+>
+> 1. **Module `web/src/lib/housing.ts`** :
+>    - Types `HousingRow`, `HousingInsert`, `HousingRequestRow` dérivés de
+>      `Database['public']`.
+>    - `listHousing({ city, search, dateRange, limit })` — filtre
+>      `is_published=true` par défaut, tri `created_at DESC`. Search
+>      `or('title.ilike.%X%,city.ilike.%X%,description.ilike.%X%')` avec
+>      échappement %/_/,.
+>    - `getHousing(id)` — la fiche est par ID (pas de slug pour le moment —
+>      table sans colonne slug). Si on veut un slug, ajouter d'abord
+>      `housing.slug` + index unique au schéma.
+>    - `createHousing(input)` — validation (title 4-80, city obligatoire,
+>      capacity ≥ 1, available_from < available_to), insert RLS-checked.
+>    - `requestHousing(housingId, { message, dates })` — insert
+>      `housing_requests` (status `pending`), RLS empêche un host de se
+>      contacter lui-même.
+>    - Helpers `cancelRequest(id)`, `acceptRequest(id)`, `refuseRequest(id)`.
+> 2. **Module `web/src/lib/carpooling.ts`** :
+>    - Types `CarpoolingRow`, `CarpoolingInsert`.
+>    - `listCarpooling({ from, to, dateRange, search, limit })`.
+>    - `getCarpooling(id)`.
+>    - `createCarpooling(input)` — validation (depart/arrivée obligatoires,
+>      depart_at futur, seats ≥ 1 ≤ 8, price_eur ≥ 0).
+> 3. **Hooks `useHousing` / `useHousingItem` / `useCarpooling` /
+>    `useCarpoolingItem`** — pattern polls/campaigns.
+> 4. **Pages** :
+>    - `HousingPage` (`/services/housing`) — listing avec filtres (ville,
+>      capacité min, dates).
+>    - `HousingDetailPage` (`/services/housing/:id`) — hero photo, infos,
+>      bouton « Faire une demande » (modale ou page séparée, au choix —
+>      page séparée plus simple).
+>    - `HousingCreatePage` (`/services/housing/new`, RequireAuth).
+>    - `HousingRequestPage` (`/services/housing/:id/request`, RequireAuth).
+>    - `CarpoolingPage` (`/services/carpooling`) — listing avec filtres
+>      (départ, arrivée, date).
+>    - `CarpoolingDetailPage` (`/services/carpooling/:id`).
+>    - `CarpoolingCreatePage` (`/services/carpooling/new`, RequireAuth).
+> 5. **Router** : ajouter les routes ci-dessus en respectant la
+>    structure existante (`children` sous `services`).
+> 6. **Tests** : objectif ≥ 340 tests verts (298 + ≥ 42 nouveaux,
+>    pattern habituel : lib 12-15 / hooks 6 / pages 18-25).
+> 7. **HANDOFF-PROGRESS.md** : étape 14 ✅ avec sections « Module housing »,
+>    « Module carpooling », « Hooks », « Pages », « Tests », « Décisions ».
+> 8. **Prompt étape 15** : suite Sprint 3 (Lending + Marketplace + Garden
+>    + SEL + Crowdfunding).
+> 9. **Commit** : `feat(services): step 14 — hébergement + covoiturage CRUD`.
+>    Push sur la branche imposée par l'harness.
+>
+> **Contraintes** :
+>
+> - Ne pas toucher au prototype.
+> - TS strict + no `any`.
+> - Conserver les checks verts.
+> - Pas d'emojis dans le code TS ni dans les commits.
+> - Réutiliser `slugify()` si on décide d'ajouter `housing.slug` (préférer
+>   alors une migration séparée — modifier `db/schema.sql` + régénérer
+>   `web/src/types/database.ts`).

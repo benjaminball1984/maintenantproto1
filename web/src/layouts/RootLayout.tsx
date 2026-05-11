@@ -2,6 +2,8 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom';
 
 import AuthModal from '@/components/AuthModal';
+import CookieBanner from '@/components/CookieBanner';
+import Footer from '@/components/Footer';
 import { IconLogout, IconUser } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 
@@ -190,7 +192,10 @@ export default function RootLayout() {
 
       <Outlet />
 
+      <Footer />
+
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+      <CookieBanner />
     </div>
   );
 }

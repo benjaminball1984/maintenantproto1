@@ -32,6 +32,9 @@ import CommunesPage from './pages/CommunesPage';
 import ProfilePage from './pages/ProfilePage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
+import PrivacyPage from './pages/PrivacyPage';
+import LegalNoticePage from './pages/LegalNoticePage';
+import CookiesPage from './pages/CookiesPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 export const router = createBrowserRouter([
@@ -110,6 +113,14 @@ export const router = createBrowserRouter([
       },
       { path: 'auth/reset-password', element: <ResetPasswordPage /> },
       { path: 'auth/callback', element: <AuthCallbackPage /> },
+      {
+        path: 'legal',
+        children: [
+          { path: 'privacy', element: <PrivacyPage /> },
+          { path: 'notice', element: <LegalNoticePage /> },
+          { path: 'cookies', element: <CookiesPage /> },
+        ],
+      },
       { path: '*', element: <NotFoundPage /> },
     ],
   },
