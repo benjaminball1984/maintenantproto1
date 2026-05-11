@@ -4,6 +4,29 @@
 > vers la cible Vite + React + TypeScript + Supabase décrite dans [`HANDOFF.md`](./HANDOFF.md).
 > Chaque étape laisse le prototype d'origine intact tant que la parité visuelle n'est pas atteinte.
 
+## Process — Règle de continuité (à appliquer à CHAQUE session)
+
+À la fin de chaque session de passation, **après** une livraison réussie (commit + push acceptés
+par le remote), l'agent doit produire dans sa réponse finale **le prompt prêt-à-coller pour la
+session suivante**. Ce prompt doit :
+
+1. **Suivre la même structure** que les prompts précédents :
+   - commencer par « Lis `HANDOFF-PROGRESS.md` puis exécute l'étape N : … »
+   - décrire la tâche précise (livrables, fichiers à créer/modifier, contraintes),
+   - rappeler les fichiers à NE PAS casser (`project/app/Maintenant.html`, `app/index.html`,
+     toute entrée déjà livrée),
+   - se terminer par : mise à jour de `HANDOFF-PROGRESS.md`, commit en
+     [Conventional Commits](https://www.conventionalcommits.org/) (`chore(handoff): step N — <slug>`),
+     push sur une branche `claude/<slug>`.
+2. **Cibler l'étape suivante** telle qu'elle apparaît dans le tableau « État global » ci-dessous.
+   Si l'étape suivante manque ou n'est plus pertinente, l'agent met d'abord à jour le tableau.
+3. **Inclure lui-même cette règle de continuité** (par référence ou par copie de cette
+   section), pour que la session N+1 produise à son tour le prompt de la session N+2, et
+   ainsi de suite jusqu'à la mise en production (étape finale du tableau).
+
+Cette règle est volontairement auto-réplicative : si elle est oubliée dans un prompt, l'agent
+qui lit `HANDOFF-PROGRESS.md` la retrouve ici et l'applique quand même.
+
 ## État global
 
 | # | Étape                                                       | Statut      | Branche                                    |
