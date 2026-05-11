@@ -153,6 +153,21 @@ export function authErrorMessage(error: AuthError | null): string | null {
       return 'Aucun compte trouvé avec cet email.';
     case 'signup_disabled':
       return 'Les inscriptions sont actuellement désactivées.';
+    case 'access_denied':
+    case 'unauthorized_client':
+      return 'Vous avez refusé l’accès. Réessayez et acceptez le partage d’informations.';
+    case 'provider_email_needs_verification':
+      return 'Email non vérifié chez le fournisseur. Confirmez-le puis réessayez.';
+    case 'provider_disabled':
+      return 'Ce mode de connexion est actuellement désactivé.';
+    case 'oauth_provider_not_supported':
+      return 'Ce fournisseur n’est pas encore configuré côté serveur.';
+    case 'bad_oauth_callback':
+    case 'bad_oauth_state':
+      return 'Lien d’authentification invalide ou expiré. Recommencez la connexion.';
+    case 'flow_state_not_found':
+    case 'flow_state_expired':
+      return 'Session d’authentification expirée. Recommencez la connexion.';
     default:
       return error.message || 'Une erreur est survenue. Réessayez plus tard.';
   }

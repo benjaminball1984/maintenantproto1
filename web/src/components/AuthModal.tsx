@@ -1,25 +1,36 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 
 import { authErrorMessage, useAuthStore } from '@/lib/auth';
-import { IconClose, IconLock, IconMail, IconUser } from '@/components/icons';
+import { signInWithProvider, type SocialProvider } from '@/lib/oauth';
+import {
+  IconClose,
+  IconGoogle,
+  IconInstagram,
+  IconLink,
+  IconLock,
+  IconMail,
+  IconUser,
+} from '@/components/icons';
 
 export interface AuthModalProps {
   open: boolean;
   onClose: () => void;
 }
 
-type Mode = 'login' | 'signup' | 'forgot';
+type Mode = 'login' | 'signup' | 'forgot' | 'magic';
 
 const titles: Record<Mode, string> = {
   login: 'Connexion',
   signup: 'Créer un compte',
   forgot: 'Réinitialiser le mot de passe',
+  magic: 'Lien magique par email',
 };
 
 const submitLabels: Record<Mode, string> = {
   login: 'Se connecter',
   signup: 'Créer mon compte',
   forgot: 'Envoyer le lien',
+  magic: 'M’envoyer le lien',
 };
 
 const overlayStyle: CSSProperties = {
@@ -138,6 +149,41 @@ const submitBtnStyle: CSSProperties = {
   marginTop: 4,
 };
 
+const oauthBtnStyle: CSSProperties = {
+  width: '100%',
+  minHeight: 46,
+  border: '1.5px solid var(--mn-border)',
+  borderRadius: 12,
+  background: 'var(--mn-bg)',
+  color: 'var(--mn-text-1)',
+  fontSize: 14,
+  fontWeight: 600,
+  fontFamily: 'Inter, sans-serif',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 10,
+};
+
+const dividerStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  margin: '6px 0 2px',
+  fontSize: 11,
+  fontWeight: 600,
+  color: 'var(--mn-text-4)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.08em',
+};
+
+const dividerRuleStyle: CSSProperties = {
+  flex: 1,
+  height: 1,
+  background: 'var(--mn-border)',
+};
+
 const footerLinkStyle: CSSProperties = {
   textAlign: 'center',
   fontSize: 13,
@@ -202,6 +248,7 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
   const signInWithPassword = useAuthStore((s) => s.signInWithPassword);
   const signUpWithPassword = useAuthStore((s) => s.signUpWithPassword);
   const resetPasswordForEmail = useAuthStore((s) => s.resetPasswordForEmail);
+  const signInWithMagicLink = useAuthStore((s) => s.signInWithMagicLink);
 
   useEffect(() => {
     if (!open) return;
@@ -263,6 +310,13 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
         } else {
           setSuccessText('Compte créé. Vérifiez votre boîte mail pour confirmer votre adresse.');
         }
+      } else if (mode === 'magic') {
+        const { error } = await signInWithMagicLink({ email });
+        if (error) {
+          setErrorText(authErrorMessage(error));
+        } else {
+          setSuccessText('Lien envoyé. Vérifiez votre boîte mail pour finaliser la connexion.');
+        }
       } else {
         const { error } = await resetPasswordForEmail(email);
         if (error) {
@@ -273,6 +327,22 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
           );
         }
       }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleOAuth = async (provider: SocialProvider) => {
+    if (submitting) return;
+    setSubmitting(true);
+    setErrorText(null);
+    setSuccessText(null);
+    try {
+      const { error } = await signInWithProvider(provider);
+      if (error) {
+        setErrorText(authErrorMessage(error));
+      }
+      // En cas de succès Supabase redirige le navigateur : pas de close ici.
     } finally {
       setSubmitting(false);
     }
@@ -306,6 +376,58 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
             <div role="status" style={successMessageStyle}>
               {successText}
             </div>
+          )}
+
+          {(mode === 'login' || mode === 'signup') && (
+            <>
+              <button
+                type="button"
+                onClick={() => handleOAuth('google')}
+                disabled={submitting}
+                style={oauthBtnStyle}
+              >
+                <IconGoogle />
+                Continuer avec Google
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOAuth('instagram')}
+                disabled={submitting}
+                style={oauthBtnStyle}
+              >
+                <IconInstagram />
+                Continuer avec Instagram
+              </button>
+              {mode === 'login' && (
+                <button
+                  type="button"
+                  onClick={() => switchMode('magic')}
+                  disabled={submitting}
+                  style={oauthBtnStyle}
+                >
+                  <IconLink />
+                  Lien magique par email
+                </button>
+              )}
+              <div style={dividerStyle}>
+                <span style={dividerRuleStyle} aria-hidden="true" />
+                ou par email
+                <span style={dividerRuleStyle} aria-hidden="true" />
+              </div>
+            </>
+          )}
+
+          {mode === 'magic' && (
+            <p
+              style={{
+                fontSize: 13,
+                color: 'var(--mn-text-3)',
+                margin: '0 0 4px',
+                lineHeight: 1.5,
+              }}
+            >
+              Entrez votre email : un lien de connexion vous sera envoyé sans mot de passe.
+            </p>
           )}
 
           {mode === 'signup' && (
@@ -354,7 +476,7 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
             </div>
           </div>
 
-          {mode !== 'forgot' && (
+          {mode !== 'forgot' && mode !== 'magic' && (
             <div>
               <label htmlFor="auth-password" style={labelStyle}>
                 Mot de passe
@@ -408,6 +530,11 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
               </button>
             )}
             {mode === 'forgot' && (
+              <button type="button" onClick={() => switchMode('login')} style={linkBtnStyle}>
+                Retour à la connexion
+              </button>
+            )}
+            {mode === 'magic' && (
               <button type="button" onClick={() => switchMode('login')} style={linkBtnStyle}>
                 Retour à la connexion
               </button>

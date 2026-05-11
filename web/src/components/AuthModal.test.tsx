@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   signUp: vi.fn(),
   signInWithOtp: vi.fn(),
   resetPasswordForEmail: vi.fn(),
+  signInWithOAuth: vi.fn(),
   signOut: vi.fn(),
   getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
   onAuthStateChange: vi.fn().mockReturnValue({
@@ -122,5 +123,55 @@ describe('AuthModal — interactions', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe('AuthModal — OAuth & lien magique', () => {
+  it('clic sur « Continuer avec Google » appelle signInWithOAuth(provider=google)', async () => {
+    mocks.signInWithOAuth.mockResolvedValueOnce({
+      data: { url: 'https://accounts.google.com/…', provider: 'google' },
+      error: null,
+    });
+    const user = userEvent.setup();
+    renderModal();
+    await user.click(screen.getByRole('button', { name: /Continuer avec Google/i }));
+    await waitFor(() => {
+      expect(mocks.signInWithOAuth).toHaveBeenCalledWith({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+    });
+  });
+
+  it('clic sur « Continuer avec Instagram » appelle signInWithOAuth(provider=instagram)', async () => {
+    mocks.signInWithOAuth.mockResolvedValueOnce({
+      data: { url: 'https://api.instagram.com/oauth/…', provider: 'instagram' },
+      error: null,
+    });
+    const user = userEvent.setup();
+    renderModal();
+    await user.click(screen.getByRole('button', { name: /Continuer avec Instagram/i }));
+    await waitFor(() => {
+      expect(mocks.signInWithOAuth).toHaveBeenCalledWith({
+        provider: 'instagram',
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+    });
+  });
+
+  it("bascule sur l'écran magic link puis appelle signInWithOtp", async () => {
+    mocks.signInWithOtp.mockResolvedValueOnce({ data: {}, error: null });
+    const user = userEvent.setup();
+    renderModal();
+    await user.click(screen.getByRole('button', { name: /Lien magique par email/i }));
+    expect(screen.getByRole('heading', { name: /Lien magique par email/i })).toBeInTheDocument();
+    // Pas de champ mot de passe en mode magic.
+    expect(screen.queryByLabelText(/^Mot de passe$/i)).not.toBeInTheDocument();
+    await user.type(screen.getByRole('textbox', { name: /Email/i }), 'me@maintenant.org');
+    await user.click(screen.getByRole('button', { name: /M’envoyer le lien/i }));
+    await waitFor(() => {
+      expect(mocks.signInWithOtp).toHaveBeenCalledWith({ email: 'me@maintenant.org' });
+    });
+    expect(await screen.findByText(/Lien envoyé/i)).toBeInTheDocument();
   });
 });

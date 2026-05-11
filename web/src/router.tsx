@@ -23,6 +23,7 @@ import JoinPage from './pages/JoinPage';
 import CommunesPage from './pages/CommunesPage';
 import ProfilePage from './pages/ProfilePage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import AuthCallbackPage from './pages/AuthCallbackPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 export const router = createBrowserRouter([
@@ -64,6 +65,7 @@ export const router = createBrowserRouter([
         ),
       },
       { path: 'auth/reset-password', element: <ResetPasswordPage /> },
+      { path: 'auth/callback', element: <AuthCallbackPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

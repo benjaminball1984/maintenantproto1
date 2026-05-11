@@ -16,7 +16,8 @@
 | 5. Brancher Supabase Auth sur `AuthModal`               |   ✅   |
 | 6. Page profil + reset password + avatars bucket        |   ✅   |
 | 7. Adhésion Stripe (3 tiers) + RPC T99CP (Sprint 1)     |   ✅   |
-| 8. OAuth Google/Instagram + magic link (fin Sprint 1)   |   ⬜   |
+| 8. OAuth Google/Instagram + magic link (fin Sprint 1)   |   ✅   |
+| 9. Sprint 2 — Pétitions CRUD côté front                 |   ⬜   |
 
 ---
 
@@ -1083,6 +1084,344 @@ directe sur `window.location`). Restauré dans `afterEach`.
 3. À l'issue : Sprint 1 complet (auth + profil + adhésion + T99CP). On
    pourra basculer sur **Sprint 2 (contenu militant)** — pétitions CRUD,
    mobilisations, campagnes.
+
+---
+
+## Étape 8 — OAuth Google + Instagram + magic link + callback ✅
+
+**Branche** : `claude/review-project-rules-BqjpH` (imposée par l'harness).
+Merge initial : `git merge --no-ff origin/claude/review-project-setup-QwLHV`
+récupère les commits `feat(adhesion): step 7 …` (45bb74a) + `docs(handoff):
+step 8 prompt` (bf99d43) avant d'attaquer l'étape.
+
+### Pré-requis exécutés
+
+1. `git fetch origin claude/review-project-setup-QwLHV` puis merge `--no-ff`
+   pour récupérer la racine de l'étape 7.
+2. `cd web && npm install --legacy-peer-deps` (lockfile non versionné,
+   conflit ESLint 10 ↔ eslint-plugin-jsx-a11y).
+3. Pas de `supabase start` : Docker indisponible dans la sandbox. OAuth
+   est entièrement testé via mocks Vitest (`signInWithOAuth`,
+   `exchangeCodeForSession`).
+
+### OAuth Google + Instagram (`web/src/lib/oauth.ts`)
+
+Nouveau module dédié `web/src/lib/oauth.ts` qui expose :
+
+- `type SocialProvider = 'google' | 'instagram'` — domaine restreint
+  côté UI, distinct du `Provider` interne de @supabase/auth-js (qui
+  liste ~25 providers).
+- `signInWithProvider(provider): Promise<{ error }>` — appelle
+  `supabase.auth.signInWithOAuth({ provider, options: { redirectTo } })`
+  avec `redirectTo = ${window.location.origin}/auth/callback`. La
+  promise résolue reflète l'erreur Supabase ; en cas de succès le
+  navigateur est en train de naviguer vers le consent screen du
+  fournisseur (rien à faire côté React).
+- Pour Instagram, le `Provider` natif de @supabase/auth-js (v2.x
+  packagé avec @supabase/supabase-js) ne liste pas encore `'instagram'`.
+  On utilise `as Provider` ciblé, justifié dans un commentaire : la
+  résolution effective se fait via la config OIDC custom dans le
+  dashboard Supabase Auth (Settings → Providers → Instagram).
+
+### Callback page `/auth/callback` (`web/src/pages/AuthCallbackPage.tsx`)
+
+- Détection synchrone du payload (`?code=…` ou fragment
+  `#access_token=…` ou `?error=…`) via `hasCallbackPayload(href)` ; la
+  fonction est isolée pour rester testable sans monter le composant.
+- État initial calculé hors `useEffect` (compatible règle ESLint
+  `react-hooks/set-state-in-effect` du preset React 19) : `status =
+  'exchanging' | 'success' | 'error'`.
+- L'`useEffect` appelle `supabase.auth.exchangeCodeForSession(href)`,
+  passe le `href` complet (Supabase v2 accepte cette forme et lit
+  `code` / `provider` dans l'URL elle-même).
+- Sur succès → `navigate('/profile', { replace: true })`.
+- Sur erreur → mappée par `authErrorMessage(error)` puis affichée dans
+  un `<div role="alert">`.
+- Affiche un état intermédiaire `« Validation du lien d'authentification.
+  Cette opération prend quelques secondes. »` pendant l'échange.
+- Route branchée dans `web/src/router.tsx` : `path: 'auth/callback'`.
+
+### Magic link UI (`AuthModal.tsx`)
+
+- Nouveau `Mode = 'login' | 'signup' | 'forgot' | 'magic'` (4ᵉ écran).
+- Bouton « Lien magique par email » visible uniquement en mode
+  `login`, sous les boutons OAuth, qui bascule sur le mode `magic`.
+- Le mode `magic` réutilise le même formulaire (sans champ mot de
+  passe) et appelle `signInWithMagicLink({ email })` (déjà exposé par
+  le store Zustand depuis l'étape 5).
+- Message de succès : « Lien envoyé. Vérifiez votre boîte mail pour
+  finaliser la connexion. »
+- Retour à la connexion via un bouton lien `linkBtnStyle` cohérent
+  avec les autres écrans.
+
+### Boutons OAuth dans `AuthModal.tsx`
+
+- Visible en modes `login` et `signup`, en haut du formulaire, avant
+  un divider `« ou par email »`.
+- Trois boutons : Google (avec `IconGoogle`), Instagram (avec
+  `IconInstagram`), Lien magique (avec `IconLink`, en mode login
+  uniquement).
+- `oauthBtnStyle` : surface neutre (`var(--mn-bg)` + bordure 1.5 px),
+  hauteur 46 px, hover natif (cursor pointer). Pas de gradient pour
+  laisser respirer les logos officiels.
+- `handleOAuth(provider)` désactive temporairement le bouton via
+  `submitting=true`, map les erreurs en FR via `authErrorMessage`,
+  laisse le navigateur faire la redirection.
+
+### Icônes (`web/src/components/icons.tsx`)
+
+Trois nouvelles icônes ajoutées :
+
+- `IconGoogle` — SVG officiel multi-color (4 chemins jaune / rouge /
+  vert / bleu). **Exception currentColor justifiée en commentaire** :
+  les guidelines de Google et Meta imposent les couleurs officielles
+  pour les boutons OAuth.
+- `IconInstagram` — SVG avec radial gradient officiel (jaune → orange
+  → magenta → bleu), cercle blanc + point blanc. Idem : exception
+  currentColor justifiée.
+- `IconLink` — chaîne classique (deux maillons), suit `currentColor`
+  comme les autres icônes du design system.
+
+### Mapping d'erreurs (`web/src/lib/auth.ts::authErrorMessage`)
+
+Codes Supabase Auth ajoutés (tous mappés en FR) :
+
+| Code Supabase                       | Message FR                                            |
+| ----------------------------------- | ----------------------------------------------------- |
+| `access_denied`                     | Vous avez refusé l'accès. Réessayez et acceptez…     |
+| `unauthorized_client`               | (idem `access_denied`)                                |
+| `provider_email_needs_verification` | Email non vérifié chez le fournisseur. Confirmez-le… |
+| `provider_disabled`                 | Ce mode de connexion est actuellement désactivé.      |
+| `oauth_provider_not_supported`      | Ce fournisseur n'est pas encore configuré…           |
+| `bad_oauth_callback`                | Lien d'authentification invalide ou expiré.           |
+| `bad_oauth_state`                   | (idem `bad_oauth_callback`)                           |
+| `flow_state_not_found`              | Session d'authentification expirée.                   |
+| `flow_state_expired`                | (idem `flow_state_not_found`)                         |
+
+### Tests (Vitest + Testing Library)
+
+10 nouveaux tests, total **83 tests verts** (73 → 83) :
+
+- `src/lib/oauth.test.ts` (3 cas) — Google + Instagram + erreur
+  réseau (`AuthRetryableFetchError`).
+- `src/pages/AuthCallbackPage.test.tsx` (4 cas) — code valide →
+  redirection `/profile`, code absent → message d'erreur, erreur
+  Supabase mappée FR, paramètre `error=access_denied` mappé FR.
+- `src/components/AuthModal.test.tsx` (3 nouveaux cas) — bouton Google
+  appelle `signInWithOAuth(google)`, bouton Instagram appelle
+  `signInWithOAuth(instagram)`, bouton « Lien magique par email »
+  bascule sur le mode `magic` puis appelle `signInWithOtp`.
+
+### Décisions (provider id Instagram, OIDC custom)
+
+1. **Provider id Instagram** : on conserve `'instagram'` côté domaine
+   (UI + module `oauth.ts`) avec un cast `as Provider` ciblé sur la
+   ligne d'appel `signInWithOAuth`. La résolution effective côté
+   Supabase Auth se fait via la config OIDC custom dans le dashboard
+   (Settings → Auth → Providers → Instagram custom OIDC, app_id de
+   l'app Meta Instagram Basic Display ou Threads). Décision réversible :
+   si une future version de `@supabase/auth-js` ajoute `'instagram'`
+   au type `Provider`, le cast disparaîtra naturellement.
+2. **`exchangeCodeForSession` avec `href` complet** : Supabase v2
+   accepte la signature `(input: string)` où `input` peut être soit le
+   `code` brut, soit l'URL complète. On passe l'URL complète pour
+   bénéficier de la détection automatique des paramètres `code`,
+   `state`, `provider` et des fragments hash le cas échéant.
+3. **Pas de bouton OAuth en mode `forgot` ni `magic`** : flux
+   incohérent (réinitialisation = pas OAuth) et focus mental réduit.
+4. **`IconGoogle` et `IconInstagram` figés en couleur** : exception
+   documentée à la règle currentColor du design system, exigée par les
+   guidelines de marque Google et Meta.
+5. **Pas d'environnement Supabase local** : OAuth en local nécessite
+   un tunnel ngrok ou supabase.com en mode dev. Pour l'étape 8, on
+   reste sur les mocks Vitest ; l'intégration sera testée manuellement
+   à la prochaine étape de déploiement.
+
+### Vérifications passées
+
+- `npm run typecheck` ✅
+- `npm run lint` ✅ (preset ESLint flat + react-hooks 6)
+- `npm test -- --run` ✅ — 83 tests verts (13 fichiers).
+- `npm run build` ✅ — bundle 295 kB (gzip 85 kB), aucune
+  augmentation perceptible (logos OAuth = SVG inline, pas d'asset
+  externe).
+- `npm run format:check` ✅.
+
+### Tableau d'état global
+
+| Domaine      | Statut | Détail                                                     |
+| ------------ | :----: | ---------------------------------------------------------- |
+| Prototype    |   ✅   | Intact (`project/app/Maintenant.html` + JSX racine).       |
+| Vite skeleton|   ✅   | Étape 3.                                                   |
+| Schéma DB    |   ✅   | 36 tables + 119 policies RLS + bucket avatars + RPC T99CP. |
+| Auth         |   ✅   | Étape 5 + étape 8 (OAuth Google/Instagram + magic link).   |
+| Profil       |   ✅   | Étape 6.                                                   |
+| Adhésion     |   ✅   | Étape 7 — Stripe Checkout + webhook + JoinPage.            |
+| Pétitions    |   ⬜   | Sprint 2 (étape 9).                                        |
+
+### Prochaines étapes (Sprint 2 — étape 9)
+
+Sprint 1 complet. On bascule sur le Sprint 2 (contenu militant) :
+
+1. **Étape 9 — Pétitions CRUD côté front** : listing public, fiche
+   détail, signature authentifiée, formulaire de création, soft-delete
+   et modération (statut `draft / pending / published / closed`).
+   Les tables et policies RLS existent déjà depuis l'étape 4
+   (`petitions`, `petition_signatures`).
+2. Puis : mobilisations (étape 10), campagnes (étape 11), sondages /
+   audit fin sprint 2 (étape 12).
+
+---
+
+## Prompt pour la session N+3 (étape 9)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS
+>    / snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD).
+> 2. `HANDOFF.md` §3 (architecture pages) + §7.2 (tables `petitions`,
+>    `petition_signatures`) + §10 Sprint 2 (contenu militant).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 8 ✅ — étape 9 à faire).
+> 4. `Pages_Services.jsx` / racine prototype : maquette pétitions
+>    (formulaire création, fiche détail, listing). Chercher `Petition`
+>    / `PetitionsPage` / `signPetition`.
+> 5. `web/src/lib/auth.ts`, `web/src/lib/profile.ts`,
+>    `web/src/lib/membership.ts`, `web/src/lib/postgrestError.ts`,
+>    `web/src/pages/PetitionsPage.tsx` (placeholder posé à l'étape 3),
+>    `web/src/router.tsx`.
+> 6. `db/schema.sql` §7 — tables `petitions` + `petition_signatures` +
+>    policies RLS. Vérifier que toutes les colonnes nécessaires sont
+>    présentes (compteur dénormalisé `signature_count`, trigger
+>    d'incrément, contraintes d'unicité par `(petition_id, user_id)`).
+>
+> **État actuel à la fin de l'étape 8** (tip de cette branche, commit
+> `feat(auth): step 8 — OAuth Google + Instagram + magic link + callback`) :
+>
+> - Prototype intact : `project/app/Maintenant.html` + JSX racine.
+> - `web/` : Vite + React 19 + TS 6 strict, **83 tests verts** (10
+>   nouveaux à l'étape 8), ESLint flat, Vitest, Prettier, build 295 kB.
+> - Supabase : `db/schema.sql` à 1 605 lignes (36 tables + 119 policies
+>   RLS + trigger `handle_new_user` + bucket avatars + RPC T99CP),
+>   `web/src/types/database.ts` à 1 699 lignes.
+> - Auth complète : signup/login/logout/reset password + OAuth Google
+>   + Instagram + magic link + callback page `/auth/callback`.
+> - Profil + adhésion Stripe + RPC T99CP opérationnels.
+> - Sprint 1 **complet**.
+>
+> **CONTEXTE D'OUVERTURE — à exécuter avant toute autre action** :
+>
+> 1. `git fetch origin <branche-précédente>` (retry network 2s/4s/8s/16s)
+>    pour récupérer le tip de l'étape 8.
+> 2. `git merge --no-ff <sha-tip>` pour intégrer le commit
+>    `feat(auth): step 8 …`. En cas d'absence,
+>    `git checkout origin/<branche-précédente> -- .` puis commit.
+> 3. `cd web && npm install --legacy-peer-deps` (lockfile non versionné,
+>    option requise à cause d'`eslint-plugin-jsx-a11y` ↔ ESLint 10). À
+>    réutiliser pour tout nouvel `npm install` dans cette session.
+>
+> **ÉTAPE 9 à exécuter — Pétitions CRUD côté front (Sprint 2)** :
+>
+> 1. **Module `web/src/lib/petitions.ts`** : fonctions typées via
+>    `Database` (`Tables<'petitions'>`, `Tables<'petition_signatures'>`) :
+>    - `listPetitions({ status, search, limit })` — listing paginé
+>      (statut public uniquement par défaut).
+>    - `getPetition(slug)` — fiche détail (jointure
+>      `petition_signatures` pour stats).
+>    - `createPetition(input)` — insert + slug auto via SQL function
+>      `slugify()` (ajouter cette fonction au schéma si absente).
+>    - `signPetition(petitionId, comment?)` — insert dans
+>      `petition_signatures` (RLS authenticated_self).
+>    - `unsignPetition(petitionId)` — delete via RLS owner.
+>    - `hasUserSigned(petitionId, userId)` — single-row check.
+> 2. **Hooks `web/src/hooks/usePetitions.ts` + `usePetition.ts`** :
+>    wrappers Zustand ou React Query (à choisir — le projet n'a pas
+>    encore React Query, donc rester sur Zustand ou un simple useState
+>    + useEffect).
+> 3. **Pages** :
+>    - `web/src/pages/PetitionsPage.tsx` — listing avec recherche +
+>      filtres (statut, ville, thématique). Port TS strict du
+>      prototype.
+>    - `web/src/pages/PetitionDetailPage.tsx` — fiche pétition avec
+>      bouton « Signer » (authenticated only via `RequireAuth`),
+>      compteur live, liste des signataires (anonymisée si non public).
+>    - `web/src/pages/PetitionCreatePage.tsx` — formulaire création
+>      (RequireAuth), validation côté client (titre 8–80 caractères,
+>      description ≥ 200 caractères, image optionnelle).
+> 4. **Router** : ajouter les routes `/petitions/:slug`,
+>    `/petitions/new`, et brancher `RequireAuth` sur la création.
+> 5. **Trigger SQL `update_petition_signature_count`** : si pas déjà
+>    présent dans `db/schema.sql`, ajouter un trigger AFTER
+>    INSERT/DELETE qui met à jour `petitions.signature_count`. Sinon
+>    documenter dans HANDOFF-PROGRESS.md que c'est déjà en place.
+> 6. **Tests** (Vitest + Testing Library + mocks supabase) :
+>    - `src/lib/petitions.test.ts` (≥ 6 cas) — listPetitions,
+>      getPetition (succès + 404), createPetition, signPetition,
+>      unsignPetition, hasUserSigned.
+>    - `src/hooks/usePetitions.test.tsx` (≥ 2 cas).
+>    - `src/pages/PetitionsPage.test.tsx` (≥ 3 cas) — rendu listing,
+>      filtres, état vide.
+>    - `src/pages/PetitionDetailPage.test.tsx` (≥ 4 cas) — rendu fiche,
+>      bouton signer (non auth → redirige login, auth → appelle
+>      `signPetition`), compteur mis à jour.
+>    - `src/pages/PetitionCreatePage.test.tsx` (≥ 3 cas) — validation,
+>      submit, erreur Postgrest mappée FR.
+>    Objectif : **≥ 100 tests verts** (83 existants + ≥ 18 nouveaux).
+> 7. **Mettre à jour `HANDOFF-PROGRESS.md`** : étape 9 ✅ avec sections
+>    « Module petitions.ts », « hooks », « pages », « trigger
+>    signature_count », « décisions (slug auto, modération, public vs
+>    privé) », « prochaines étapes (étape 10 — mobilisations) ». Cocher
+>    la ligne 9 et créer une ligne 10 si manquante.
+> 8. **Écrire le prompt de la session N+4 (étape 10)** dans
+>    `HANDOFF-PROGRESS.md` (en bas du fichier ou en annexe), section
+>    `## Prompt pour la session N+4 (étape 10)` reprenant la même
+>    structure (contexte d'ouverture, état actuel, étape à exécuter,
+>    contraintes, fallback Docker, **consigne récursive**). L'étape 10
+>    cible : **mobilisations CRUD** (port du prototype, mêmes patterns
+>    que pétitions).
+> 9. **Coller le prompt de l'étape 10 dans la conversation finale**, en
+>    plus de l'avoir écrit dans HANDOFF-PROGRESS.md : à la fin de la
+>    session, le message Claude doit contenir littéralement le bloc du
+>    prompt (citation `>` ou code-fence), pour que l'utilisateur
+>    puisse le copier d'un coup. Cette consigne fait partie de la
+>    boucle récursive : tant que le Sprint 2 n'est pas complet, le
+>    prompt généré (étape 11, 12, …) doit aussi être collé dans la
+>    réponse finale de la session.
+> 10. **Commit** : `feat(petitions): step 9 — CRUD pétitions + listing +
+>     fiche + création`. Push sur la branche imposée par l'harness avec
+>     `git push -u origin <branch>`, retry sur erreurs réseau
+>     (2s/4s/8s/16s). Pas de PR sans demande explicite.
+>
+> **Contraintes** :
+>
+> - Ne pas toucher au prototype (`project/app/Maintenant.html` et JSX
+>   racine).
+> - TS strict + no `any` : tous les types Supabase via
+>   `web/src/types/database.ts` ou `@supabase/supabase-js`.
+> - **Aucune clé `service_role` dans `web/`** : tout passe par RLS et
+>   `VITE_SUPABASE_ANON_KEY`.
+> - Pas d'emojis dans le code TS ni dans les commits (utiliser SVG —
+>   `IconFlame`, `IconPen` à ajouter si besoin pour pétitions /
+>   création).
+> - Conserver les checks verts : `typecheck`, `lint`, `test`, `build`,
+>   `format:check`. Lancer les 5 en fin de session avant de committer.
+> - Si Docker n'est pas dispo dans la sandbox, ne pas tenter
+>   `supabase start` ; les pétitions se testent via mocks Vitest. Pour
+>   les vérifs SQL (slug, triggers), documenter en commentaire dans
+>   `db/schema.sql` et tester avec un PG local si possible (`service
+>   postgresql start` + `psql -f db/schema.sql`).
+> - **DOUBLE CONSIGNE RÉCURSIVE** :
+>   1. Écrire le prompt de l'étape 10 dans `HANDOFF-PROGRESS.md` avant
+>      le commit final.
+>   2. **Coller le prompt de l'étape 10 dans la conversation** (réponse
+>      finale Claude), pas seulement dans le fichier journal.
+>
+> Cette boucle s'arrête uniquement quand le Sprint 2 (contenu militant
+> — pétitions, mobilisations, campagnes, sondages) est complet, point
+> auquel le prompt généré peut basculer sur le Sprint 3 (services
+> communautaires).
 
 ---
 
