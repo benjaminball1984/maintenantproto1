@@ -3506,7 +3506,9 @@ Légende des colonnes :
 > **Lis dans cet ordre** :
 >
 > 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
->    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD).
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD). **Note
+>    la section « Politique de PR » qui t'autorise à enchaîner ouverture
+>    + merge des PR sans confirmation jusqu'à la session 50 incluse.**
 > 2. `HANDOFF.md` §10 Sprint 3 (services communautaires — Lending,
 >    Marketplace, Jardins, SEL, Crowdfunding).
 > 3. `HANDOFF-PROGRESS.md` — journal (étape 14 ✅ — étape 15 à faire).
@@ -3514,21 +3516,28 @@ Légende des colonnes :
 >    `garden_plots`, `sel_offers`, `crowdfunding_projects` /
 >    `crowdfunding_contributions`) + leurs policies RLS.
 > 5. `web/src/lib/housing.ts` + `web/src/lib/carpooling.ts` — patterns
->    de référence (validation, listing avec or-search échappée).
+>    de référence (validation, listing avec or-search échappée, helpers
+>    de mutation).
 > 6. `web/src/pages/services/HousingPage.tsx` + `HousingDetailPage.tsx`
 >    + `HousingCreatePage.tsx` — patterns UI (hero, toolbar, cards,
->    fiche avec Partager).
+>    fiche avec Partager, masquage de CTA si l'utilisateur est
+>    propriétaire).
 >
-> **État actuel à la fin de l'étape 14** (tip
-> `claude/hosting-carpooling-sprint-NFZBr`, commit
-> `feat(services): step 14 — hébergement + covoiturage CRUD`) :
+> **État actuel à la fin de l'étape 14** (PR #3 mergée dans `main` —
+> commits `feat(services): step 14 — hébergement + covoiturage CRUD`
+> + `docs(claude): autoriser merge auto des PR jusqu'à la session 50
+> incluse`) :
 >
 > - Sprint 2 complet (pétitions / mobilisations / sondages / campagnes).
 > - Bannière cookies + 3 pages légales + Footer global.
 > - Sentry no-PII scaffold prêt (DSN à brancher).
-> - Sprint 3 démarré : hébergement + covoiturage CRUD opérationnels.
-> - `web/` : 380 tests verts, build 295 kB (tronqué tant que les env
->   vars Supabase publiques ne sont pas fournies en CI).
+> - Sprint 3 démarré : hébergement + covoiturage CRUD opérationnels
+>   (lib + hooks + 7 pages + routes RequireAuth).
+> - `web/` : 380 tests verts, build 295 kB (bundle tronquée tant que
+>   les env vars Supabase publiques ne sont pas fournies en CI —
+>   vérifié 670 kB en local avec `.env.local`).
+> - Autorisation permanente de merge auto active
+>   (cf. `CLAUDE.md` § Politique de PR).
 >
 > **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
 >
@@ -3562,27 +3571,67 @@ Légende des colonnes :
 >    - Idem pour marketplace, garden, sel, crowdfunding.
 >    - Crowdfunding : ajouter `CrowdfundingContributePage` (RequireAuth,
 >      `/services/crowdfunding/:id/contribute`).
->    - Mettre à jour `CampaignDetailPage` pour résoudre les liens
->      `action.crowdfunding_id` vers `/services/crowdfunding/:id`
->      (déjà en place — vérifier que ça pointe bien sur le nouvel ID).
-> 8. **Router** : ajouter routes sous `services`.
+>    - Vérifier que `CampaignDetailPage` résout bien les liens
+>      `action.crowdfunding_id` vers `/services/crowdfunding/:id`.
+> 8. **Router** : ajouter routes sous `services` (children).
 > 9. **Tests** : objectif ≥ 500 tests verts (380 + ≥ 120 nouveaux —
->    5 modules x ~24 tests par module : lib 12-15 / hooks 4-6 / pages
->    8-15).
-> 10. **HANDOFF-PROGRESS.md** : étape 15 ✅ + prompt étape 16 (Sprint 4 —
->     Réseau social + Messagerie + Notifications + Média).
-> 11. **Commit** : `feat(services): step 15 — sprint 3 complet (lending
->     + marketplace + garden + sel + crowdfunding)`.
+>    5 modules × ~24 tests : lib 12-15 / hooks 4-6 / pages 8-15).
+> 10. **HANDOFF-PROGRESS.md** : étape 15 ✅ détaillée (sections Modules
+>     / Hooks / Pages / Tests / Décisions) + prompt étape 16 (Sprint
+>     4 — Réseau social + Messagerie + Notifications + Média).
 >
-> **Contraintes** :
+> **CLÔTURE DE L'ÉTAPE — workflow auto-merge** :
+>
+> Conformément à `CLAUDE.md` § « Politique de PR », tu as autorisation
+> permanente d'enchaîner les étapes ci-dessous sans demander
+> confirmation. Procéder dans l'ordre, **sans s'arrêter entre les
+> étapes** :
+>
+> 1. **Vérifier les 4 checks locaux verts** : `npm run typecheck &&
+>    npm run lint && npx vitest run && npm run build`. Si un check
+>    échoue → corriger, ne pas commit. Si tu ne sais pas corriger en
+>    moins de 3 tentatives → t'arrêter et demander.
+> 2. **Commit** : `feat(services): step 15 — sprint 3 complet (lending
+>    + marketplace + garden + sel + crowdfunding)`. Pas d'emojis dans
+>    le message.
+> 3. **Push** sur la branche imposée par l'harness
+>    (`git push -u origin <branch>`, retry exponentiel 2/4/8/16 s sur
+>    erreur réseau).
+> 4. **Ouvrir la PR** vers `main` via
+>    `mcp__github__create_pull_request` avec titre identique au commit,
+>    body suivant le template (Summary + Décisions + Test plan). Pas
+>    d'emojis.
+> 5. **Attendre les checks GitHub Actions si présents**. S'ils sont
+>    rouges → autofix puis re-push, ne pas merger.
+> 6. **Merger la PR** via `mcp__github__merge_pull_request` (merge
+>    method `merge` ou `squash` — pas `rebase`, pour conserver le
+>    commit complet). Confirmer le merge dans la conversation avec
+>    l'URL de la PR.
+>
+> **Conditions d'arrêt malgré l'autorisation permanente**
+> (cf. `CLAUDE.md`) :
+>
+> - Migration DB risquée (suppression / rename de table / colonne /
+>   RPC non listée dans ce prompt).
+> - Changement RGPD (nouvelle collecte de données perso, nouveau
+>   cookie non listé).
+> - Breaking change visible utilisateur (route supprimée, format URL
+>   changé, schéma de stockage modifié).
+> - Review humaine ou commentaire GitHub arrivé avant le merge —
+>   traiter d'abord.
+>
+> Dans tous ces cas : demander confirmation explicite avant de merger.
+>
+> **Contraintes générales** :
 >
 > - Ne pas toucher au prototype.
 > - TS strict + no `any`.
-> - Conserver les checks verts.
-> - Pas d'emojis dans le code TS ni dans les commits.
+> - Conserver les checks verts à chaque étape.
+> - Pas d'emojis dans le code TS ni dans les commits / PR.
 > - Vérifier que la FK `campaign_actions.crowdfunding_id` continue de
 >   fonctionner après l'introduction du module crowdfunding (la fiche
->   campagne doit pouvoir résoudre l'ID en lien `/services/crowdfunding/:id`).
+>   campagne doit pouvoir résoudre l'ID en lien
+>   `/services/crowdfunding/:id`).
 
 ---
 

@@ -97,7 +97,36 @@ Détails par sprint dans `HANDOFF.md` §10.
 
 - Questions produit : ouvre une issue GitHub avec le label `question/product`
 - Questions tech : label `question/tech`
-- Le projet est piloté par l'équipe Maintenant! — pas de PR mergée sans review
+
+## Politique de PR (autorisation permanente jusqu'à la session 50 incluse)
+
+À partir de l'étape 14 et **jusqu'à la fin de la 50ème session du projet incluse**,
+l'équipe Maintenant! autorise Claude à enchaîner ouverture **et merge** de PR
+sans demander confirmation à chaque étape. Concrètement, à la fin de chaque
+étape :
+
+1. **Commit + push** sur la branche imposée par l'harness (déjà obligatoire).
+2. **Ouvrir une PR** vers `main` avec titre `feat/fix/chore(...): step N — ...`
+   et un body qui suit le template (Summary + Décisions + Test plan).
+3. **Merger la PR** dès qu'elle est verte (typecheck + lint + vitest + build,
+   plus les checks GitHub Actions si présents).
+
+Conditions impératives pour le merge automatique :
+
+- Tous les checks locaux verts AVANT push (typecheck, lint, vitest, build).
+- Jamais de `--force` / `--force-with-lease` vers `main`.
+- Jamais de `--no-verify` / `--no-gpg-sign` ni de bypass de hook.
+- Jamais de suppression ou rename de table / colonne / RPC en DB sans
+  l'avoir explicitement listé dans le prompt de l'étape.
+- Si une review humaine ou un commentaire de PR arrive AVANT le merge,
+  l'attendre et traiter les remarques d'abord.
+- En cas de doute sur une migration DB risquée, un changement RGPD, ou un
+  breaking change visible utilisateur, **demander confirmation explicite**
+  malgré l'autorisation permanente.
+
+Au-delà de la session 50, revenir au workflow « pas de PR mergée sans review ».
+Le compteur de sessions vit dans `HANDOFF-PROGRESS.md` (« État global » +
+« Prompt pour la session N+X »).
 
 ---
 
