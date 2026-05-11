@@ -3524,9 +3524,10 @@ Légende des colonnes :
 >    propriétaire).
 >
 > **État actuel à la fin de l'étape 14** (PR #3 mergée dans `main` —
-> commits `feat(services): step 14 — hébergement + covoiturage CRUD`
-> + `docs(claude): autoriser merge auto des PR jusqu'à la session 50
-> incluse`) :
+> commit `feat(services): step 14 — hébergement + covoiturage CRUD` ;
+> puis PR #4 mergée — commits `docs(claude): autoriser merge auto des
+> PR jusqu'à la session 50 incluse` + `docs(handoff): prompt étape 15
+> — workflow auto-merge intégré`) :
 >
 > - Sprint 2 complet (pétitions / mobilisations / sondages / campagnes).
 > - Bannière cookies + 3 pages légales + Footer global.
