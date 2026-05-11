@@ -2,3 +2,11 @@ node_modules/
 package-lock.json
 *.log
 .DS_Store
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# Local Supabase / Stripe config (ne jamais committer)
+app/lib/config.local.js
