@@ -22,7 +22,8 @@
 | 11. Sprint 2 — Sondages CRUD côté front                 |   ✅   |
 | 12. Sprint 2 — Campagnes CRUD côté front                |   ✅   |
 | 13. Fin Sprint 2 — Audit RGPD ou bascule Sprint 3       |   ✅   |
-| 14. Sprint 3 — Hébergement + Covoiturage CRUD côté front |   ⬜   |
+| 14. Sprint 3 — Hébergement + Covoiturage CRUD côté front |   ✅   |
+| 15. Sprint 3 — Lending + Marketplace + Jardins + SEL + Crowdfunding |   ⬜   |
 
 ---
 
@@ -3344,6 +3345,244 @@ Légende des colonnes :
   l'email + grant SELECT colonne par colonne (cf. finding #1).
 - **À brancher quand DSN dispo** : `Sentry.init({ beforeSend: scrubEvent })`
   dans `web/src/main.tsx`.
+
+---
+
+## Étape 14 — Sprint 3 / Hébergement + Covoiturage CRUD ✅
+
+> Session N+8. Tip de branche : `claude/hosting-carpooling-sprint-NFZBr`.
+> Commit : `feat(services): step 14 — hébergement + covoiturage CRUD`.
+
+### Module `web/src/lib/housing.ts`
+
+- Types dérivés du schéma : `HousingRow`, `HousingInsert`,
+  `HousingRequestRow`, `HousingRequestInsert`, `HousingRequestStatus`.
+- Constantes de validation exportées (titre 4-80, description 40-2000,
+  capacité 1-20, message 20-2000, etc.).
+- `validateHousingInput(input)` — retourne `ValidationIssue[]`
+  (champs typés `CreateHousingField`). Vérifie les bornes, l'ordre
+  `availableFrom <= availableTo`.
+- `validateRequestInput(input)` — vérifie le message, les dates et
+  `endsOn >= startsOn`.
+- `listHousing({ city, search, capacityMin, availableFrom, availableTo,
+  limit })` — `is_published=true` par défaut, tri `created_at DESC`,
+  search `or('title.ilike.%X%,city.ilike.%X%,description.ilike.%X%')`
+  avec échappement `%`, `_`, `,`. Limite par défaut 50.
+- `getHousing(id)` — `maybeSingle` par ID (pas de slug — la table n'a
+  pas de colonne `slug`). Si on veut un slug, migration séparée à
+  prévoir.
+- `createHousing(input)` — validation puis insert RLS-checked.
+- `requestHousing({ housingId, requesterId, message, startsOn, endsOn })`
+  — insert `housing_requests` (statut `pending`).
+- `cancelRequest(id)` / `acceptRequest(id)` / `refuseRequest(id)` —
+  update du `status` (`cancelled` / `accepted` / `declined`) ; RLS
+  filtre côté DB (le demandeur peut annuler, l'hôte peut accepter
+  / refuser).
+
+### Module `web/src/lib/carpooling.ts`
+
+- Types `CarpoolingRow`, `CarpoolingInsert`.
+- Constantes : `CARPOOLING_CITY_MIN/MAX`, `CARPOOLING_SEATS_MIN/MAX`,
+  `CARPOOLING_PRICE_MIN/MAX`, `CARPOOLING_NOTES_MAX`.
+- `validateCarpoolingInput(input)` — origin/destination 2-80,
+  `departsAt` futur et valide, `seats` entier 1-8, `priceEur` ≥ 0
+  (≤ 500), notes ≤ 2000.
+- `listCarpooling({ from, to, search, departsAfter, departsBefore,
+  limit })` — `is_published=true`, tri `departs_at ASC`. Search
+  `or('origin_city.ilike.%X%,destination_city.ilike.%X%,notes.ilike.%X%')`
+  avec échappement.
+- `getCarpooling(id)` — par ID.
+- `createCarpooling(input)` — validation puis insert RLS-checked.
+
+### Hooks `useHousing` / `useHousingItem` / `useCarpooling` / `useCarpoolingItem`
+
+- Pattern identique à `useCampaigns` / `useCampaign` : `status` =
+  `idle | loading | ready | (notfound) | error`, reset des états
+  pendant le render quand les filtres changent.
+- `refresh()` rejoue la requête (utile après mutation côté listing
+  ou côté fiche).
+
+### Pages
+
+- `HousingPage` (`/services/housing`) — hero gradient, toolbar avec
+  recherche / ville / capacité minimum / CTA « Proposer un
+  hébergement ». Cards `Link` vers `/services/housing/:id`.
+- `HousingDetailPage` (`/services/housing/:id`) — hero avec titre,
+  ville, capacité, plage de disponibilité formatée FR, bouton
+  « Faire une demande » (masqué si l'utilisateur est l'hôte —
+  message « Vous êtes l'hôte » à la place) + bouton « Partager »
+  (Web Share API → clipboard fallback).
+- `HousingCreatePage` (`/services/housing/new`, RequireAuth) —
+  formulaire complet avec validation FR.
+- `HousingRequestPage` (`/services/housing/:id/request`, RequireAuth)
+  — formulaire `message + startsOn + endsOn`, écran de confirmation
+  après soumission. Redirige vers la fiche si l'utilisateur est
+  l'hôte (impossible de se contacter soi-même).
+- `CarpoolingPage` (`/services/carpooling`) — toolbar `from / to /
+  search / date de départ minimum`. Card avec date formatée FR,
+  trajet `origin → destination`, places, prix (« Gratuit » si
+  `price_eur=0`).
+- `CarpoolingDetailPage` (`/services/carpooling/:id`) — hero avec
+  trajet, date complète FR, places, prix, notes ; bouton
+  « Partager ».
+- `CarpoolingCreatePage` (`/services/carpooling/new`, RequireAuth)
+  — formulaire avec heure séparée (date + time → ISO).
+
+### Icônes
+
+- Ajout de `IconHome` et `IconCar` dans
+  `web/src/components/icons.tsx`. Pas d'emojis dans le code (cf.
+  CLAUDE.md).
+
+### Router
+
+- Routes ajoutées sous `services` (cf. `web/src/router.tsx`) :
+  `housing`, `housing/new` (RequireAuth), `housing/:id`,
+  `housing/:id/request` (RequireAuth), `carpooling`,
+  `carpooling/new` (RequireAuth), `carpooling/:id`.
+
+### Tests
+
+- `web/src/lib/housing.test.ts` — 26 tests (validation host /
+  request, listHousing tri + filtres + escaping, getHousing,
+  createHousing erreurs/succès, cancel/accept/refuse).
+- `web/src/lib/carpooling.test.ts` — 16 tests (validation incluant
+  bornes, departs_at passé, prix, listCarpooling tri + filtres
+  ASC + escaping, getCarpooling, createCarpooling).
+- `web/src/hooks/useHousing.test.tsx` — 3 tests.
+- `web/src/hooks/useHousingItem.test.tsx` — 3 tests.
+- `web/src/hooks/useCarpooling.test.tsx` — 3 tests.
+- `web/src/hooks/useCarpoolingItem.test.tsx` — 3 tests.
+- `web/src/pages/services/HousingPage.test.tsx` — 4 tests (listing
+  + compteur, état vide, recherche, erreur RLS FR).
+- `web/src/pages/services/HousingDetailPage.test.tsx` — 5 tests
+  (rendu fiche, CTA non-hôte, masquage CTA hôte, notfound
+  redirect, bouton Partager).
+- `web/src/pages/services/HousingCreatePage.test.tsx` — 4 tests
+  (rendu formulaire, validation FR, succès redirect, erreur RLS).
+- `web/src/pages/services/HousingRequestPage.test.tsx` — 4 tests
+  (rendu + résumé annonce, redirect hôte, validation, succès
+  + écran de confirmation).
+- `web/src/pages/services/CarpoolingPage.test.tsx` — 4 tests
+  (compteur, « Gratuit », état vide, erreur RLS).
+- `web/src/pages/services/CarpoolingDetailPage.test.tsx` — 4 tests
+  (rendu trajet + notes, notfound redirect, Partager, « Gratuit »).
+- `web/src/pages/services/CarpoolingCreatePage.test.tsx` — 3 tests
+  (rendu formulaire, validation FR, succès redirect).
+- **Total : 82 nouveaux tests.** Compteur global :
+  `Test Files 57 passed (57) · Tests 380 passed (380)` (vs 298 à la
+  fin de l'étape 13).
+
+### Décisions
+
+- **Pas de slug `housing` ni `carpooling` pour l'instant.** Les
+  fiches sont accessibles par ID. Si on veut des URLs « jolies »
+  plus tard, prévoir migration séparée + `slugify()` (déjà dispo
+  dans `web/src/lib/slug.ts`).
+- **`requestHousing` : page séparée plutôt que modale**. Mieux pour
+  l'A11Y (focus management) et autorise du deep-linking partagé.
+- **`HousingDetailPage` masque le CTA quand `user.id === host_id`.**
+  La RLS aurait bloqué la requête en cas de bypass, mais l'UX est
+  plus claire avec une garde côté front.
+- **Pas de RPC dédié pour `acceptRequest/refuseRequest`.** Un
+  simple update du `status` suffit ; la policy
+  `housing_requests_update_parties` filtre déjà côté DB.
+- **`carpooling.notes` indexé en search.** Comme on n'a pas de
+  champ `title` sur cette table, on étend `ilike` à `notes` pour
+  permettre une recherche large (point de RDV, événement…).
+- **Build inchangé en taille (295 kB)** — la bundle Vite est
+  tronquée à `supabase.ts` faute d'env vars en CI ; pas un
+  regression introduit ici (déjà observé en étape 13). À fixer
+  proprement quand on activera l'environnement de preview avec
+  vraies clés Supabase publiques.
+
+---
+
+## Prompt pour la session N+9 (étape 15)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD).
+> 2. `HANDOFF.md` §10 Sprint 3 (services communautaires — Lending,
+>    Marketplace, Jardins, SEL, Crowdfunding).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 14 ✅ — étape 15 à faire).
+> 4. `db/schema.sql` §10-11 (`lending`, `marketplace_items`,
+>    `garden_plots`, `sel_offers`, `crowdfunding_projects` /
+>    `crowdfunding_contributions`) + leurs policies RLS.
+> 5. `web/src/lib/housing.ts` + `web/src/lib/carpooling.ts` — patterns
+>    de référence (validation, listing avec or-search échappée).
+> 6. `web/src/pages/services/HousingPage.tsx` + `HousingDetailPage.tsx`
+>    + `HousingCreatePage.tsx` — patterns UI (hero, toolbar, cards,
+>    fiche avec Partager).
+>
+> **État actuel à la fin de l'étape 14** (tip
+> `claude/hosting-carpooling-sprint-NFZBr`, commit
+> `feat(services): step 14 — hébergement + covoiturage CRUD`) :
+>
+> - Sprint 2 complet (pétitions / mobilisations / sondages / campagnes).
+> - Bannière cookies + 3 pages légales + Footer global.
+> - Sentry no-PII scaffold prêt (DSN à brancher).
+> - Sprint 3 démarré : hébergement + covoiturage CRUD opérationnels.
+> - `web/` : 380 tests verts, build 295 kB (tronqué tant que les env
+>   vars Supabase publiques ne sont pas fournies en CI).
+>
+> **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
+>
+> 1. Vérifier qu'on est bien dans un workspace contenant `web/`. Si non
+>    (rare — branche partie d'un main obsolète), `git fetch origin main &&
+>    git merge --ff-only origin/main`.
+> 2. `cd web && npm ci` (le `.devcontainer/` lance ça automatiquement au
+>    `postCreateCommand`). Fallback : `npm install --legacy-peer-deps`.
+> 3. `npm run typecheck && npm run lint && npx vitest run && npm run build`
+>    pour vérifier le compteur de tests au point de départ
+>    (≥ 380 verts à la fin de l'étape 14, à incrémenter à chaque étape).
+>
+> **ÉTAPE 15 à exécuter — Sprint 3 / Lending + Marketplace + Jardins
+> + SEL + Crowdfunding** :
+>
+> 1. **Module `web/src/lib/lending.ts`** : prêt d'objets (categories,
+>    is_available, t99cp_cost). Pas de slug.
+> 2. **Module `web/src/lib/marketplace.ts`** : annonces de matériel /
+>    services (titre, description, prix optionnel, échange T99CP).
+> 3. **Module `web/src/lib/garden.ts`** : jardins partagés / parcelles
+>    (commune, surface, contact responsable).
+> 4. **Module `web/src/lib/sel.ts`** : offres SEL (titre, description,
+>    coût en T99CP).
+> 5. **Module `web/src/lib/crowdfunding.ts`** : cagnottes (titre,
+>    description, target_eur, deadline) + contributions. Attention :
+>    table déjà référencée par `campaign_actions.crowdfunding_id`.
+> 6. **Hooks correspondants** (pattern `useHousing` / `useHousingItem`).
+> 7. **Pages** :
+>    - `LendingPage` + `LendingDetailPage` + `LendingCreatePage`
+>      (`/services/lending`).
+>    - Idem pour marketplace, garden, sel, crowdfunding.
+>    - Crowdfunding : ajouter `CrowdfundingContributePage` (RequireAuth,
+>      `/services/crowdfunding/:id/contribute`).
+>    - Mettre à jour `CampaignDetailPage` pour résoudre les liens
+>      `action.crowdfunding_id` vers `/services/crowdfunding/:id`
+>      (déjà en place — vérifier que ça pointe bien sur le nouvel ID).
+> 8. **Router** : ajouter routes sous `services`.
+> 9. **Tests** : objectif ≥ 500 tests verts (380 + ≥ 120 nouveaux —
+>    5 modules x ~24 tests par module : lib 12-15 / hooks 4-6 / pages
+>    8-15).
+> 10. **HANDOFF-PROGRESS.md** : étape 15 ✅ + prompt étape 16 (Sprint 4 —
+>     Réseau social + Messagerie + Notifications + Média).
+> 11. **Commit** : `feat(services): step 15 — sprint 3 complet (lending
+>     + marketplace + garden + sel + crowdfunding)`.
+>
+> **Contraintes** :
+>
+> - Ne pas toucher au prototype.
+> - TS strict + no `any`.
+> - Conserver les checks verts.
+> - Pas d'emojis dans le code TS ni dans les commits.
+> - Vérifier que la FK `campaign_actions.crowdfunding_id` continue de
+>   fonctionner après l'introduction du module crowdfunding (la fiche
+>   campagne doit pouvoir résoudre l'ID en lien `/services/crowdfunding/:id`).
 
 ---
 

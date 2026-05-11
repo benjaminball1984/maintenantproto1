@@ -501,3 +501,40 @@ export function IconList({ width = 18, height = 18, ...props }: IconProps) {
     </svg>
   );
 }
+
+export function IconHome({ width = 18, height = 18, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <path d="M3 11.5 12 4l9 7.5" />
+      <path d="M5 10v10h14V10" />
+      <path d="M10 20v-6h4v6" />
+    </svg>
+  );
+}
+
+export function IconCar({ width = 18, height = 18, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <path d="M5 17V11l2-5h10l2 5v6" />
+      <path d="M3 17h18" />
+      <circle cx="7.5" cy="17.5" r="1.5" />
+      <circle cx="16.5" cy="17.5" r="1.5" />
+    </svg>
+  );
+}

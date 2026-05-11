@@ -13,7 +13,12 @@ import CampaignDetailPage from './pages/CampaignDetailPage';
 import CampaignCreatePage from './pages/CampaignCreatePage';
 import ServicesHubPage from './pages/services/ServicesHubPage';
 import HousingPage from './pages/services/HousingPage';
+import HousingDetailPage from './pages/services/HousingDetailPage';
+import HousingCreatePage from './pages/services/HousingCreatePage';
+import HousingRequestPage from './pages/services/HousingRequestPage';
 import CarpoolingPage from './pages/services/CarpoolingPage';
+import CarpoolingDetailPage from './pages/services/CarpoolingDetailPage';
+import CarpoolingCreatePage from './pages/services/CarpoolingCreatePage';
 import MarketplacePage from './pages/services/MarketplacePage';
 import LendingPage from './pages/services/LendingPage';
 import GardenPage from './pages/services/GardenPage';
@@ -78,7 +83,33 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <ServicesHubPage /> },
           { path: 'housing', element: <HousingPage /> },
+          {
+            path: 'housing/new',
+            element: (
+              <RequireAuth>
+                <HousingCreatePage />
+              </RequireAuth>
+            ),
+          },
+          { path: 'housing/:id', element: <HousingDetailPage /> },
+          {
+            path: 'housing/:id/request',
+            element: (
+              <RequireAuth>
+                <HousingRequestPage />
+              </RequireAuth>
+            ),
+          },
           { path: 'carpooling', element: <CarpoolingPage /> },
+          {
+            path: 'carpooling/new',
+            element: (
+              <RequireAuth>
+                <CarpoolingCreatePage />
+              </RequireAuth>
+            ),
+          },
+          { path: 'carpooling/:id', element: <CarpoolingDetailPage /> },
           { path: 'marketplace', element: <MarketplacePage /> },
           { path: 'lending', element: <LendingPage /> },
           { path: 'garden', element: <GardenPage /> },
