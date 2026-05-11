@@ -1180,7 +1180,15 @@ directe sur `window.location`). Restauré dans `afterEach`.
 >    Cette consigne récursive doit être présente à chaque étape : tant
 >    que le Sprint 2 n'est pas complet, le journal auto-prépare la
 >    session suivante.
-> 8. **Commit** : `feat(auth): step 8 — OAuth Google + Instagram + magic
+> 8. **Coller le prompt de l'étape 9 dans la conversation finale**, en
+>    plus de l'avoir écrit dans `HANDOFF-PROGRESS.md` : à la fin de la
+>    session, le message Claude doit contenir littéralement le bloc du
+>    prompt (citation `>` ou code-fence), afin que l'utilisateur puisse le
+>    copier d'un coup pour lancer la session N+3 sans rouvrir le fichier.
+>    Cette consigne fait partie de la boucle récursive : tant que le
+>    Sprint 2 n'est pas complet, le prompt généré (étapes 10, 11, …) doit
+>    aussi être collé dans la réponse finale de la session.
+> 9. **Commit** : `feat(auth): step 8 — OAuth Google + Instagram + magic
 >    link + callback`. **Push** sur la branche imposée par l'harness avec
 >    `git push -u origin <branch>`, retry sur erreurs réseau
 >    (2s/4s/8s/16s). Pas de PR sans demande explicite.
@@ -1203,12 +1211,17 @@ directe sur `window.location`). Restauré dans `afterEach`.
 >   `supabase start` ; OAuth se teste uniquement avec des mocks côté
 >   front (`supabase.auth.signInWithOAuth` mocké).
 >
-> Le prompt de l'étape 9 doit impérativement contenir la même consigne
-> récursive : « écrire le prompt de l'étape 10 dans `HANDOFF-PROGRESS.md`
-> avant le commit final ». Cette boucle s'arrête uniquement quand le
-> Sprint 2 (contenu militant — pétitions, mobilisations, campagnes) est
-> complet, point auquel le prompt généré peut basculer sur le Sprint 3
-> (services communautaires).
+> Le prompt de l'étape 9 doit impérativement contenir la **même double
+> consigne récursive** :
+>
+> 1. « écrire le prompt de l'étape 10 dans `HANDOFF-PROGRESS.md` avant le
+>    commit final »,
+> 2. « **coller le prompt de l'étape 10 dans la conversation** (réponse
+>    finale Claude), pas seulement dans le fichier journal ».
+>
+> Cette boucle s'arrête uniquement quand le Sprint 2 (contenu militant —
+> pétitions, mobilisations, campagnes) est complet, point auquel le
+> prompt généré peut basculer sur le Sprint 3 (services communautaires).
 
 ---
 
