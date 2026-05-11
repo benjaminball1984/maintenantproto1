@@ -615,10 +615,23 @@ create trigger post_comments_touch before update on public.post_comments
 
 -- -------------------------------------------------------------------------------------
 -- 12. Sondages (polls / poll_options / votes)
+--
+-- Modèle simple « 1 user = 1 vote » :
+--   - polls.slug : alias stable pour les URLs /polls/:slug, généré côté front via
+--     slugify(). UNIQUE pour empêcher les collisions ; le front retente avec un
+--     suffixe en cas de conflit (cf. createPoll dans web/src/lib/polls.ts).
+--   - poll_options.vote_count : compteur dénormalisé, mis à jour par le trigger
+--     touch_poll_option_vote_count (cf. §12.b). Le front lit ce champ pour
+--     afficher les barres de progression sans COUNT(*).
+--   - votes : table de liaison (poll_id, option_id, user_id) — UNIQUE
+--     (poll_id, user_id) garantit qu'un utilisateur ne vote qu'une fois par
+--     sondage ; le retrait de vote (DELETE RGPD) est autorisé par la policy
+--     votes_delete_self.
 -- -------------------------------------------------------------------------------------
 create table if not exists public.polls (
   id uuid primary key default gen_random_uuid(),
   author_id uuid not null references public.users(id) on delete restrict,
+  slug text not null unique,
   question text not null,
   description text,
   members_only boolean not null default true,
@@ -627,7 +640,24 @@ create table if not exists public.polls (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+-- Ajout idempotent de polls.slug si la table existait déjà sans cette colonne.
+-- Migration progressive : on remplit d'abord la colonne avec un slug dérivé de
+-- la question (via slugify), puis on impose NOT NULL et UNIQUE. Le fallback
+-- coalesce(question, id::text) sert si la question est nulle (cas théorique).
+alter table public.polls
+  add column if not exists slug text;
+update public.polls
+   set slug = public.slugify(coalesce(question, id::text)) || '-' || substr(id::text, 1, 8)
+ where slug is null;
+do $$ begin
+  alter table public.polls alter column slug set not null;
+exception when others then null; end $$;
+do $$ begin
+  alter table public.polls add constraint polls_slug_key unique (slug);
+exception when duplicate_table then null;
+when duplicate_object then null; end $$;
 create index if not exists polls_author_idx on public.polls (author_id);
+create index if not exists polls_status_idx on public.polls (status);
 create trigger polls_touch before update on public.polls
   for each row execute function public.touch_updated_at();
 
@@ -636,9 +666,18 @@ create table if not exists public.poll_options (
   poll_id uuid not null references public.polls(id) on delete cascade,
   label text not null,
   position integer not null default 0,
+  vote_count integer not null default 0 check (vote_count >= 0),
   created_at timestamptz not null default now(),
   unique (poll_id, position)
 );
+-- Ajout idempotent de poll_options.vote_count si la table existait déjà sans
+-- cette colonne (utile pour la migration progressive depuis un schéma antérieur).
+alter table public.poll_options
+  add column if not exists vote_count integer not null default 0;
+do $$ begin
+  alter table public.poll_options
+    add constraint poll_options_vote_count_chk check (vote_count >= 0);
+exception when duplicate_object then null; end $$;
 create index if not exists poll_options_poll_idx on public.poll_options (poll_id);
 
 create table if not exists public.votes (
@@ -652,6 +691,50 @@ create table if not exists public.votes (
 create index if not exists votes_poll_idx on public.votes (poll_id);
 create index if not exists votes_option_idx on public.votes (option_id);
 create index if not exists votes_user_idx on public.votes (user_id);
+
+-- -------------------------------------------------------------------------------------
+-- 12.b Trigger d'incrément/décrément de poll_options.vote_count
+--
+-- Même logique que petitions.signature_count (cf. 4.b) et
+-- mobilizations.participation_count (cf. 5.b). Le compteur dénormalisé évite un
+-- COUNT(*) sur chaque rendu de fiche. Le trigger AFTER INSERT/DELETE sur votes
+-- met à jour la colonne ; aucun chemin applicatif ne doit toucher ce champ.
+--
+-- Cas de test SQL (à valider sur un PG local) :
+--   * insert votes → poll_options.vote_count +1 sur l'option visée
+--   * delete votes (retrait RGPD) → poll_options.vote_count -1 (greatest 0)
+--   * delete poll (cascade) → supprime options + votes, pas de bump négatif
+--   * la contrainte UNIQUE (poll_id, user_id) sur votes empêche le double-vote
+-- -------------------------------------------------------------------------------------
+create or replace function public.touch_poll_option_vote_count()
+returns trigger
+language plpgsql
+as $$
+begin
+  if (tg_op = 'INSERT') then
+    update public.poll_options
+       set vote_count = vote_count + 1
+     where id = new.option_id;
+    return new;
+  elsif (tg_op = 'DELETE') then
+    update public.poll_options
+       set vote_count = greatest(vote_count - 1, 0)
+     where id = old.option_id;
+    return old;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists votes_count_inc on public.votes;
+create trigger votes_count_inc
+  after insert on public.votes
+  for each row execute function public.touch_poll_option_vote_count();
+
+drop trigger if exists votes_count_dec on public.votes;
+create trigger votes_count_dec
+  after delete on public.votes
+  for each row execute function public.touch_poll_option_vote_count();
 
 -- -------------------------------------------------------------------------------------
 -- 13. Campagnes ciblées (regroupement multi-actions)

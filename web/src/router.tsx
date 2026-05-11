@@ -20,6 +20,8 @@ import CrowdfundingPage from './pages/services/CrowdfundingPage';
 import MediaPage from './pages/MediaPage';
 import ReseauPage from './pages/ReseauPage';
 import PollsPage from './pages/PollsPage';
+import PollDetailPage from './pages/PollDetailPage';
+import PollCreatePage from './pages/PollCreatePage';
 import MessagingPage from './pages/MessagingPage';
 import NotificationsPage from './pages/NotificationsPage';
 import AdminPage from './pages/AdminPage';
@@ -73,6 +75,15 @@ export const router = createBrowserRouter([
       { path: 'media', element: <MediaPage /> },
       { path: 'reseau', element: <ReseauPage /> },
       { path: 'polls', element: <PollsPage /> },
+      {
+        path: 'polls/new',
+        element: (
+          <RequireAuth>
+            <PollCreatePage />
+          </RequireAuth>
+        ),
+      },
+      { path: 'polls/:slug', element: <PollDetailPage /> },
       { path: 'messaging', element: <MessagingPage /> },
       { path: 'notifications', element: <NotificationsPage /> },
       { path: 'admin', element: <AdminPage /> },

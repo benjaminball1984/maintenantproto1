@@ -1170,6 +1170,7 @@ export interface Database {
           poll_id: string;
           label: string;
           position: number;
+          vote_count: number;
           created_at: string;
         };
         Insert: {
@@ -1177,6 +1178,7 @@ export interface Database {
           poll_id: string;
           label: string;
           position?: number;
+          vote_count?: number;
           created_at?: string;
         };
         Update: {
@@ -1184,6 +1186,7 @@ export interface Database {
           poll_id?: string;
           label?: string;
           position?: number;
+          vote_count?: number;
           created_at?: string;
         };
         Relationships: [
@@ -1200,6 +1203,7 @@ export interface Database {
         Row: {
           id: string;
           author_id: string;
+          slug: string;
           question: string;
           description: string | null;
           members_only: boolean;
@@ -1211,6 +1215,7 @@ export interface Database {
         Insert: {
           id?: string;
           author_id: string;
+          slug: string;
           question: string;
           description?: string | null;
           members_only?: boolean;
@@ -1222,6 +1227,7 @@ export interface Database {
         Update: {
           id?: string;
           author_id?: string;
+          slug?: string;
           question?: string;
           description?: string | null;
           members_only?: boolean;

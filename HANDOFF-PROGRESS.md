@@ -19,7 +19,8 @@
 | 8. OAuth Google/Instagram + magic link (fin Sprint 1)   |   ✅   |
 | 9. Sprint 2 — Pétitions CRUD côté front                 |   ✅   |
 | 10. Sprint 2 — Mobilisations CRUD côté front            |   ✅   |
-| 11. Sprint 2 — Sondages CRUD côté front                 |   ⬜   |
+| 11. Sprint 2 — Sondages CRUD côté front                 |   ✅   |
+| 12. Sprint 2 — Campagnes CRUD côté front                |   ⬜   |
 
 ---
 
@@ -2284,6 +2285,188 @@ Mocks Supabase :
 
 ---
 
+## Étape 11 — Sprint 2 / Sondages CRUD côté front ✅
+
+**Branche** : `claude/review-project-setup-AjlyB`
+**Commit** : `feat(polls): step 11 — CRUD sondages + listing + fiche + création`
+
+### Module `web/src/lib/polls.ts`
+
+Types Supabase via `Database['public']['Tables']<'polls'|'poll_options'|'votes'>`.
+Helper `PollWithOptions` qui agrège le `poll` et ses `options[]` pour la fiche.
+
+API exposée :
+
+- `listPolls({ status, search, limit })` — listing public (`status='published'`
+  par défaut, tri `created_at DESC`, limite 50). Recherche `.or()` sur
+  `question` + `description`, échappement des méta-caractères `%`, `_`, `,`.
+- `getPoll(slug)` — fiche détail : deux requêtes (poll par slug, puis options
+  par `poll_id` triées par `position`). `data: null` propre si introuvable.
+- `createPoll(input)` — validation FR, slug auto via `slugify(question)` avec
+  retry incrémental sur collision `23505` (jusqu'à 5 essais), insert poll +
+  insert options en cascade, rollback manuel (DELETE poll) si l'insertion des
+  options échoue.
+- `votePoll(pollId, optionId, userId)` — insert `votes` (la contrainte UNIQUE
+  `(poll_id, user_id)` empêche le double-vote ; RLS `votes_insert_member`
+  vérifie `auth.uid() = user_id` et l'appartenance adhérent si `members_only`).
+- `unvotePoll(pollId, userId)` — delete RGPD (retrait du vote).
+- `hasUserVoted(pollId, userId)` — single-row check (boolean).
+- `getUserVote(pollId, userId)` — renvoie `optionId | null` (pour pré-cocher
+  l'option dans la fiche).
+
+Validation côté client (`validatePollInput`) :
+
+- Question : 8–200 caractères.
+- Description : 40–400 caractères.
+- Options : 2–8 options, chaque option 2–80 caractères, toutes distinctes.
+- `closesAt` (facultatif) : doit être dans le futur si fourni.
+
+### Hooks
+
+- `usePolls(params)` — liste + states `idle/loading/ready/error` + `refresh`.
+- `usePoll(slug, userId)` — fiche + options + `userOptionId` (option votée par
+  l'utilisateur, lue via `getUserVote` quand `userId` est fourni).
+
+Patterns identiques à `usePetitions`/`usePetition` et
+`useMobilizations`/`useMobilization` : `queueMicrotask` au mount, reset des
+states locaux quand les clés tracées (`slug:userId`) changent.
+
+### Pages
+
+- `web/src/pages/PollsPage.tsx` — listing avec hero brand, barre de recherche
+  + filtre statut (Ouvert / Publié / Archivé), grille cards (auto-fill,
+  min 280 px). Le CTA « Créer un sondage » est désactivé tant que l'état auth
+  n'est pas connu (`authStatus === 'loading'`).
+- `web/src/pages/PollDetailPage.tsx` — fiche avec radio-like buttons par
+  option : tant que l'utilisateur n'a pas voté on cache les compteurs, dès
+  qu'il a voté (ou que le sondage est clos) on affiche les barres de
+  progression (`var(--mn-gradient)`) + pourcentage + nombre de votes. CTA
+  « Se connecter pour voter » pour l'anonyme, sinon « Valider mon vote » /
+  « Vote enregistré — retirer mon vote ». Partage `navigator.share` →
+  fallback `clipboard.writeText`. Le calcul `isClosed` est porté par un
+  `useEffect + queueMicrotask` pour éviter `Date.now()` pendant le render
+  (règle `react-hooks/purity`).
+- `web/src/pages/PollCreatePage.tsx` — formulaire (RequireAuth via router) :
+  question, description, options dynamiques (2 par défaut, max 8, avec boutons
+  ajouter/retirer), date de clôture (datetime-local, facultative), case
+  « Réservé aux adhérent·es » (cochée par défaut). Sur succès → redirige
+  vers `/polls/<slug>` en `replace`.
+
+Icônes ajoutées : `IconBarChart` (4 barres verticales, `currentColor`).
+`IconCheck` réutilisé tel quel.
+
+### Trigger SQL `vote_count`
+
+Ajout dans `db/schema.sql` §12 :
+
+- Colonne `poll_options.vote_count integer not null default 0 check (>= 0)`
+  (ajout idempotent via `alter table … add column if not exists`).
+- Trigger `votes_count_inc` / `votes_count_dec` (AFTER INSERT/DELETE) qui
+  appelle `public.touch_poll_option_vote_count` — même pattern que
+  `petitions.signature_count` et `mobilizations.participation_count`.
+- Colonne `polls.slug text not null unique` (ajout idempotent + backfill via
+  `slugify(question) || '-' || substr(id::text, 1, 8)` pour les lignes
+  préexistantes).
+- Index `polls_status_idx` (filtre listing).
+
+Cas de test SQL documentés en commentaires : insert/delete votes met à jour
+`vote_count`, cascade DELETE poll → options → votes propre, contrainte UNIQUE
+`(poll_id, user_id)` empêche le double-vote. Pas de validation runtime
+possible sans Docker (cf. fallback ci-dessous).
+
+### Types Supabase
+
+`web/src/types/database.ts` patché à la main :
+
+- `polls.Row` / `.Insert` / `.Update` → ajout de `slug: string`.
+- `poll_options.Row` / `.Insert` / `.Update` → ajout de `vote_count: number`.
+
+Régénération automatique reportée au moment où on rebrancherea Docker
+Supabase (cf. note `--legacy-peer-deps` + fallback).
+
+### Router
+
+Trois routes ajoutées dans `web/src/router.tsx` :
+
+```
+/polls          → PollsPage          (public)
+/polls/new      → PollCreatePage     (RequireAuth)
+/polls/:slug    → PollDetailPage     (public)
+```
+
+### Tests Vitest
+
+- `src/lib/polls.test.ts` : **29 cas** — `validatePollInput` (8),
+  `listPolls` (4), `getPoll` (3), `createPoll` (5 dont rollback), `votePoll`
+  (2), `unvotePoll`, `hasUserVoted` (2), `getUserVote` (2), constantes (1).
+- `src/hooks/usePolls.test.tsx` : **3 cas** — mount/ready, erreur, ré-exécution
+  sur changement de `search`.
+- `src/hooks/usePoll.test.tsx` : **4 cas** — anonyme (pas de getUserVote),
+  notfound, fetch userOptionId, refresh + mise à jour.
+- `src/pages/PollsPage.test.tsx` : **4 cas** — listing, état vide, recherche,
+  erreur Postgrest FR.
+- `src/pages/PollDetailPage.test.tsx` : **5 cas** — rendu, anonyme, vote (sel +
+  validate → `votePoll` + refresh), retrait du vote (`unvotePoll`),
+  redirection 404.
+- `src/pages/PollCreatePage.test.tsx` : **4 cas** — rendu, validation FR
+  sur soumission vide, succès → redirect, erreur 42501 FR.
+
+**Total** : **49 nouveaux tests** (≥ 25 requis), **224 tests verts** sur
+l'ensemble du projet (175 hérités + 49). `npm run typecheck`, `npm run lint`,
+`npm run test`, `npm run build` (295 kB), `npm run format:check` → tous verts.
+
+### Décisions de design
+
+- **Pas de transaction native** : Supabase via PostgREST n'expose pas de
+  transaction côté client. On insère le poll d'abord, puis le tableau
+  d'options en un seul `insert(arr)`. En cas d'erreur sur les options,
+  rollback manuel via `delete().eq('id', poll.id)`. Risque résiduel : si le
+  rollback échoue, on a un poll orphelin sans options ; la fiche est alors
+  illisible (0 option) mais reste invisible côté front (cache busté au
+  refresh). Si le risque devient gênant, on basculera plus tard sur une
+  RPC SQL `public.create_poll_with_options(input jsonb)` qui fera une
+  transaction côté serveur.
+- **Vote unique, pas de pondération** : le prototype `PollsPage.jsx` avait
+  un calcul INSEE-style avec pondération démographique (`computeReliability`
+  + 15 questions de profil). On part sur du « 1 user = 1 vote » strict pour
+  l'étape 11 ; la pondération sera ajoutée au Sprint 5 (audit RGPD + admin)
+  via une RPC dédiée. Décision documentée dans le code.
+- **Partage** : `navigator.share` (mobile) → fallback `clipboard.writeText`.
+  Pareil que MobilizationDetailPage. La constante `shared` se réinitialise à
+  chaque clic (toast éphémère).
+- **`isClosed` calculé en `useEffect`** : la règle ESLint
+  `react-hooks/purity` interdit `Date.now()` pendant le render. On copie le
+  pattern de `MobilizationDetailPage.tsx` (`useEffect + queueMicrotask + state`)
+  pour rester dans les règles React 19.
+
+### Prochaines étapes (étape 12)
+
+1. **Campagnes CRUD** (`web/src/lib/campaigns.ts`, hooks, pages) — port du
+   prototype `Pages_Services.jsx` (composant Campagnes). Spécifique :
+   `campaigns` agrège plusieurs `campaign_actions` (FK vers `petitions`,
+   `mobilizations`, `polls`, `crowdfunding_campaigns`) — il faudra prévoir la
+   sélection multi-cibles dans le formulaire de création.
+2. Sinon, basculer sur **audit RGPD fin Sprint 2** (bannière cookies, page
+   politique de confidentialité, vérif que `service_role` n'est jamais
+   exposée côté front, audit des logs Sentry pour qu'aucune donnée perso
+   n'y atterrisse).
+
+### Fallback Docker / Supabase local
+
+Pas de validation runtime des triggers `vote_count` cette session (sandbox
+sans Docker). À refaire en local quand on a Postgres :
+
+```bash
+service postgresql start
+createdb maintenant_test
+psql maintenant_test < db/schema.sql
+psql maintenant_test -c "insert into public.users(id, email) values ('u1', 'a@b.c');"
+psql maintenant_test -c "insert into public.polls(author_id, slug, question) values ('u1', 's1', 'Q?');"
+# … puis valider que le trigger met bien à jour poll_options.vote_count.
+```
+
+---
+
 ## Prompt pour la session N+5 (étape 11)
 
 > Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
@@ -2470,3 +2653,185 @@ Mocks Supabase :
 > — pétitions, mobilisations, campagnes, sondages) est complet, point
 > auquel le prompt généré peut basculer sur le Sprint 3 (services
 > communautaires).
+
+---
+
+## Prompt pour la session N+6 (étape 12)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD).
+> 2. `HANDOFF.md` §3 (architecture pages) + §7.2 (tables `campaigns`,
+>    `campaign_actions`) + §10 Sprint 2.
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 11 ✅ — étape 12 à faire).
+> 4. `Pages_Services.jsx` racine prototype : composants liés aux campagnes
+>    (chercher `Campagnes`, `Campaign`, `CampaignDetail`, `campaign_actions`,
+>    `selected items`). En particulier les commits `d97d272` (6 templates
+>    pré-remplis) et `01f4d73` (sélection multi-items inline) pour comprendre
+>    la sémantique d'une campagne « multi-actions ».
+> 5. `web/src/lib/petitions.ts`, `web/src/lib/mobilizations.ts`,
+>    `web/src/lib/polls.ts`, `web/src/lib/slug.ts`, hooks correspondants,
+>    pages `PetitionsPage.tsx`, `MobilizationsPage.tsx`, `PollsPage.tsx`,
+>    leurs fiches et leurs formulaires de création — patterns à reproduire
+>    pour `campaigns`.
+> 6. `db/schema.sql` §13 (campagnes) — tables `campaigns`, `campaign_actions`
+>    + policies RLS. Vérifier que toutes les colonnes nécessaires sont
+>    présentes (notamment la nature des FK : `petition_id`, `mobilization_id`,
+>    `poll_id`, `crowdfunding_id` toutes `nullable`).
+>
+> **État actuel à la fin de l'étape 11** (tip
+> `claude/review-project-setup-AjlyB`, commit
+> `feat(polls): step 11 — CRUD sondages + listing + fiche + création`) :
+>
+> - Prototype intact : `project/app/Maintenant.html` + JSX racine.
+> - `web/` : Vite + React 19 + TS 6 strict, **224 tests verts** (49 nouveaux
+>   à l'étape 11), ESLint flat, Vitest, Prettier, build 295 kB.
+> - Supabase : `db/schema.sql` ≈ 1 880 lignes (36 tables + 119 policies RLS
+>   + trigger `handle_new_user` + bucket avatars + RPC T99CP + compteur
+>   `signature_count` + compteur `participation_count` + compteur
+>   `vote_count` sur `poll_options` + colonne `polls.slug` + slugify(text)),
+>   `web/src/types/database.ts` ≈ 1 720 lignes.
+> - Auth complète : signup/login/logout/reset password + OAuth Google +
+>   Instagram + magic link + callback page `/auth/callback`.
+> - Profil + adhésion Stripe + RPC T99CP opérationnels.
+> - **Pétitions** complètes : listing, fiche, signer/retirer signature,
+>   création (RequireAuth) — Sprint 2 démarré.
+> - **Mobilisations** complètes : listing avec filtres ville+date, fiche
+>   avec « Je participe » / partage / dates FR Intl, création (RequireAuth)
+>   — Sprint 2 poursuivi.
+> - **Sondages** complets : listing, fiche avec radio buttons + barres de
+>   progression `var(--mn-gradient)`, vote unique « 1 user / 1 sondage » via
+>   contrainte UNIQUE, retrait RGPD, création (RequireAuth) — Sprint 2
+>   poursuivi.
+> - `slugify()` partagé via `web/src/lib/slug.ts`.
+>
+> **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
+>
+> 1. `git fetch origin claude/review-project-setup-AjlyB` (retry network
+>    2s/4s/8s/16s) pour récupérer le tip de l'étape 11.
+> 2. `git merge --no-ff <SHA-étape-11>` pour intégrer le commit
+>    `feat(polls): step 11 …`. En cas d'absence,
+>    `git checkout origin/claude/review-project-setup-AjlyB -- .` puis
+>    commit.
+> 3. `cd web && npm install --legacy-peer-deps` (lockfile non versionné,
+>    option requise à cause d'`eslint-plugin-jsx-a11y` ↔ ESLint 10). À
+>    réutiliser pour tout nouvel `npm install` dans cette session.
+>
+> **ÉTAPE 12 à exécuter — Campagnes CRUD côté front (Sprint 2)** :
+>
+> 1. **Module `web/src/lib/campaigns.ts`** — fonctions typées via `Database`
+>    (`Tables<'campaigns'>`, `Tables<'campaign_actions'>`) :
+>    - `listCampaigns({ status, search, limit })` — listing public,
+>      `status='published'`, tri `created_at DESC`. Filtre `search` via
+>      `.or()` sur `title`+`summary`.
+>    - `getCampaign(slug)` — fiche détail : poll par slug, puis
+>      `campaign_actions` triées par `position`, avec **jointures** vers
+>      les ressources cibles (`petition_id → petitions(*)`, etc.). Astuce :
+>      utiliser la syntaxe Supabase `select('*, petition:petitions(*), …')`
+>      ou faire des requêtes séparées si la jointure est trop lourde.
+>    - `createCampaign(input)` — insert campaign + insert
+>      campaign_actions[]. Validation FR. Slug auto via `slugify()`
+>      factorisé. Retry incrémental sur collision (5 essais).
+>    - `addCampaignAction(campaignId, ref)` / `removeCampaignAction(id)`
+>      pour ajouter / retirer une action liée à une campagne existante
+>      (admin / owner uniquement, vérifié par RLS).
+>    - `validateCampaignInput(input)` — title 8–80, summary 40–240, body
+>      facultatif (si présent ≥ 100), ≥ 1 action et ≤ 12 actions.
+> 2. **Hooks `useCampaigns.ts` + `useCampaign.ts`** : copier le pattern
+>    `usePetitions / usePetition / useMobilizations / useMobilization /
+>    usePolls / usePoll`.
+> 3. **Pages** :
+>    - `web/src/pages/CampaignsPage.tsx` — listing avec recherche + filtre
+>      statut. Port TS strict du prototype (cf. commits `d97d272` et
+>      `01f4d73`).
+>    - `web/src/pages/CampaignDetailPage.tsx` — fiche avec hero, body,
+>      liste des `campaign_actions` (cards cliquables vers
+>      `/petitions/<slug>`, `/mobilizations/<slug>`, `/polls/<slug>`,
+>      `/services/crowdfunding/<slug>`). Partage du lien.
+>    - `web/src/pages/CampaignCreatePage.tsx` — formulaire création
+>      (RequireAuth), sélection multi-items inline (l'utilisateur peut
+>      ajouter à la volée des actions existantes — un combobox `search` qui
+>      tape sur les listings publics + sélection multiple).
+> 4. **Router** : ajouter les routes `/campaigns/:slug`, `/campaigns/new`,
+>    et brancher `RequireAuth` sur la création.
+> 5. **Schéma DB** : vérifier que `db/schema.sql` §13 est complet (slug
+>    unique sur campaigns ✅, mais pas de compteur dénormalisé — pas besoin
+>    pour les campagnes, on remontera juste le nombre d'actions via la
+>    jointure). Si manquant, ajouter index `campaigns_status_idx` et
+>    `campaign_actions_position_idx`.
+> 6. **Régénérer** `web/src/types/database.ts` si tu touches `db/schema.sql`
+>    (au minimum patcher à la main).
+> 7. **Icônes SVG** à ajouter si besoin : `IconMegaphone`, `IconList` —
+>    toujours `currentColor`, pas d'emoji.
+> 8. **Tests** (Vitest + Testing Library + mocks Supabase) :
+>    - `src/lib/campaigns.test.ts` (≥ 10 cas) — `listCampaigns` (filtres),
+>      `getCampaign` (succès + 404), `createCampaign` (validation, succès,
+>      retry slug-collision, rollback en cas d'erreur sur insert d'actions),
+>      `addCampaignAction`, `removeCampaignAction`.
+>    - `src/hooks/useCampaigns.test.tsx` (≥ 3 cas).
+>    - `src/hooks/useCampaign.test.tsx` (≥ 3 cas).
+>    - `src/pages/CampaignsPage.test.tsx` (≥ 3 cas).
+>    - `src/pages/CampaignDetailPage.test.tsx` (≥ 4 cas) — rendu fiche,
+>      actions cliquables, partage, redirection 404.
+>    - `src/pages/CampaignCreatePage.test.tsx` (≥ 3 cas) — rendu, validation
+>      FR, succès → redirect.
+>    - Objectif : **≥ 250 tests verts** (224 existants + ≥ 25 nouveaux).
+> 9. Mettre à jour `HANDOFF-PROGRESS.md` : étape 12 ✅ avec sections
+>    « Module campaigns.ts », « hooks », « pages », « jointures campaign_actions »,
+>    « décisions (multi-items inline, RLS owner) »,
+>    « prochaines étapes (étape 13 — audit RGPD fin Sprint 2 OU bascule sur
+>    Sprint 3 — services communautaires) ». Cocher la ligne 12 et créer
+>    une ligne 13 si manquante.
+> 10. Écrire le prompt de la session N+7 (étape 13) dans
+>     `HANDOFF-PROGRESS.md` (en bas du fichier ou en annexe), section
+>     `## Prompt pour la session N+7 (étape 13)` reprenant la même
+>     structure. L'étape 13 cible : audit RGPD fin Sprint 2 (bannière
+>     cookies + page politique de confidentialité + audit RLS final +
+>     vérif Sentry no-PII) ou bascule Sprint 3 (Hébergement +
+>     Covoiturage).
+> 11. **Coller le prompt de l'étape 13 dans la conversation finale**, en
+>     plus de l'avoir écrit dans `HANDOFF-PROGRESS.md` : à la fin de la
+>     session, le message Claude doit contenir littéralement le bloc du
+>     prompt (citation `>` ou code-fence), pour que l'utilisateur puisse
+>     le copier d'un coup. Cette consigne fait partie de la boucle
+>     récursive : tant que le Sprint 2 (contenu militant — pétitions,
+>     mobilisations, campagnes, sondages) n'est pas complet, le prompt
+>     généré doit aussi être collé dans la réponse finale de la session.
+> 12. **Commit** :
+>     `feat(campaigns): step 12 — CRUD campagnes + listing + fiche + création`.
+>     Push sur la branche imposée par l'harness avec
+>     `git push -u origin <branch>`, retry sur erreurs réseau
+>     (2s/4s/8s/16s). Pas de PR sans demande explicite.
+>
+> **Contraintes** :
+>
+> - Ne pas toucher au prototype (`project/app/Maintenant.html` et JSX
+>   racine).
+> - TS strict + no `any` : tous les types Supabase via
+>   `web/src/types/database.ts` ou `@supabase/supabase-js`.
+> - Aucune clé `service_role` dans `web/` : tout passe par RLS et
+>   `VITE_SUPABASE_ANON_KEY`.
+> - Pas d'emojis dans le code TS ni dans les commits (utiliser SVG —
+>   `IconMegaphone`, `IconList`, etc. à ajouter si besoin).
+> - Conserver les checks verts : `typecheck`, `lint`, `test`, `build`,
+>   `format:check`. Lancer les 5 en fin de session avant de committer.
+> - Si Docker n'est pas dispo dans la sandbox, ne pas tenter
+>   `supabase start` ; les campagnes se testent via mocks Vitest. Pour
+>   les vérifs SQL (jointures `campaign_actions`), documenter en
+>   commentaire dans `db/schema.sql` et tester avec un PG local si
+>   possible (`service postgresql start` + `psql -f db/schema.sql`).
+>
+> **DOUBLE CONSIGNE RÉCURSIVE** :
+>
+> 1. Écrire le prompt de l'étape 13 dans `HANDOFF-PROGRESS.md` **avant**
+>    le commit final.
+> 2. Coller le prompt de l'étape 13 dans la conversation (réponse finale
+>    Claude), pas seulement dans le fichier journal.
+>
+> Cette boucle s'arrête uniquement quand le Sprint 2 (contenu militant —
+> pétitions, mobilisations, campagnes, sondages) est complet, point auquel
+> le prompt généré peut basculer sur le Sprint 3 (services communautaires).
