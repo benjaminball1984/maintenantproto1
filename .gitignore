@@ -2,3 +2,10 @@ node_modules/
 package-lock.json
 *.log
 .DS_Store
+
+# Supabase local working directories (config.toml is versioned, runtime data is not)
+supabase/.temp/
+supabase/.branches/
+supabase/.env
+supabase/.env.local
+
