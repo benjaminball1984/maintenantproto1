@@ -284,6 +284,93 @@ export function IconLink({ width = 18, height = 18, ...props }: IconProps) {
   );
 }
 
+export function IconFlame({ width = 18, height = 18, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <path d="M8.5 14.5A2.5 2.5 0 0 0 11 17a2.5 2.5 0 0 0 2.5-2.5c0-2.5-2.5-3-2-5.5-2 0-3 2.5-3 5.5z" />
+      <path d="M14 4c0 2-2 4-4 6-2 2-3 4-3 6.5A5 5 0 0 0 12 21a5 5 0 0 0 5-5c0-3.5-3-7-3-12z" />
+    </svg>
+  );
+}
+
+export function IconPen({ width = 16, height = 16, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <path d="M3 21v-4l11-11 4 4-11 11H3z" />
+      <path d="M14 6l4 4" />
+    </svg>
+  );
+}
+
+export function IconSearch({ width = 18, height = 18, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
+
+export function IconArrowLeft({ width = 18, height = 18, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
+    </svg>
+  );
+}
+
+export function IconUsers({ width = 18, height = 18, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+      <circle cx="10" cy="7" r="4" />
+      <path d="M21 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M17 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
 export function IconBadge({ width = 16, height = 16, ...props }: IconProps) {
   return (
     <svg

@@ -3,6 +3,8 @@ import RequireAuth from './components/RequireAuth';
 import RootLayout from './layouts/RootLayout';
 import HomePage from './pages/HomePage';
 import PetitionsPage from './pages/PetitionsPage';
+import PetitionDetailPage from './pages/PetitionDetailPage';
+import PetitionCreatePage from './pages/PetitionCreatePage';
 import MobilizationsPage from './pages/MobilizationsPage';
 import CampaignsPage from './pages/CampaignsPage';
 import ServicesHubPage from './pages/services/ServicesHubPage';
@@ -33,6 +35,15 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <HomePage /> },
       { path: 'petitions', element: <PetitionsPage /> },
+      {
+        path: 'petitions/new',
+        element: (
+          <RequireAuth>
+            <PetitionCreatePage />
+          </RequireAuth>
+        ),
+      },
+      { path: 'petitions/:slug', element: <PetitionDetailPage /> },
       { path: 'mobilizations', element: <MobilizationsPage /> },
       { path: 'campaigns', element: <CampaignsPage /> },
       {

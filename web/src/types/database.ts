@@ -1117,6 +1117,7 @@ export interface Database {
           cover_url: string | null;
           category: string;
           status: 'draft' | 'published' | 'archived' | 'flagged';
+          signature_count: number;
           created_at: string;
           updated_at: string;
         };
@@ -1131,6 +1132,7 @@ export interface Database {
           cover_url?: string | null;
           category: string;
           status?: 'draft' | 'published' | 'archived' | 'flagged';
+          signature_count?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -1145,6 +1147,7 @@ export interface Database {
           cover_url?: string | null;
           category?: string;
           status?: 'draft' | 'published' | 'archived' | 'flagged';
+          signature_count?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -1676,6 +1679,10 @@ export interface Database {
       debit_t99cp: {
         Args: { p_user: string; p_amount: number; p_reason: string };
         Returns: void;
+      };
+      slugify: {
+        Args: { input: string };
+        Returns: string;
       };
     };
     Enums: {

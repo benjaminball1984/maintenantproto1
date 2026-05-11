@@ -140,11 +140,23 @@ create table if not exists public.petitions (
   cover_url text,
   category text not null,
   status public.content_status not null default 'published',
+  signature_count integer not null default 0 check (signature_count >= 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+-- Ajout idempotent de signature_count si la table existait déjà sans cette colonne
+-- (utile lors d'une migration progressive depuis un schéma antérieur — sprint 2).
+alter table public.petitions
+  add column if not exists signature_count integer not null default 0;
+do $$ begin
+  -- Le CHECK n'est pas porté par `add column if not exists` ; on l'ajoute
+  -- séparément pour rester idempotent.
+  alter table public.petitions
+    add constraint petitions_signature_count_chk check (signature_count >= 0);
+exception when duplicate_object then null; end $$;
 create index if not exists petitions_author_idx on public.petitions (author_id);
 create index if not exists petitions_category_idx on public.petitions (category);
+create index if not exists petitions_status_idx on public.petitions (status);
 create trigger petitions_touch before update on public.petitions
   for each row execute function public.touch_updated_at();
 
@@ -157,6 +169,84 @@ create table if not exists public.signatures (
 );
 create index if not exists signatures_petition_idx on public.signatures (petition_id);
 create index if not exists signatures_user_idx on public.signatures (user_id);
+
+-- -------------------------------------------------------------------------------------
+-- 4.b Trigger d'incrément/décrément de petitions.signature_count
+--
+-- Le compteur dénormalisé évite un COUNT(*) sur chaque listing. Le trigger
+-- AFTER INSERT/DELETE sur signatures met à jour la colonne en SQL pur. Aucun
+-- chemin applicatif ne doit toucher ce champ : il est dérivé de signatures.
+--
+-- SECURITY DEFINER n'est pas nécessaire (le trigger s'exécute dans la
+-- transaction de l'insert/delete et hérite des privilèges).
+-- -------------------------------------------------------------------------------------
+create or replace function public.touch_petition_signature_count()
+returns trigger
+language plpgsql
+as $$
+begin
+  if (tg_op = 'INSERT') then
+    update public.petitions
+       set signature_count = signature_count + 1
+     where id = new.petition_id;
+    return new;
+  elsif (tg_op = 'DELETE') then
+    update public.petitions
+       set signature_count = greatest(signature_count - 1, 0)
+     where id = old.petition_id;
+    return old;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists signatures_count_inc on public.signatures;
+create trigger signatures_count_inc
+  after insert on public.signatures
+  for each row execute function public.touch_petition_signature_count();
+
+drop trigger if exists signatures_count_dec on public.signatures;
+create trigger signatures_count_dec
+  after delete on public.signatures
+  for each row execute function public.touch_petition_signature_count();
+
+-- -------------------------------------------------------------------------------------
+-- 4.c Helper slugify(text) — utilisé pour générer un slug stable côté front
+-- (le front peut ensuite vérifier l'unicité en base et boucler avec un suffixe
+-- numérique en cas de collision).
+--
+-- Règles : lower(unaccent simulé) → enlever tout sauf [a-z0-9-] → trim « - ».
+-- Pas de dépendance à l'extension `unaccent` pour rester compatible avec une
+-- DB Supabase fraîche : on translate manuellement les accents latins courants.
+-- -------------------------------------------------------------------------------------
+create or replace function public.slugify(input text)
+returns text
+language sql
+immutable
+strict
+as $$
+  select trim(both '-' from regexp_replace(
+    regexp_replace(
+      lower(translate(
+        input,
+        'àâäáãåçèéêëìîïíòôöóõùûüúýÿñ' || 'ÀÂÄÁÃÅÇÈÉÊËÌÎÏÍÒÔÖÓÕÙÛÜÚÝŸÑ',
+        'aaaaaaceeeeiiiioooooouuuuyyn' || 'aaaaaaceeeeiiiioooooouuuuyyn'
+      )),
+      '[^a-z0-9]+', '-', 'g'
+    ),
+    '-{2,}', '-', 'g'
+  ));
+$$;
+grant execute on function public.slugify(text) to anon, authenticated;
+
+-- Cas de test (à dérouler en local après application du schéma) :
+--   * slugify('Stop à la fermeture de la maternité de Cherbourg !')
+--       → 'stop-a-la-fermeture-de-la-maternite-de-cherbourg'
+--   * slugify('---HELLO---  WORLD  ---') → 'hello-world'
+--   * slugify('Élections 2026') → 'elections-2026'
+--   * insert signatures → petitions.signature_count incrémenté de 1
+--   * delete signatures (retrait RGPD) → petitions.signature_count décrémenté
+--     de 1 (et non négatif grâce au greatest()).
 
 -- -------------------------------------------------------------------------------------
 -- 5. Mobilisations + participations
