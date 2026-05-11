@@ -19,19 +19,24 @@ Aucune dépendance à installer — React et Babel sont chargés via CDN.
 - **[CLAUDE.md](./CLAUDE.md)** — Instructions pour Claude Code
 - **[.env.example](./.env.example)** — Variables d'environnement requises
 - **[db/schema.sql](./db/schema.sql)** — Schéma Supabase Postgres
-- **[package.template.json](./package.template.json)** — Template `package.json` pour la migration Vite
+- **[web/package.json](./web/package.json)** — Projet Vite + React 19 + TS (production)
+- **[docs/package.template.json](./docs/package.template.json)** — Template historique des deps cibles (planification, plus utilisé par les outils)
 
 ## Structure
 
 ```
 .
-├── app/                  ← Prototype HTML/JSX (entrée : Maintenant.html)
+├── web/                  ← Projet Vite + React 19 + TS (production) — `cd web && npm install`
 ├── db/                   ← Schéma Postgres + migrations
+├── supabase/             ← Config locale Supabase (CLI)
+├── app/                  ← Prototype HTML/JSX legacy (entrée : Maintenant.html) — référence visuelle
+├── docs/                 ← Documents historiques (template package.json, etc.)
+├── .devcontainer/        ← Config conteneur dev (postCreateCommand → npm ci dans web/)
 ├── HANDOFF.md            ← Passation tech
+├── HANDOFF-PROGRESS.md   ← Journal de migration sprint par sprint
 ├── CLAUDE.md             ← Instructions agent
 ├── README.md             ← Ce fichier
-├── .env.example          ← Variables d'env (à copier en .env.local)
-└── package.template.json ← Base package.json pour Vite+React+TS
+└── .env.example          ← Variables d'env (à copier en .env.local)
 ```
 
 ## Stack cible (prod)

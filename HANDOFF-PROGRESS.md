@@ -10,7 +10,7 @@
 | Étape                                                   | Statut |
 | ------------------------------------------------------- | :----: |
 | 1. Initialisation repo + branche                        |   ✅   |
-| 2. `.env.example` + `package.template.json` à la racine |   ✅   |
+| 2. `.env.example` à la racine + template historique dans `docs/` |   ✅   |
 | 3. Squelette Vite + React + TS dans `web/`              |   ✅   |
 | 4. Schéma DB Supabase + RLS                             |   ✅   |
 | 5. Brancher Supabase Auth sur `AuthModal`               |   ✅   |
@@ -3381,14 +3381,18 @@ Légende des colonnes :
 >
 > **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
 >
-> 1. `git fetch origin claude/add-campaigns-module-FHBHA` (retry 2s/4s/8s/16s
->    sur erreur réseau).
-> 2. `git merge --no-ff <SHA-étape-13>` pour intégrer
->    `chore(rgpd): step 13 …`. Fallback :
->    `git checkout origin/claude/add-campaigns-module-FHBHA -- .` + commit.
-> 3. `cd web && npm install --legacy-peer-deps`.
-> 4. `npm run typecheck && npm run lint && npx vitest run && npm run build`
->    pour vérifier 298 tests verts au point de départ.
+> Depuis la PR #1, `main` contient le projet Vite à jour : il n'y a plus
+> aucune branche `claude/*` figée à fetch. Le démarrage est désormais :
+>
+> 1. Vérifier qu'on est bien dans un workspace contenant `web/`. Si non
+>    (rare — branche partie d'un main obsolète), `git fetch origin main &&
+>    git merge --ff-only origin/main`.
+> 2. `cd web && npm ci` (le `.devcontainer/` lance ça automatiquement au
+>    `postCreateCommand` ; refaire à la main si besoin). Fallback :
+>    `npm install --legacy-peer-deps`.
+> 3. `npm run typecheck && npm run lint && npx vitest run && npm run build`
+>    pour vérifier le compteur de tests au point de départ
+>    (≥ 298 verts à la fin de l'étape 13, à incrémenter à chaque étape).
 >
 > **ÉTAPE 14 à exécuter — Sprint 3 / Hébergement + Covoiturage** :
 >
