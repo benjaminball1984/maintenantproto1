@@ -23,7 +23,8 @@
 | 12. Sprint 2 — Campagnes CRUD côté front                |   ✅   |
 | 13. Fin Sprint 2 — Audit RGPD ou bascule Sprint 3       |   ✅   |
 | 14. Sprint 3 — Hébergement + Covoiturage CRUD côté front |   ✅   |
-| 15. Sprint 3 — Lending + Marketplace + Jardins + SEL + Crowdfunding |   ⬜   |
+| 15. Sprint 3 — Lending + Marketplace + Jardins + SEL + Crowdfunding |   ✅   |
+| 16. Sprint 4 — Réseau social + Messagerie + Notifications + Média |   ⬜   |
 
 ---
 
@@ -3495,6 +3496,265 @@ Légende des colonnes :
   regression introduit ici (déjà observé en étape 13). À fixer
   proprement quand on activera l'environnement de preview avec
   vraies clés Supabase publiques.
+
+---
+
+## Étape 15 — Sprint 3 / Lending + Marketplace + Garden + SEL + Crowdfunding ✅
+
+**Branche** : `claude/sprint-3-features-1Z4a3`
+
+Fin du Sprint 3 : on monte les 5 modules restants des services
+communautaires. Mêmes patterns que `housing` / `carpooling` à l'étape 14
+(types dérivés de `Database['public']`, validation côté front avant
+insert, `listX` avec or-search échappée, hook listing + hook item, pages
+Listing/Detail/Create). Crowdfunding ajoute une page `Contribute` et le
+retry slug du pattern `campaigns`.
+
+### Modules `web/src/lib/`
+
+- **`lending.ts`** — annonces de prêt d'objets en T99CP.
+  Table `lending(owner_id, title, description?, category, city,
+  t99cp_cost, is_available)`. Pas de slug. Filtre listing
+  `is_available=true`. Validation : titre 4-80, catégorie 2-40, ville
+  2-80, coût T99CP 0-10000.
+- **`marketplace.ts`** — annonces de matériel / services
+  (`marketplace_items`). CHECK SQL impose price_eur OU t99cp_cost
+  renseigné → validation front aussi. Filtre listing `is_sold=false`.
+- **`garden.ts`** — jardins partagés (`garden_plots`). Pas de filtre
+  actif (toutes les fiches publiées). Filtre `withSpots` côté front via
+  `gt('available_spots', 0)`.
+- **`sel.ts`** — offres SEL (`sel_offers`). Filtre listing
+  `is_active=true`. Tarif en T99CP / unité (heure, séance, etc.) défini
+  par l'auteur.
+- **`crowdfunding.ts`** — cagnottes (`crowdfunding_campaigns`) +
+  contributions (`contributions`). Réutilise `slugify()` et le retry
+  23505 du pattern `campaigns`. `contribute()` insère sans
+  `stripe_payment_intent` (mis à jour plus tard via webhook Stripe au
+  sprint paiement).
+
+### Hooks `web/src/hooks/`
+
+Pour chaque module, deux hooks suivant le pattern
+`useCarpooling` / `useCarpoolingItem` :
+
+- `useLending` / `useLendingItem`
+- `useMarketplace` / `useMarketplaceItem`
+- `useGarden` / `useGardenItem`
+- `useSel` / `useSelItem`
+- `useCrowdfunding` / `useCrowdfundingItem`
+
+Status `idle | loading | ready | error` (ou `notfound` pour l'item),
+reset des états quand les filtres changent, `refresh()` exposé.
+
+### Pages `web/src/pages/services/`
+
+Pour chaque module : `XxxPage` (listing avec hero + filtres),
+`XxxDetailPage` (fiche avec Partager + masquage CTA si propriétaire) et
+`XxxCreatePage` (formulaire RequireAuth). Crowdfunding ajoute
+`CrowdfundingContributePage` (`/services/crowdfunding/:id/contribute`,
+RequireAuth) : montant 1-10000 €, option « anonyme », succès →
+redirection vers la fiche après 1,5 s.
+
+Toutes les fiches `XxxDetailPage` :
+
+- Hero avec tag catégorie, titre, métadonnées (ville, coût/places…).
+- Description en `whitespace: pre-wrap` si présente.
+- Bouton « Partager » avec `navigator.share` + fallback clipboard.
+- Masquage du CTA principal si l'utilisateur est le propriétaire
+  (cf. `housing.host_id`, `marketplace_items.seller_id`,
+  `lending.owner_id`, `garden_plots.manager_id`, `sel_offers.user_id`,
+  `crowdfunding_campaigns.organizer_id`).
+
+### Router
+
+Ajout sous `services` (avec `RequireAuth` sur les routes d'écriture) :
+
+- `lending`, `lending/new`, `lending/:id`
+- `marketplace`, `marketplace/new`, `marketplace/:id`
+- `garden`, `garden/new`, `garden/:id`
+- `sel`, `sel/new`, `sel/:id`
+- `crowdfunding`, `crowdfunding/new`, `crowdfunding/:id`,
+  `crowdfunding/:id/contribute`
+
+`CampaignDetailPage` (`web/src/pages/CampaignDetailPage.tsx:241`)
+référence déjà `/services/crowdfunding/${action.crowdfunding_id}` (cf.
+résolveur d'actions) — la route est désormais montée, donc les fiches
+campagne avec une action `crowdfunding_id` deviennent cliquables.
+
+### Tests
+
+- **Lending** : 32 tests (lib 13 / hooks 6 / pages 13)
+- **Marketplace** : 27 tests (lib 12 / hooks 5 / pages 10)
+- **Garden** : 26 tests (lib 13 / hooks 5 / pages 8)
+- **SEL** : 26 tests (lib 13 / hooks 5 / pages 8)
+- **Crowdfunding** : 35 tests (lib 17 / hooks 5 / pages 13 dont 4 pour
+  la contribute page)
+
+Total nouveau : **146 tests**.
+
+Fin d'étape 14 : 380 tests verts. Fin d'étape 15 :
+**526 tests verts** (88 fichiers, durée ~54 s). Build : 295 kB (tronqué
+à `supabase.ts` faute de `VITE_SUPABASE_*` en CI — pas une régression
+introduite ici, déjà observé aux étapes 13 et 14).
+
+### Décisions
+
+- **URLs par ID, pas par slug** — la table `crowdfunding_campaigns`
+  impose un slug NOT NULL UNIQUE, mais la route demandée par le prompt
+  (`/services/crowdfunding/:id`) et l'usage par `campaign_actions.
+  crowdfunding_id` (déjà UUID) imposent un fetch par ID. Le slug est
+  généré et inséré pour respecter la contrainte SQL, mais inutilisé en
+  routage front. Un suivi futur pourrait monter `/cagnottes/:slug` à
+  côté de `/services/crowdfunding/:id` si on souhaite des URLs lisibles
+  (idem `/petitions/:slug` / `/campaigns/:slug`).
+- **Pas de paiement Stripe à cette étape** — `contribute()` enregistre
+  la ligne en DB avec `stripe_payment_intent = null`. La table
+  `crowdfunding_campaigns.raised_eur` n'est PAS incrémentée
+  client-side : la mise à jour viendra via un webhook Stripe (au sprint
+  paiement), pour garantir l'intégrité comptable et ne pas exposer une
+  RPC `increment_raised` côté front.
+- **Validation `price_eur` OU `t99cp_cost`** pour `marketplace_items` —
+  la table a un `CHECK (price_eur IS NOT NULL OR t99cp_cost IS NOT
+  NULL)`. La validation front reproduit la contrainte et renvoie un
+  message FR avant l'insert pour éviter un round-trip 23514.
+- **`withSpots` côté garden** — au lieu d'un `eq('available_spots', > 0)`
+  (qui n'existe pas en PostgREST), on a un `gt('available_spots', 0)`.
+  C'est l'équivalent SQL `available_spots > 0` direct.
+- **Build inchangé en taille (295 kB)** — la bundle Vite est tronquée
+  à `supabase.ts` faute d'env vars en CI ; pas une régression
+  introduite ici (déjà observé aux étapes 13 et 14).
+- **Auth dans les tests** — la fiche
+  `CrowdfundingDetailPage.test.tsx` a un cas « organisateur »
+  qui doit mocker `getSession` *et* `useAuthStore.setState` : sans le
+  premier, l'effet `useAuth` reset le store en `anonymous` au mount.
+  Pattern à garder en tête pour les tests qui dépendent de
+  `auth.user.id === row.owner_id`.
+
+---
+
+## Prompt pour la session N+10 (étape 16)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD). **Note
+>    la section « Politique de PR » qui t'autorise à enchaîner ouverture
+>    + merge des PR sans confirmation jusqu'à la session 50 incluse.**
+> 2. `HANDOFF.md` §10 Sprint 4 (Réseau social + Messagerie +
+>    Notifications + Média).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 15 ✅ — étape 16 à faire).
+> 4. `db/schema.sql` §10-12 : `articles`, `comments`, `reactions`,
+>    `follows`, `posts`, `conversations`, `messages`, `notifications`
+>    + leurs policies RLS.
+> 5. `web/src/lib/crowdfunding.ts` + `web/src/lib/sel.ts` — patterns
+>    de référence (validation, listing, hooks, pages détaillées).
+> 6. `web/src/pages/services/CrowdfundingContributePage.tsx` — pattern
+>    formulaire RequireAuth dépendant d'une ressource parente
+>    (utilisé pour `/messages/:conversationId/reply`).
+>
+> **État actuel à la fin de l'étape 15** :
+>
+> - Sprint 3 complet (hébergement + covoiturage + lending +
+>   marketplace + garden + sel + crowdfunding).
+> - 526 tests verts, build 295 kB (tronqué CI).
+> - Routes `/services/*` couvertes pour les 7 services.
+> - `CampaignDetailPage` résout déjà `action.crowdfunding_id` vers
+>   `/services/crowdfunding/:id` (route désormais montée).
+>
+> **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
+>
+> 1. Vérifier qu'on est bien dans un workspace contenant `web/`. Si non
+>    (rare — branche partie d'un main obsolète), `git fetch origin main &&
+>    git merge --ff-only origin/main`.
+> 2. `cd web && npm ci` (fallback : `npm install --legacy-peer-deps`).
+> 3. `npm run typecheck && npm run lint && npx vitest run && npm run build`
+>    pour vérifier le compteur de tests au point de départ (≥ 526 verts
+>    à la fin de l'étape 15).
+>
+> **ÉTAPE 16 à exécuter — Sprint 4 / Réseau social + Messagerie +
+> Notifications + Média** :
+>
+> 1. **Module `web/src/lib/social.ts`** : posts du réseau social
+>    (table `posts(author_id, body, visibility, created_at)`),
+>    follows (`follows(follower_id, followee_id)`).
+> 2. **Module `web/src/lib/messaging.ts`** : conversations DM
+>    (`conversations(user_a, user_b, last_message_at)`) + messages
+>    (`messages(conversation_id, sender_id, body, read_at?)`). RLS
+>    stricte : seuls `user_a` et `user_b` lisent / écrivent.
+> 3. **Module `web/src/lib/notifications.ts`** : flux
+>    (`notifications(user_id, kind, payload, read_at?)`).
+> 4. **Module `web/src/lib/media.ts`** : articles
+>    (`articles(author_id, slug, title, summary, body, status,
+>    published_at?)`) + comments + reactions.
+> 5. **Hooks** suivant le pattern d'étape 15.
+> 6. **Pages** :
+>    - `ReseauPage` (`/reseau`) — feed des posts, filtres « tout / suivis ».
+>    - `MessagingPage` (`/messaging`) — liste conversations + DM.
+>    - `NotificationsPage` (`/notifications`) — flux marqué lu/non-lu.
+>    - `MediaPage` (`/media`) — listing articles publiés.
+>    - `ArticleDetailPage` (`/media/:slug`) + `ArticleCreatePage`
+>      (`/media/new`, RequireAuth).
+> 7. **Router** : remplacer les placeholders existants
+>    (`MessagingPage`, `NotificationsPage`, `ReseauPage`, `MediaPage`).
+> 8. **Tests** : objectif ≥ 650 tests verts (526 + ≥ 130 nouveaux —
+>    4 modules × ~30 tests).
+> 9. **HANDOFF-PROGRESS.md** : étape 16 ✅ + prompt étape 17
+>    (Sprint 5 — Admin + Communes libres + Pages légales restantes).
+>
+> **CLÔTURE DE L'ÉTAPE — workflow auto-merge** :
+>
+> Conformément à `CLAUDE.md` § « Politique de PR », tu as autorisation
+> permanente d'enchaîner les étapes ci-dessous sans demander
+> confirmation. Procéder dans l'ordre, **sans s'arrêter entre les
+> étapes** :
+>
+> 1. **Vérifier les 4 checks locaux verts** : `npm run typecheck &&
+>    npm run lint && npx vitest run && npm run build`. Si un check
+>    échoue → corriger, ne pas commit. Si tu ne sais pas corriger en
+>    moins de 3 tentatives → t'arrêter et demander.
+> 2. **Commit** : `feat(social): step 16 — sprint 4 (réseau +
+>    messagerie + notifications + média)`. Pas d'emojis dans le
+>    message.
+> 3. **Push** sur la branche imposée par l'harness
+>    (`git push -u origin <branch>`, retry exponentiel 2/4/8/16 s sur
+>    erreur réseau).
+> 4. **Ouvrir la PR** vers `main` via
+>    `mcp__github__create_pull_request` avec titre identique au commit,
+>    body suivant le template (Summary + Décisions + Test plan). Pas
+>    d'emojis.
+> 5. **Attendre les checks GitHub Actions si présents**. S'ils sont
+>    rouges → autofix puis re-push, ne pas merger.
+> 6. **Merger la PR** via `mcp__github__merge_pull_request` (merge
+>    method `merge` ou `squash` — pas `rebase`). Confirmer le merge
+>    dans la conversation avec l'URL de la PR.
+>
+> **Conditions d'arrêt malgré l'autorisation permanente**
+> (cf. `CLAUDE.md`) :
+>
+> - Migration DB risquée (suppression / rename de table / colonne /
+>   RPC non listée dans ce prompt).
+> - Changement RGPD (nouvelle collecte de données perso, nouveau
+>   cookie non listé — attention à la messagerie : les DM sont des
+>   données perso de catégorie sensible côté RGPD).
+> - Breaking change visible utilisateur.
+> - Review humaine ou commentaire GitHub arrivé avant le merge —
+>   traiter d'abord.
+>
+> Dans tous ces cas : demander confirmation explicite avant de merger.
+>
+> **Contraintes générales** :
+>
+> - Ne pas toucher au prototype.
+> - TS strict + no `any`.
+> - Conserver les checks verts à chaque étape.
+> - Pas d'emojis dans le code TS ni dans les commits / PR.
+> - Pour la messagerie : RLS critique. Vérifier que les policies
+>   `messages_select` et `messages_insert` interdisent toute lecture
+>   par un tiers (cf. `db/schema.sql`). Si la policy n'est pas stricte,
+>   **ne pas merger** et lever un blocage RGPD.
 
 ---
 
