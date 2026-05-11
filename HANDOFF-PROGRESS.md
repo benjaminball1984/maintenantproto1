@@ -1,0 +1,3450 @@
+# HANDOFF — Suivi d'avancement
+
+> Journal de bord de la migration prototype → production (Vite + React + TS + Supabase).
+> Référence : [HANDOFF.md](./HANDOFF.md) — [CLAUDE.md](./CLAUDE.md)
+
+---
+
+## État global
+
+| Étape                                                   | Statut |
+| ------------------------------------------------------- | :----: |
+| 1. Initialisation repo + branche                        |   ✅   |
+| 2. `.env.example` + `package.template.json` à la racine |   ✅   |
+| 3. Squelette Vite + React + TS dans `web/`              |   ✅   |
+| 4. Schéma DB Supabase + RLS                             |   ✅   |
+| 5. Brancher Supabase Auth sur `AuthModal`               |   ✅   |
+| 6. Page profil + reset password + avatars bucket        |   ✅   |
+| 7. Adhésion Stripe (3 tiers) + RPC T99CP (Sprint 1)     |   ✅   |
+| 8. OAuth Google/Instagram + magic link (fin Sprint 1)   |   ✅   |
+| 9. Sprint 2 — Pétitions CRUD côté front                 |   ✅   |
+| 10. Sprint 2 — Mobilisations CRUD côté front            |   ✅   |
+| 11. Sprint 2 — Sondages CRUD côté front                 |   ✅   |
+| 12. Sprint 2 — Campagnes CRUD côté front                |   ✅   |
+| 13. Fin Sprint 2 — Audit RGPD ou bascule Sprint 3       |   ✅   |
+| 14. Sprint 3 — Hébergement + Covoiturage CRUD côté front |   ⬜   |
+
+---
+
+## Étape 3 — Squelette Vite + React + TS ✅
+
+**Branche** : `claude/setup-vite-react-ts-7amfy`
+**Dossier cible** : `web/` (le prototype `project/app/Maintenant.html` reste intact)
+
+### Stack posée
+
+- **Vite 8** + **React 19** + **TypeScript 6** (mode `strict` + `noUncheckedIndexedAccess` +
+  `exactOptionalPropertyTypes` — pas d'`any` autorisé via la règle ESLint
+  `@typescript-eslint/no-explicit-any`).
+- **react-router-dom 6** avec `createBrowserRouter`.
+- **@supabase/supabase-js 2** initialisé via `import.meta.env.VITE_SUPABASE_URL` /
+  `VITE_SUPABASE_ANON_KEY` (lance une erreur claire si absent).
+- **ESLint 10** (flat config) avec : `@eslint/js` recommended, `typescript-eslint` recommended +
+  stylistic, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`,
+  `eslint-plugin-jsx-a11y`, et `eslint-config-prettier` pour éviter les conflits de format.
+- **Prettier 3** (`.prettierrc.json`, `.prettierignore`).
+- **Vitest 4** + **Testing Library** (React 16, jest-dom, user-event, dom) + **jsdom**, configuré
+  via `vite.config.ts` (`test.environment = 'jsdom'`, setup `src/test/setup.ts`,
+  couverture `@vitest/coverage-v8`).
+
+### Conventions ESLint (CLAUDE.md)
+
+- `@typescript-eslint/no-explicit-any: error` — interdiction absolue d'`any`.
+- `@typescript-eslint/consistent-type-imports` — imports `type` séparés.
+- `@typescript-eslint/naming-convention` :
+  - Variables : `camelCase | PascalCase | UPPER_CASE`
+  - Fonctions / composants React : `camelCase | PascalCase`
+  - Types / interfaces : `PascalCase`
+  - Propriétés d'objet : `camelCase | snake_case | PascalCase | UPPER_CASE`
+    (snake_case pour le mapping DB Supabase, UPPER_CASE pour les `VITE_*` env vars)
+  - Identifiants entre guillemets (`'@'`, en-têtes HTTP) : ignorés
+- Tests : règles `no-explicit-any` et `naming-convention` désactivées.
+
+### Structure `web/`
+
+```
+web/
+├── .env.example              ← variables VITE_*  (copier en .env.local)
+├── .gitignore                ← exclut node_modules, dist, coverage, .env.local
+├── .prettierrc.json
+├── .prettierignore
+├── eslint.config.js          ← flat config
+├── index.html                ← lang="fr", title "Maintenant !"
+├── package.json
+├── tsconfig.json (refs)
+├── tsconfig.app.json         ← strict + paths "@/*" → "./src/*"
+├── tsconfig.node.json
+├── vite.config.ts            ← plugin React, alias @, config Vitest
+└── src/
+    ├── App.tsx               ← <RouterProvider router={router} />
+    ├── main.tsx              ← createRoot + StrictMode
+    ├── index.css             ← reset minimal + tokens --mn-*
+    ├── vite-env.d.ts         ← typage strict de import.meta.env
+    ├── router.tsx            ← createBrowserRouter + toutes les routes
+    ├── App.test.tsx          ← smoke test routing (2 tests)
+    ├── lib/
+    │   └── supabase.ts       ← createClient + check env vars
+    ├── layouts/
+    │   └── RootLayout.tsx    ← header de navigation + <Outlet />
+    ├── test/
+    │   └── setup.ts          ← jest-dom matchers + cleanup
+    └── pages/
+        ├── Placeholder.tsx   ← composant placeholder réutilisable
+        ├── HomePage.tsx
+        ├── PetitionsPage.tsx
+        ├── MobilizationsPage.tsx
+        ├── CampaignsPage.tsx
+        ├── MediaPage.tsx
+        ├── ReseauPage.tsx
+        ├── PollsPage.tsx
+        ├── MessagingPage.tsx
+        ├── NotificationsPage.tsx
+        ├── AdminPage.tsx
+        ├── JoinPage.tsx
+        ├── CommunesPage.tsx
+        ├── ProfilePage.tsx
+        ├── NotFoundPage.tsx
+        └── services/
+            ├── ServicesHubPage.tsx
+            ├── HousingPage.tsx
+            ├── CarpoolingPage.tsx
+            ├── MarketplacePage.tsx
+            ├── LendingPage.tsx
+            ├── GardenPage.tsx
+            ├── SelPage.tsx
+            └── CrowdfundingPage.tsx
+```
+
+### Routing — URLs publiques préservées
+
+Toutes les pages sont des placeholders (`<h1>` + description) montés via `RootLayout` qui
+expose une nav header listant les sections. La fallback `path: '*'` rend `NotFoundPage`.
+
+| URL                       | Composant            |
+| ------------------------- | -------------------- |
+| `/`                       | `HomePage`           |
+| `/petitions`              | `PetitionsPage`      |
+| `/mobilizations`          | `MobilizationsPage`  |
+| `/campaigns`              | `CampaignsPage`      |
+| `/services`               | `ServicesHubPage`    |
+| `/services/housing`       | `HousingPage`        |
+| `/services/carpooling`    | `CarpoolingPage`     |
+| `/services/marketplace`   | `MarketplacePage`    |
+| `/services/lending`       | `LendingPage`        |
+| `/services/garden`        | `GardenPage`         |
+| `/services/sel`           | `SelPage`            |
+| `/services/crowdfunding`  | `CrowdfundingPage`   |
+| `/media`                  | `MediaPage`          |
+| `/reseau`                 | `ReseauPage`         |
+| `/polls`                  | `PollsPage`          |
+| `/messaging`              | `MessagingPage`      |
+| `/notifications`          | `NotificationsPage`  |
+| `/admin`                  | `AdminPage`          |
+| `/join`                   | `JoinPage`           |
+| `/communes`               | `CommunesPage`       |
+| `/profile`                | `ProfilePage`        |
+| `*`                       | `NotFoundPage` (404) |
+
+### Scripts npm disponibles (`web/package.json`)
+
+| Script               | Action                                                   |
+| -------------------- | -------------------------------------------------------- |
+| `npm run dev`        | Dev server Vite (port 5173 par défaut)                   |
+| `npm run build`      | `tsc -b && vite build`                                   |
+| `npm run preview`    | Serveur statique du build                                |
+| `npm run typecheck`  | `tsc -b --noEmit`                                        |
+| `npm run lint`       | ESLint sur tout le repo `web/`                           |
+| `npm run lint:fix`   | ESLint avec auto-fix                                     |
+| `npm run format`     | Prettier write sur `src/**/*.{ts,tsx,css,md,json}`       |
+| `npm run format:check` | Prettier check (CI)                                    |
+| `npm test`           | Vitest run unique                                        |
+| `npm run test:watch` | Vitest watch                                             |
+| `npm run test:coverage` | Vitest run + couverture v8                            |
+
+### Vérifications passées
+
+- `npm run typecheck` : ✅ aucune erreur
+- `npm run lint` : ✅ 0 problème
+- `npm test` : ✅ 2/2 tests passent (`src/App.test.tsx` smoke test routing)
+- `npm run build` : ✅ build OK (`dist/` ~ 260 kB JS, 0,56 kB CSS)
+- `npm run format` : ✅ tous les fichiers conformes
+
+### Notes / décisions
+
+- **React 19** retenu (livré par `create-vite` 9). Le prototype tourne en React 18 via CDN — pas
+  de migration de code à prévoir, le prototype reste isolé.
+- Le **client Supabase** lève une erreur explicite si les variables d'environnement ne sont pas
+  définies — utile pour ne pas push silencieusement un build cassé.
+- Le **header de navigation** dans `RootLayout` est volontairement minimal (liste de
+  `<NavLink>`). Il sera remplacé par `AppNav` / `BottomNav` lors du Sprint 1 (cf. Theme.jsx).
+- Le **prototype** (`project/app/Maintenant.html` + JSX racine) n'a pas été modifié et continue
+  de fonctionner indépendamment.
+- Aucun `app/index.html` n'a été créé (il n'existait pas et n'est pas demandé) — le seul
+  HTML d'entrée du nouveau projet est `web/index.html`.
+
+### Prochaines étapes (étape 4)
+
+1. Initialiser Supabase local (`npx supabase init && npx supabase start`).
+2. Écrire `db/schema.sql` (cf. HANDOFF §7.2 — tables `users`, `petitions`, …) avec **RLS**
+   strict sur chaque table contenant des données privées.
+3. Générer les types TS Supabase (`supabase gen types typescript --local > web/src/types/database.ts`).
+4. Créer un module `web/src/lib/auth.ts` (Zustand ou contexte) pour la session utilisateur.
+
+---
+
+## Étape 4 — Schéma DB Supabase + RLS ✅
+
+**Branche** : `claude/setup-vite-react-ts-2T9bF` (l'étape 3 a été mergée depuis
+`claude/setup-vite-react-ts-7amfy` @ `1f94a48` au début de cette session).
+
+### Pré-requis exécutés
+
+- `git fetch origin claude/setup-vite-react-ts-7amfy` puis merge `1f94a48` pour récupérer le
+  squelette Vite (web/).
+- `npm install --legacy-peer-deps` dans `web/` (le lockfile n'est pas versionné, cf.
+  `.gitignore` racine, et l'option reste nécessaire à cause du conflit
+  `eslint-plugin-jsx-a11y` ↔ ESLint 10).
+- Ajout de `supabase@^2.98.2` aux `devDependencies` de `web/` (CLI Supabase, fournit
+  `supabase init` / `supabase db ...` / `supabase gen types`).
+
+### Supabase init
+
+```
+supabase/
+├── .gitignore         ← .temp / .branches / .env*.local
+└── config.toml        ← config par défaut (à éditer pour l'instance hébergée EU)
+```
+
+> `supabase start` (stack Docker locale) n'a **pas** été exécuté ici parce que la
+> sandbox CI n'a pas de démon Docker disponible. La commande s'exécute sans
+> friction sur un poste de dev local : `npx supabase start` puis
+> `npx supabase db reset` pour rejouer les migrations.
+
+Le `.gitignore` racine a été complété pour exclure `supabase/.temp/`,
+`supabase/.branches/` et `supabase/.env*` (les configs versionnées restent
+`supabase/config.toml` et `supabase/.gitignore`).
+
+### `db/schema.sql` — schéma Postgres complet
+
+Fichier idempotent (`create … if not exists`, `drop policy if exists` avant chaque
+`create policy`) au format Supabase. Il couvre les **36 tables** demandées par
+`HANDOFF.md §7.2`, organisé en sections numérotées :
+
+| # | Section | Tables |
+| - | ------- | ------ |
+| 0 | Extensions | `pgcrypto`, `citext` |
+| 1 | Helpers | `touch_updated_at()`, `is_admin(uid uuid)` (SECURITY DEFINER) |
+| 2 | Enums | `adhesion_tier`, `adhesion_status`, `t99cp_kind`, `post_visibility`, `notification_kind`, `content_status` |
+| 3 | Profils | `users` (PK = `auth.users.id`, `is_admin`, `t99cp_balance`) |
+| 4 | Pétitions | `petitions`, `signatures` |
+| 5 | Mobilisations | `mobilizations`, `participations` |
+| 6 | Hébergement | `housing`, `housing_requests` |
+| 7 | Économie solidaire | `carpooling`, `lending`, `marketplace_items` |
+| 8 | Jardins / SEL | `garden_plots`, `sel_offers`, `sel_demands` |
+| 9 | Cagnottes | `crowdfunding_campaigns`, `contributions` |
+| 10 | Média | `articles`, `comments`, `reactions` |
+| 11 | Réseau social | `posts`, `post_likes`, `post_comments` |
+| 12 | Sondages | `polls`, `poll_options`, `votes` |
+| 13 | Campagnes | `campaigns`, `campaign_actions` |
+| 14 | Communes libres | `communes`, `commune_members` |
+| 15 | Messagerie | `conversations`, `messages`, `notifications` |
+| 16 | Adhésion / T99CP | `members`, `adhesions`, `t99cp_transactions` |
+| 17 | Admin | `admin_logs`, `email_campaigns` |
+
+**Conventions appliquées** (cf. CLAUDE.md) :
+
+- PK `uuid` par défaut `gen_random_uuid()` (sauf `users.id` qui référence
+  `auth.users.id` pour le mapping Auth Supabase).
+- Colonnes en `snake_case`.
+- `created_at` / `updated_at timestamptz default now()` partout, et un trigger
+  `*_touch` qui appelle `public.touch_updated_at()` à chaque `UPDATE` sur les
+  tables qui en ont besoin.
+- Foreign keys explicites avec `on delete cascade` (relations 1-N) ou
+  `on delete restrict` (auteur d'un contenu publié) ou `set null` (organisateur
+  optionnel).
+- **Index sur chaque colonne FK** (et sur `created_at desc` pour les feeds
+  triés : posts, messages, notifications, ledger T99CP).
+- Contraintes métier : `check (capacity > 0)`, `check (price_eur >= 0)`,
+  `check (ends_on >= starts_on)`, `check (user_a <> user_b)` (1-1
+  conversations), index unique sur `least/greatest(user_a, user_b)` pour éviter
+  les conversations dupliquées.
+
+### RLS — politique générale
+
+`ALTER TABLE … ENABLE ROW LEVEL SECURITY` sur les **36 tables** → DENY par
+défaut. Toutes les policies sont ensuite **explicites** et précédées d'un
+commentaire SQL qui décrit le « pourquoi » (audit reviewable). Vérification :
+
+```sql
+select count(*) from pg_policies where schemaname = 'public';   -- 119
+select tablename from pg_tables where schemaname = 'public' and not rowsecurity;  -- (0 rows)
+```
+
+Catégories de policies appliquées :
+
+- **Lecture publique** (anon + authenticated) sur le contenu militant publié :
+  `petitions`, `mobilizations`, `articles`, `polls/poll_options`, `campaigns`,
+  `communes`, `commune_members`, `lending`, `marketplace_items`,
+  `garden_plots`, `sel_*`, `crowdfunding_campaigns`, `housing` (si `is_published`),
+  `carpooling` (si `is_published`), `users` (profil public).
+- **Compteurs publics** mais insertion = `auth.uid() = user_id` :
+  `signatures`, `participations`, `reactions`, `post_likes`, `votes`.
+- **Privé propriétaire** : `notifications` (recipient_id), `messages`
+  (participants de la conversation), `housing_requests` (demandeur + hôte),
+  `contributions` (contributeur + organisateur de la cagnotte),
+  `adhesions` (user_id), `t99cp_transactions` (user_id).
+- **Admin uniquement** : `admin_logs`, `email_campaigns`, `members` (gestion par
+  back-office / webhook Stripe), `notifications.insert` (création depuis le
+  serveur), `t99cp_transactions.insert` (intégrité monétaire), `communes`
+  (politique éditoriale), `messages.update` (préserver l'intégrité du body).
+- **Visibilité fine** : `posts` (`public` / `members` / `private`),
+  `comments` & `post_comments` (cachés si `is_flagged` sauf pour l'auteur et
+  les admins).
+
+Helper : `public.is_admin(uid uuid)` (SECURITY DEFINER) lit `users.is_admin`.
+Utilisé dans toutes les policies pour donner accès au back-office sans dépendre
+du `service_role`.
+
+### Application locale & génération des types
+
+Le sandbox de cette session n'a pas Docker. Pour valider le schéma et générer
+les types :
+
+1. Un Postgres local (`service postgresql start`, base `maintenant`).
+2. Un `auth` schema stub (`/tmp/auth_stub.sql` — `auth.users`, `auth.uid()`,
+   rôles `anon` / `authenticated` / `service_role`).
+3. `psql -v ON_ERROR_STOP=1 -f db/schema.sql` → 36 tables, 119 policies.
+4. `node db/gen-types.mjs --url …` → écrit `web/src/types/database.ts`
+   (1674 lignes).
+
+`db/gen-types.mjs` introspecte `pg_catalog` (`pg_class`, `pg_attribute`,
+`pg_constraint`, `pg_enum`) et émet le type `Database` au format
+`@supabase/supabase-js` (`Tables[*].{Row, Insert, Update, Relationships}`,
+`Enums` inlinés en unions de littéraux, `Functions.is_admin`). Le script est
+réutilisable : il sera remplacé par `supabase gen types typescript --local`
+dès qu'un environnement avec Docker (machine de dev ou CI GitHub Actions) est
+disponible. La sortie est strictement compatible avec le générateur officiel
+(format `Database['public']['Tables'][...]`).
+
+### Branchement côté front
+
+`web/src/lib/supabase.ts` est désormais typé :
+
+```ts
+import type { Database } from '@/types/database';
+export const supabase: SupabaseClient<Database> = createClient<Database>(…);
+```
+
+Cela rend toutes les requêtes `supabase.from('petitions')` strictement typées
+(autocompletion sur les colonnes, type narrowing sur les enums comme
+`adhesion_tier`).
+
+### Vérifications passées (sur cette branche)
+
+- `npm run typecheck` : ✅ aucune erreur (le nouveau `database.ts` traverse `tsc -b`)
+- `npm run lint` : ✅ 0 problème (les noms snake_case des colonnes sont déjà
+  autorisés en `typeProperty` par la naming-convention)
+- `npm test` : ✅ 2/2
+- `npm run build` : ✅ `dist/` ~260 kB JS / 0,56 kB CSS
+
+### Décisions / hors scope
+
+- **Pas de seed initial** : la table `users` se peuplera via le trigger
+  `auth.users → public.users` qu'on ajoutera au Sprint 1 (Supabase Auth).
+- **Pas de migration `supabase/migrations/*.sql`** : `db/schema.sql` reste la
+  source canonique pour cette étape. Avant le premier `supabase db push` réel,
+  il suffira de `cp db/schema.sql supabase/migrations/<timestamp>_init.sql`.
+- **Pas de `service-role` côté front** : le client `supabase.ts` n'utilise que
+  `VITE_SUPABASE_ANON_KEY`. Les opérations privilégiées (création de
+  notifications, mise à jour d'`adhesions`, ledger T99CP) seront déclenchées
+  via Edge Functions ou webhooks côté serveur.
+
+### Prochaines étapes (étape 5 — auth)
+
+1. Lancer `supabase start` sur un poste de dev (Docker requis), exécuter
+   `psql < db/schema.sql` ou `supabase db reset` après avoir déposé une
+   migration depuis `db/schema.sql`.
+2. Brancher Supabase Auth sur le composant `AuthModal` (Theme.jsx → port TS).
+3. Créer `web/src/lib/auth.ts` (Zustand) pour exposer `session`, `user`,
+   `signIn`, `signOut`.
+4. Ajouter un trigger SQL `on auth.user created → insert into public.users
+   (id, email, display_name)` pour synchroniser le profil.
+
+---
+
+## Étape 5 — Supabase Auth + AuthModal + handle_new_user ✅
+
+**Branche** : `claude/review-project-setup-r2FSV` (étape 4 mergée depuis
+`claude/setup-vite-react-ts-2T9bF` @ `7491228` au début de cette session).
+
+### Pré-requis exécutés
+
+- `git fetch origin claude/setup-vite-react-ts-2T9bF` puis `git merge --no-ff 7491228`
+  pour récupérer le tip de l'étape 4 (squelette Vite, schéma DB, types).
+- `npm install --legacy-peer-deps` dans `web/`.
+- `npm install --legacy-peer-deps zustand` (ajoute `zustand@^5.0` aux `dependencies`).
+
+### Trigger SQL `handle_new_user`
+
+Ajouté à la fin de `db/schema.sql` (section 18) :
+
+```sql
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  insert into public.users (id, email, display_name)
+  values (
+    new.id,
+    new.email,
+    coalesce(
+      nullif(trim(new.raw_user_meta_data->>'display_name'), ''),
+      split_part(new.email, '@', 1)
+    )
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+```
+
+- `SECURITY DEFINER` pour pouvoir écrire dans `public.users` malgré la RLS
+  (le trigger tourne en contexte auth, sans `auth.uid()` défini).
+- `search_path = public, pg_temp` pour neutraliser les attaques de
+  shadowing.
+- `revoke all on function public.handle_new_user() from public` (le trigger
+  s'exécute via le rôle definer — pas de droit d'appel direct).
+- Idempotent : `create or replace function` + `drop trigger if exists`.
+- Fallback `display_name` : `coalesce(nullif(trim(...)), split_part(email, '@', 1))`
+  — si la metadata est absente ou vide/whitespace seule, on prend la partie
+  locale de l'email.
+
+**Test local** (sandbox sans Docker, comme étape 4) :
+
+1. `service postgresql start` + base `maintenant` (utilisateur `maintenant/dev`).
+2. Stub `auth` (`auth.users`, `auth.uid()`, rôles `anon`/`authenticated`/`service_role`).
+3. `psql -f db/schema.sql` → 36 tables, 119 policies, fonction + trigger créés.
+4. `insert into auth.users (email, raw_user_meta_data) values ('alice@x.org', '{"display_name":"Alice"}'::jsonb)`
+   → ligne miroir dans `public.users` avec `display_name='Alice'`.
+5. `insert into auth.users (email) values ('bob@x.org')` → `display_name='bob'`.
+6. `insert into auth.users (email, raw_user_meta_data) values ('carol@x.org', '{"display_name":"   "}'::jsonb)`
+   → `display_name='carol'` (whitespace stripped).
+7. Re-insertion d'un id existant → `on conflict do nothing` (idempotent).
+
+### Régénération des types
+
+`node db/gen-types.mjs > web/src/types/database.ts` → 1 674 lignes, identique
+à la version étape 4 (le trigger n'ajoute aucune table publique mais valide
+que le pipeline de génération reste idempotent).
+
+### Store Zustand (`web/src/lib/auth.ts`)
+
+```ts
+useAuthStore: {
+  session: Session | null;
+  user: User | null;
+  status: 'loading' | 'authenticated' | 'anonymous';
+  signInWithPassword({ email, password }): Promise<{ error }>;
+  signUpWithPassword({ email, password, displayName }): Promise<{ error }>;
+  signInWithMagicLink({ email }): Promise<{ error }>;
+  resetPasswordForEmail(email): Promise<{ error }>;
+  signOut(): Promise<{ error }>;
+  setSession(session): void;
+}
+```
+
+- Tous les types proviennent de `@supabase/supabase-js`
+  (`Session`, `User`, `AuthError`) — zéro `any`.
+- Hook `useAuth()` à monter dans `RootLayout` : appelle
+  `supabase.auth.getSession()` une fois, s'abonne à
+  `supabase.auth.onAuthStateChange` et synchronise le store. Garde-fou
+  `subscribed` module-level pour éviter les double-abonnements en
+  StrictMode (le cleanup remet le flag à `false`).
+- Helper `authErrorMessage(error)` mappe les codes Supabase Auth
+  (`invalid_credentials`, `email_already_exists`, `weak_password`,
+  `over_email_send_rate_limit`, etc.) vers des messages en français.
+  Fallback sur `error.message` pour les codes inconnus.
+
+### `web/src/components/AuthModal.tsx` — port TS strict
+
+- Trois écrans : `login`, `signup`, `forgot` (state local `Mode`).
+- Inputs ≥ 46 px de hauteur (≥ 44 px requis par HANDOFF §5), `<label>`
+  associés via `htmlFor`/`id`, `autocomplete` correctement renseigné
+  (`email`, `current-password`, `new-password`, `name`).
+- Pas d'emoji : icônes SVG via `IconClose`, `IconMail`, `IconLock`,
+  `IconUser` (cf. `web/src/components/icons.tsx` — portés depuis
+  `Theme.jsx::ICONS`).
+- Tokens : `var(--mn-brand)`, `var(--mn-text-1..4)`, `var(--mn-surface)`,
+  `var(--mn-border)`, `var(--mn-gradient)` (étendus depuis `index.css`).
+  Pas d'hex en dur dans le code component.
+- `role="dialog"` + `aria-modal="true"` + `aria-labelledby={titleId}`,
+  bouton de fermeture avec `aria-label="Fermer"`, messages en `role="alert"`
+  (erreur) ou `role="status"` (succès).
+- Focus trap minimal : focus sur le premier input ≈30 ms après l'ouverture
+  (laisse le temps au DOM de se stabiliser), Escape ferme la modale, clic
+  sur l'overlay ferme également.
+- Reset des messages erreur/succès via le pattern « set state during
+  render » (clé `${open}-${mode}`) — compatible avec la nouvelle règle
+  ESLint `react-hooks/set-state-in-effect` (React Hooks 7).
+- Erreurs Supabase affichées en français via `authErrorMessage`.
+
+### `web/src/components/icons.tsx`
+
+5 icônes SVG portées depuis `Theme.jsx::ICONS` : `IconClose`, `IconMail`,
+`IconLock`, `IconUser`, `IconLogout`. Toutes en `currentColor` (héritent de
+la couleur texte du parent) avec `aria-hidden="true"`. Les icônes `Mail`
+et `Lock` n'existaient pas dans le prototype : crées en suivant la même
+grille (24×24 stroke 2 round) pour rester cohérent.
+
+### `web/src/layouts/RootLayout.tsx`
+
+- Bouton « Se connecter » à droite de la nav qui ouvre `AuthModal`.
+- Quand `useAuth().status === 'authenticated'` : remplacement du bouton par
+  un menu compact `[IconUser display_name] [IconLogout Se déconnecter]`.
+- `display_name` extrait de `user.user_metadata.display_name`, fallback sur
+  la partie locale de l'email puis « Compte ».
+- Bouton désactivé pendant `status === 'loading'` (premier
+  `getSession`).
+
+### Tests
+
+| Fichier                                       | Couverture                                |
+| --------------------------------------------- | ----------------------------------------- |
+| `web/src/lib/auth.test.ts`                    | 13 cas — store init, setSession,          |
+|                                               | signIn/signUp/signOut/magic/reset,        |
+|                                               | propagation `status`, mapping erreurs FR  |
+| `web/src/components/AuthModal.test.tsx`       | 9 cas — rendu des 3 écrans, submit login, |
+|                                               | submit signup, erreurs Supabase, Escape   |
+| `web/src/App.test.tsx` (déjà présent)         | 2 cas — smoke routing                     |
+
+**Mocking** : `vi.hoisted` + `vi.mock('@/lib/supabase')` (le client est
+mocké AVANT l'import de `auth.ts` qui le charge en module-load).
+`vi.stubEnv` ajouté à `web/src/test/setup.ts` pour injecter
+`VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` requis par `supabase.ts` au
+chargement.
+
+### Tableau d'état global
+
+`AuthModal` est désormais branché sur Supabase Auth via `useAuthStore`.
+`RootLayout` reflète l'état (`anonymous` → bouton, `authenticated` → menu).
+
+### Vérifications passées
+
+- `npm run typecheck` : ✅ aucune erreur
+- `npm run lint` : ✅ 0 problème
+- `npm test` : ✅ **22/22** tests passent
+- `npm run build` : ✅ `dist/` 295 kB JS / 1,09 kB CSS (gzip 85 kB / 0,56 kB)
+- `npm run format:check` : ✅ tous les fichiers conformes
+
+### Décisions UX
+
+- **Pas d'auth sociale (Google/Instagram) pour cette étape** : le prototype
+  l'affichait, mais ça demande des OAuth client IDs côté Supabase
+  + écrans de consentement RGPD. À ajouter dans une étape dédiée quand
+  les comptes OAuth seront créés.
+- **Pas de magic link bouton dédié dans l'UI** : la méthode est exposée
+  dans le store (`signInWithMagicLink`) mais l'UI n'a que les 3 écrans
+  classiques (login / signup / forgot). L'écran « forgot » utilise
+  `resetPasswordForEmail`, qui envoie un lien de réinitialisation — c'est
+  la primitive Supabase la plus proche du magic link demandée par
+  l'UX d'origine.
+- **Message de succès en signup** : on demande explicitement à
+  l'utilisateur de confirmer son email (Supabase par défaut). Plus tard,
+  si on veut auto-login après signup sans confirmation, désactiver
+  « email confirmation » dans Supabase Auth settings.
+- **Reset password redirect** : pas encore configuré
+  (`resetPasswordForEmail(email, { redirectTo: ... })`) — à brancher quand
+  la page `/auth/reset-password` existera.
+
+### Prochaines étapes (Sprint 1 — page profil, adhésion Stripe)
+
+1. **Page profil** : remplacer le placeholder par un vrai composant qui
+   lit `public.users` + `members` + `adhesions` via Supabase. Édition du
+   nom, bio, avatar (Supabase Storage).
+2. **Adhésion Stripe (3 tiers : gratuit / soutien / engagé)** :
+   - Frontend : page `/join` avec le tunnel d'adhésion.
+   - Backend : Edge Function Supabase `create-checkout-session` (publie
+     l'intent Stripe avec `SUPABASE_SERVICE_ROLE_KEY` côté serveur), puis
+     webhook `stripe-webhook` qui met à jour `public.adhesions` et
+     `public.members`.
+   - Stocker `stripe_customer_id` / `stripe_subscription_id` sur
+     `public.adhesions`.
+3. **T99CP balance** : RPC `credit_t99cp(user_id, amount, reason)` /
+   `debit_t99cp(...)` (SECURITY DEFINER + check de solde) pour préserver
+   l'intégrité monétaire — déjà cadré par la policy
+   `t99cp_insert_admin`.
+4. **Page /auth/reset-password** : finalise le flow forgot (récupère le
+   token via `supabase.auth.exchangeCodeForSession`, formulaire de
+   nouveau mot de passe).
+5. **OAuth Google + Instagram** : créer les OAuth credentials, configurer
+   Supabase Auth providers, ajouter les boutons sociaux dans `AuthModal`.
+
+---
+
+## Étape 6 — Page profil + reset password + avatars bucket + RequireAuth ✅
+
+**Branche** : `claude/review-project-setup-UbcCi` (étape 5 mergée depuis
+`claude/review-project-setup-r2FSV` @ `3a45184` au début de cette session).
+
+### Pré-requis exécutés
+
+- `git fetch origin claude/review-project-setup-r2FSV` puis `git merge --no-ff 3a45184`
+  pour récupérer le tip de l'étape 5 (Supabase Auth + AuthModal + handle_new_user).
+- `npm install --legacy-peer-deps` dans `web/`.
+- `service postgresql start` + base `maintenant` (utilisateur `maintenant/dev`)
+  + stub `auth` + stub `storage` (sandbox sans Docker, comme étapes 4 et 5).
+
+### Bucket Supabase Storage `avatars` + RLS
+
+Ajouté à `db/schema.sql` (nouvelle **section 19**) :
+
+```sql
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
+```
+
+Quatre policies RLS sur `storage.objects`, restreintes à `bucket_id = 'avatars'` :
+
+| Policy | Action | Contrainte |
+| ------ | ------ | ---------- |
+| `avatars_public_read`            | `select` | toujours (bucket public) |
+| `avatars_authenticated_insert`   | `insert` | `auth.uid() = owner` ET `(storage.foldername(name))[1] = auth.uid()::text` |
+| `avatars_authenticated_update`   | `update` | `owner = auth.uid()` (using + with check) |
+| `avatars_authenticated_delete`   | `delete` | `owner = auth.uid()` |
+
+La contrainte de path empêche qu'un utilisateur authentifié écrase l'avatar
+d'un tiers : un upload doit obligatoirement aller sous `<uid>/...`.
+
+**Stub `/tmp/auth_stub.sql`** étendu à `schema storage` (`storage.buckets`,
+`storage.objects` avec colonne `path_tokens` générée, RLS activée), plus la
+fonction `storage.foldername(text) returns text[]` (Supabase la fournit
+nativement). Vérifications après `psql -f db/schema.sql` :
+
+```
+public.users      : 0 rows
+public policies   : 119
+storage policies  : 4
+storage.buckets   : 'avatars' (public)
+```
+
+### Régénération des types
+
+`node db/gen-types.mjs > web/src/types/database.ts` → fichier **identique**
+à celui de l'étape 5 (1 674 lignes après formatage Prettier). Le générateur
+filtre `c.relnamespace = 'public'::regnamespace` : le schéma `storage` est
+volontairement ignoré (les buckets ne sont pas typés côté `Database`).
+Idempotence confirmée : `git diff web/src/types/database.ts` après
+régénération + format = vide.
+
+### `web/src/lib/postgrestError.ts`
+
+Mapping FR des codes Postgres / PostgREST les plus courants : `23505` unique
+violation, `23503` FK invalide, `23502` not null, `23514` check constraint,
+`22001` value too long, `22P02` invalid input, `42501` permission denied,
+`PGRST116` no rows, `PGRST301` session expired, `PGRST204` no content.
+Fallback sur `error.message` puis sur un message générique. Utilisé partout
+où une erreur Postgrest doit être affichée à l'utilisateur (édition profil,
+upload avatar).
+
+### `web/src/lib/profile.ts`
+
+Trois primitives strictement typées via `Database['public']['Tables']['users']` :
+
+- `getProfile(userId): Promise<{ data: UserRow | null, error: PostgrestError | null }>`
+- `updateProfile(userId, patch: UserUpdate)` — `UserUpdate` interdit toute
+  clé hors schéma à la compilation, zéro `any`.
+- `uploadAvatar(userId, file: File)` — validation client (`AVATAR_MAX_BYTES`
+  = 2 Mo, types `image/jpeg|png|webp|gif`), path déterministe
+  `<userId>/avatar-<timestamp>.<ext>`, upload Supabase Storage avec
+  `upsert: true`, renvoie `{ path, publicUrl }` issu de `getPublicUrl`.
+
+Les erreurs locales (validation + erreur de Storage) sont remontées comme de
+vraies `new PostgrestError({...})` (classe importée depuis
+`@supabase/supabase-js`) pour rester compatibles avec le typage Postgrest
+côté hook. Codes maison `AVATAR_INVALID_TYPE` / `AVATAR_TOO_LARGE` (non
+mappés par `postgrestErrorMessage`) → le message FR de la validation est
+préservé.
+
+### `web/src/hooks/useProfile.ts`
+
+Hook React qui consomme `useAuth().user.id` et expose :
+
+```ts
+{
+  profile: UserRow | null;
+  status: 'idle' | 'loading' | 'ready' | 'error';
+  error: PostgrestError | null;
+  refresh: () => Promise<void>;
+  update: (patch: UserUpdate) => Promise<{ error: PostgrestError | null }>;
+}
+```
+
+- Status dérivé : `authStatus === 'loading'` ⇒ `loading`. Sinon reflète
+  `fetchStatus`.
+- Reset automatique du state quand l'utilisateur change (pattern « set state
+  during render » avec clé `trackedUserId`), compatible avec la règle
+  React Hooks 7 `react-hooks/set-state-in-effect`.
+- Fetch initial déclenché via `queueMicrotask` dans `useEffect` (le setState
+  synchrone qui marque `loading` se fait par le pattern de clé, hors effet).
+
+### `web/src/pages/ProfilePage.tsx` — port TS strict
+
+Remplace le placeholder. Affiche, en mode lecture :
+
+- en-tête : avatar (image ou initiale, gradient brand) + nom + email,
+- bio (si présente), badges (tags `var(--mn-brand-light)`),
+- carte « Informations » : ville, code postal, membre depuis (formaté
+  fr-FR),
+- wallet T99CP (carte sombre, font Sora, balance affichée).
+
+En mode édition (bouton « Modifier ») :
+
+- formulaire inline avec `display_name` (obligatoire), bio (`textarea`
+  ≥ 96 px), ville, code postal,
+- avatar : bouton « Changer l'avatar » + `<input type="file" accept="image/*">`
+  caché + label cliquable au survol de l'avatar,
+- preview avant upload (`URL.createObjectURL`), validation client (2 Mo,
+  formats image),
+- erreurs Postgrest mappées en FR via `postgrestErrorMessage`,
+- boutons « Enregistrer » / « Annuler » (≥ 44 px, ARIA labels, `aria-describedby`
+  vers l'erreur de formulaire).
+
+Aucun hex en dur : 100 % des couleurs via `var(--mn-*)`. Aucun emoji : icônes
+SVG `IconEdit`, `IconCheck`, `IconUpload`, `IconBadge`, `IconClose`,
+`IconUser` (`web/src/components/icons.tsx`).
+
+### `web/src/pages/ResetPasswordPage.tsx` + route `/auth/reset-password`
+
+- Lit le `code` depuis `searchParams.get('code')` ou le hash (`extractCodeFromLocation`).
+- Initialise le status en `'exchanging'` ou `'expired'` (lazy initializer
+  → pas de setState dans un effect).
+- `supabase.auth.exchangeCodeForSession(code)` au mount (effect). En cas
+  d'erreur, message FR via `authErrorMessage`.
+- Formulaire : nouveau mot de passe + confirmation (≥ 8 caractères,
+  identiques). Submit → `supabase.auth.updateUser({ password })` puis
+  redirection `setTimeout(navigate('/profile'), 800)`.
+- Mise à jour de `auth.ts::resetPasswordForEmail` : passe désormais
+  `{ redirectTo: ${window.location.origin}/auth/reset-password }` (avec
+  fallback `undefined` en SSR).
+
+### `web/src/components/RequireAuth.tsx`
+
+Wrapper de route minimal :
+
+- `status === 'loading'` → spinner (texte « Chargement… », `role="status"`).
+- `status === 'anonymous'` → `<Navigate to="/?auth=login" replace />`,
+  conserve la route d'origine dans `location.state.from`.
+- `status === 'authenticated'` → rend `children`.
+
+Appliqué à `/profile` dans `web/src/router.tsx`. `RootLayout` consomme le
+query param `?auth=login` (pattern « set state during render ») pour
+ouvrir automatiquement la modale d'authentification, et le supprime de
+l'URL une fois l'utilisateur authentifié.
+
+### `RootLayout` — adaptations
+
+- Entrée « Profil » de la navigation conditionnelle : visible uniquement
+  quand `status === 'authenticated'`.
+- Menu compact `[IconUser display_name]` désormais cliquable → navigate
+  vers `/profile`.
+- Bouton « Se déconnecter » inchangé.
+- Effets refactorés (pattern de clé sur `authQuery|status`) pour rester
+  conformes à la règle `react-hooks/set-state-in-effect`.
+
+### Tests
+
+| Fichier                                         | Couverture                            |
+| ----------------------------------------------- | ------------------------------------- |
+| `src/lib/profile.test.ts`                       | 9 cas — getProfile/updateProfile,     |
+|                                                 | erreurs RLS/unique violation FR,      |
+|                                                 | uploadAvatar (type, taille, succès,   |
+|                                                 | erreur Storage)                       |
+| `src/hooks/useProfile.test.tsx`                 | 4 cas — fetch au mount, error RLS,    |
+|                                                 | refresh, update                       |
+| `src/pages/ProfilePage.test.tsx`                | 6 cas — rendu lecture, bascule édition |
+|                                                 | submit avec trim, erreur 42501 FR,    |
+|                                                 | upload avatar (mock File), annulation |
+| `src/pages/ResetPasswordPage.test.tsx`          | 6 cas — code absent, exchange OK,     |
+|                                                 | password < 8 char, mismatch, submit + |
+|                                                 | redirect /profile, code expiré FR     |
+| `src/components/RequireAuth.test.tsx`           | 3 cas — spinner loading, redirect     |
+|                                                 | anonymous, rend children authenticated |
+
+Total : **50 tests** (22 existants + 28 nouveaux), tous verts.
+
+Note d'implémentation tests : `useAuth()` interne appelle
+`supabase.auth.getSession()` au mount et écrase l'état local s'il résout
+avec `{ session: null }`. Pour les tests qui dépendent d'un utilisateur
+authentifié, on stub `getSession` pour retourner directement la session
+attendue (sinon race condition entre l'état manuel et la résolution du
+promise).
+
+### Vérifications passées
+
+- `npm run typecheck` : ✅ aucune erreur
+- `npm run lint` : ✅ 0 problème
+- `npm test` : ✅ **50/50** tests passent
+- `npm run build` : ✅ `dist/` 295 kB JS / 1,09 kB CSS (gzip 85 kB / 0,56 kB)
+- `npm run format:check` : ✅ tous les fichiers conformes
+
+### Décisions UX
+
+- **Pas d'onglets** (Activité/Services/Paramètres) sur la première version
+  de `/profile` : le prototype les expose mais ils dépendent de données
+  encore absentes (mobilisations, T99CP transactions). On reviendra dessus
+  au Sprint 2 (contenu militant) avec un vrai feed dérivé de Supabase.
+- **Avatar bucket public** : choix RGPD assumé — un avatar est par essence
+  un identifiant visuel public ; pour les profils privés (mineurs, lanceurs
+  d'alerte) on bascule plus tard sur un bucket privé + URL signée.
+- **Limite 2 Mo, formats JPEG/PNG/WebP/GIF** : aligné avec les standards
+  produits comme Mastodon / Bluesky. Le PNG transparent (logos) est admis.
+  Le WebP est encouragé (compression).
+- **Reset password redirect** : `${window.location.origin}/auth/reset-password`.
+  Ne dépend pas d'une variable d'env → fonctionne en preview Vercel et en
+  prod sans configuration supplémentaire. Côté Supabase Dashboard, il
+  faudra ajouter `/auth/reset-password` à la whitelist des redirect URLs
+  avant la mise en prod.
+- **Guard `RequireAuth`** : pour l'instant on redirige vers `/?auth=login`
+  qui ouvre la modale. Quand on aura plusieurs pages protégées (`/admin`,
+  `/messaging`), on stockera la route d'origine dans `location.state.from`
+  pour rediriger automatiquement après login. La logique est déjà prête,
+  il reste juste à l'exploiter côté `AuthModal` (à brancher au Sprint 1
+  Stripe quand on aura le tunnel d'adhésion).
+
+### Tableau d'état global
+
+`/profile` est désormais une route protégée qui consomme la table
+`public.users` via `getProfile` et y écrit via `updateProfile`. Le bucket
+Storage `avatars` est branché avec policies RLS strictes. Le flow forgot
+password est complet de bout en bout (modale → email → page de reset →
+redirection vers `/profile`).
+
+### Prochaines étapes (Sprint 1 — adhésion Stripe + RPC T99CP)
+
+1. **Adhésion Stripe (3 tiers : gratuit / soutien / engagé)** :
+   - Frontend : `/join` avec le tunnel d'adhésion (cartes tier + Stripe
+     Checkout via `loadStripe`).
+   - Backend : Edge Function Supabase `create-checkout-session`
+     (`SUPABASE_SERVICE_ROLE_KEY` côté serveur uniquement), puis webhook
+     `stripe-webhook` qui synchronise `public.adhesions` + `public.members`.
+   - Stocker `stripe_customer_id` / `stripe_subscription_id` sur
+     `public.adhesions`. Variables d'env : `STRIPE_SECRET_KEY`,
+     `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_SOUTIEN`, `STRIPE_PRICE_ENGAGE`.
+2. **RPC T99CP** : `credit_t99cp(p_user uuid, p_amount integer, p_reason text)`
+   / `debit_t99cp(...)` (SECURITY DEFINER + check de solde, écrit dans
+   `t99cp_transactions` et met à jour `users.t99cp_balance` dans une
+   transaction). Déjà cadré par la policy `t99cp_insert_admin` (insertion
+   réservée aux admins / via RPC).
+3. **OAuth Google + Instagram** : reporté tant que les OAuth credentials
+   ne sont pas créés (hors scope Claude — décision produit).
+
+---
+
+## Étape 7 — Adhésion Stripe (3 tiers) + RPC T99CP + JoinPage ✅
+
+**Branche** : `claude/review-project-setup-QwLHV`
+(étape 6 mergée depuis `claude/review-project-setup-UbcCi` @ `8a7ea47` au
+début de cette session via `git fetch` + `git merge --no-ff`).
+
+### Pré-requis exécutés
+
+- `git fetch origin claude/review-project-setup-UbcCi` (premier appel HTTP 500
+  → retry avec back-off 2s/4s/8s/16s, succès au 2ᵉ essai), puis
+  `git merge --no-ff 8a7ea47 -m "Merge step 6 tip ..."` pour récupérer le
+  tip de l'étape 6 (page profil + reset password + bucket avatars).
+- `cd web && npm install --legacy-peer-deps` (lockfile non versionné,
+  l'option reste indispensable à cause d'`eslint-plugin-jsx-a11y` ↔ ESLint 10).
+
+### RPC T99CP (`db/schema.sql` §20)
+
+Deux fonctions `SECURITY DEFINER` avec `set search_path = public, pg_temp`,
+exposées en `grant execute … to authenticated` (révocation pour `public`).
+
+```sql
+public.credit_t99cp(p_user uuid, p_amount integer, p_reason text) returns void
+public.debit_t99cp (p_user uuid, p_amount integer, p_reason text) returns void
+```
+
+- **credit_t99cp** : insère `t99cp_transactions(kind='credit', amount, reason)`
+  puis `update users set t99cp_balance = t99cp_balance + p_amount`. Lève
+  `invalid_amount` si `p_amount <= 0`, `invalid_reason` si la raison est
+  vide/whitespace.
+- **debit_t99cp** : `select … for update` pour verrouiller la ligne contre
+  les races avec un débit concurrent, puis vérifie `balance >= p_amount`
+  (sinon `raise exception 'insufficient_balance'`). Insère la ligne ledger
+  et décrémente. Le check colonne `t99cp_balance >= 0` posé à l'étape 4
+  reste comme deuxième garde-fou (un débit qui passerait quand même les
+  vérifications applicatives serait bloqué au niveau Postgres).
+- Idempotence : déléguée à la couche appelante (la PK `adhesions.stripe_subscription_id`
+  UNIQUE empêche les doublons d'adhésion, et le webhook Stripe utilise
+  l'event id Stripe comme deduplication clé côté staging — à formaliser à
+  l'étape 8 avec une table `stripe_events`).
+
+**Cas de test exécutés en local** (Postgres 16 + stub auth+storage,
+`PGPASSWORD=dev psql -h localhost -U maintenant -d maintenant`) :
+
+| # | Cas                                            | Résultat attendu                                 |
+| - | ---------------------------------------------- | ------------------------------------------------ |
+| 1 | `credit_t99cp(uid, 60, 'adhesion_renewal')`    | balance 0 → 60, ledger += credit                 |
+| 2 | `debit_t99cp(uid, 10, 'reward_redeem')`        | balance 60 → 50, ledger += debit                 |
+| 3 | `debit_t99cp(uid, 9999, 'big')` (solde=50)     | exception `insufficient_balance`, balance inchangée |
+| 4 | `credit_t99cp(uid, 0, 'r')`                    | exception `invalid_amount`                       |
+| 5 | `credit_t99cp(uid, 5, '   ')`                  | exception `invalid_reason`                       |
+
+Les 5 cas passent. Solde final : 50 T99CP, 2 lignes dans `t99cp_transactions`.
+
+### Régénération des types Supabase
+
+- `db/gen-types.mjs` étendu : la section `Functions` inclut désormais
+  `is_admin`, `credit_t99cp` et `debit_t99cp` avec `Args: { p_user: string;
+  p_amount: number; p_reason: string }` et `Returns: void`.
+- Régénération : `node db/gen-types.mjs --url postgres://maintenant:dev@localhost:5432/maintenant > web/src/types/database.ts`
+  puis `npx prettier --write src/types/database.ts`.
+- Le fichier passe à **1 699 lignes** (1 674 → +25 lignes pour les deux RPCs).
+- `web/src/types/database.ts` reste l'unique source de typage Supabase
+  (zéro `any` côté front, conforme à `CLAUDE.md`).
+
+### Edge Functions Stripe
+
+Deux fonctions Deno isolées sous `supabase/functions/` :
+
+```
+supabase/
+  functions/
+    _shared/
+      cors.ts                  ← allow-list origines + helper jsonResponse
+    create-checkout-session/
+      index.ts                 ← création de session Stripe Checkout
+    stripe-webhook/
+      index.ts                 ← réception + dispatch des events Stripe
+```
+
+Architecture clé : chaque fonction expose un `handle(req, deps)` testable
+en isolation (Dependency Injection) ; le bootstrap Deno (`Deno.serve(...)`)
+n'est exécuté que sous `import.meta.main`, ce qui rend ces fichiers
+analysables par TypeScript Node-only sans le runtime Deno.
+
+#### `create-checkout-session/index.ts`
+
+- Valide la méthode (POST + OPTIONS pour le pre-flight CORS).
+- Lit le JWT du caller dans `Authorization: Bearer ...`, le passe à
+  `supabase.auth.getUser(jwt)` (client Supabase reconstruit avec la clé
+  `SUPABASE_ANON_KEY` + l'`Authorization` header). Refuse l'appel si
+  l'utilisateur n'est pas authentifié.
+- Valide le `tier` reçu dans le body (allow-list : `soutien` | `engage`,
+  toute autre valeur → `invalid_tier`).
+- Crée la `Stripe.checkout.sessions.create` :
+  - `mode: 'subscription'`
+  - `line_items: [{ price: STRIPE_PRICE_SOUTIEN | STRIPE_PRICE_ENGAGE, quantity: 1 }]`
+  - `client_reference_id: user.id`
+  - `metadata: { user_id, tier }` (recopié sur `subscription_data.metadata`
+    pour que le webhook `invoice.payment_succeeded` retrouve l'`user_id`)
+  - `success_url: <site>/profile?adhesion=ok`
+  - `cancel_url: <site>/join?canceled=1`
+- Renvoie `{ url }`. Le front fait `window.location.assign(url)`.
+
+#### `stripe-webhook/index.ts`
+
+- Vérifie la signature via `stripe.webhooks.constructEventAsync(body, sig,
+  STRIPE_WEBHOOK_SECRET)`. Toute erreur de signature → 400.
+- Tourne avec `SUPABASE_SERVICE_ROLE_KEY` (Edge Function server-side
+  uniquement, jamais bundlée côté front).
+- Évènements gérés :
+  - `checkout.session.completed` → `upsert adhesions` `(user_id, tier,
+    status='active', stripe_subscription_id, ends_on)` sur le conflict de
+    `stripe_subscription_id`.
+  - `customer.subscription.deleted` → `update adhesions … status='cancelled'`.
+  - `customer.subscription.updated` → `status='cancelled'` si le status
+    Stripe ∈ `{canceled, unpaid, incomplete_expired}`, sinon synchronise
+    `ends_on = current_period_end`.
+  - `invoice.payment_succeeded` → `rpc('credit_t99cp', { p_user, p_amount: 60,
+    p_reason: 'adhesion_renewal' })` (bonus mensuel de 60 T99CP).
+- Évènements non gérés → renvoie `200 { received: true, ignored: <type> }`
+  pour ne pas saturer la retry-queue Stripe.
+
+#### Décisions Stripe
+
+| Sujet               | Décision                                                                                  |
+| ------------------- | ----------------------------------------------------------------------------------------- |
+| **Mode test/live**  | `STRIPE_SECRET_KEY` lit `sk_test_...` en staging et `sk_live_...` en prod. Mêmes price IDs séparés. |
+| **Rate-limiting**   | Délégué à Supabase (PostgREST ratelimit `aud=anon`) + Stripe (rate limits internes). À ajouter en Edge Function (memoize per-user) si abus. |
+| **Idempotence**     | `adhesions.stripe_subscription_id UNIQUE` empêche les doublons (`upsert onConflict`). Pas de table `stripe_events` pour l'instant — à ajouter si retries massifs constatés. |
+| **3D Secure**       | Activé par défaut (zone UE → Stripe applique SCA automatiquement, paramètres `automatic_payment_methods`). |
+| **EU region**       | Le projet Supabase est en `eu-west-3` (Paris). Stripe data residency n'est pas configurable côté UE pour l'instant ; webhooks signés. |
+| **Crédit T99CP**    | 60 T99CP / mois sur `invoice.payment_succeeded` (paid month = paid bonus). Pas de bonus de bienvenue (peut être ajouté plus tard via un event Stripe Checkout `success`). |
+| **Tier downgrade**  | Non géré pour l'instant : `isTierLockedFor` grise les tiers ≤ tier actuel. Une rétrogradation passe par le portail client Stripe (hors scope étape 7). |
+
+### `web/src/lib/membership.ts`
+
+API typée via `Database['public']['Tables']['adhesions']` et
+`Database['public']['Enums']['adhesion_tier']` :
+
+- `getCurrentAdhesion(userId)` — filtre `status='active'`, prend la ligne
+  la plus récente (`order by created_at desc, limit 1, maybeSingle`).
+- `createFreeAdhesion(userId)` — `insert { tier: 'gratuit', status: 'active',
+  amount_eur: 0 }`. Passe par la policy `adhesions_insert_self` (check
+  `auth.uid() = user_id`).
+- `createCheckoutSession(tier)` — appelle l'Edge Function via
+  `supabase.functions.invoke('create-checkout-session', { body: { tier } })`,
+  retourne `{ url, error }`. Toute erreur (network, Edge 4xx/5xx, absence
+  d'URL) est normalisée en `PostgrestError` (codes custom
+  `STRIPE_INVOKE_ERROR` / `STRIPE_NO_URL`) pour partager le mapper FR avec
+  `postgrestError.ts`.
+- Constantes pures : `TIER_RANK`, `TIER_ORDER`, `isTierLockedFor(current,
+  target)` — utilisées pour griser les cartes inférieures ou égales au
+  tier en cours.
+
+### Hook `web/src/hooks/useAdhesion.ts`
+
+Pattern identique à `useProfile` (cf. étape 6) :
+
+- Reset via « set state during render » (clé `trackedUserId`) — évite la
+  règle ESLint `react-hooks/set-state-in-effect`.
+- Fetch dans `queueMicrotask` (sortie de la frame synchrone de l'effect).
+- Expose `{ adhesion, status, error, refresh }`. Status :
+  `'idle' | 'loading' | 'ready' | 'error'`.
+- Si `userId` est `null` (utilisateur anonyme), reste en `'idle'` sans
+  déclencher de requête.
+
+### `web/src/pages/JoinPage.tsx`
+
+Port TS strict du tunnel d'adhésion `project/app/JoinMovement.jsx`,
+simplifié pour 3 tiers en parallèle (au lieu du wizard 4 étapes du
+prototype) :
+
+- Hero gradient `var(--mn-gradient)` + lead.
+- 3 cartes `<article>` listées dans `<ul aria-label="Formules d'adhésion">`,
+  chacune avec : titre, prix, période, blurb, 3 perks (chacun préfixé d'un
+  `IconCheckCircle`), bouton CTA.
+- Cards : `gratuit` (gris), `soutien` (mise en avant, border brand + ribbon
+  « Recommandé »), `engage` (border standard).
+- Si `useAdhesion` renvoie une adhésion active, le tier courant affiche un
+  badge `Tier actuel` (vert) et `isTierLockedFor` désactive les boutons
+  ≤ tier courant (avec libellé « Déjà adhérent·e » + `IconLock`).
+- Banner `?canceled=1` affichée si l'utilisateur revient de Stripe sans
+  finaliser. Banner spécifique pour l'utilisateur anonyme.
+- Erreurs Postgrest mappées en FR via `postgrestErrorMessage` (`42501` →
+  « Vous n'avez pas les droits… », etc.).
+- CTA gratuit → `createFreeAdhesion` + `refresh()` + message « Bienvenue
+  dans le mouvement ».
+- CTA soutien/engage → `createCheckoutSession(tier)` + `window.location.assign(url)`.
+- Aucun emoji : `IconCart`, `IconCheckCircle`, `IconSpark`, `IconLock`
+  ajoutés à `web/src/components/icons.tsx`.
+
+### Tests (Vitest + Testing Library)
+
+3 suites ajoutées, **+23 tests** (50 → 73 verts au total) :
+
+| Fichier                              | Tests | Couvre                                                      |
+| ------------------------------------ | :---: | ----------------------------------------------------------- |
+| `src/lib/membership.test.ts`         |  12   | `TIER_ORDER`/`TIER_RANK`, `isTierLockedFor` (3 scénarios), `getCurrentAdhesion` (3), `createFreeAdhesion` (2), `createCheckoutSession` (3 incl. erreurs FR). |
+| `src/hooks/useAdhesion.test.tsx`     |   4   | `userId=null` → idle, mount → ready, refresh, erreur RLS.   |
+| `src/pages/JoinPage.test.tsx`        |   7   | 3 cartes rendues, banner `?canceled=1`, click gratuit → insert, click soutien → invoke + redirect, tier déjà actif grisé + badge, erreur Postgrest mappée FR, utilisateur anonyme refuse l'action. |
+
+Pattern de mock pour `window.location.assign` :
+`Object.defineProperty(window, 'location', { value: { ...originalLocation,
+assign: spy } })` (jsdom 29 protège `assign` contre la `defineProperty`
+directe sur `window.location`). Restauré dans `afterEach`.
+
+### Vérifications passées (sur cette branche)
+
+- `npm run typecheck` : ✅
+- `npm run lint`      : ✅ (corrections : `readonly T[]` plutôt que
+  `ReadonlyArray<T>`, hook `useAdhesion` aligné sur `useProfile` pour la
+  règle `react-hooks/set-state-in-effect`)
+- `npm test`          : ✅ **73 / 73**
+- `npm run build`     : ✅ `dist/` ~295 kB JS / 1,09 kB CSS
+- `npm run format:check` : ✅
+
+### Décisions / hors scope
+
+- **Pas de migration `supabase/migrations/<ts>_init.sql`** : `db/schema.sql`
+  reste la source canonique. À convertir en migration le jour du `supabase
+  db push` réel (cf. étape 4 §Décisions).
+- **Pas d'invocation Stripe live** : les Edge Functions sont écrites et
+  testées par DI mais pas déployées (sandbox sans Docker, pas de tunnel
+  webhook). Le déploiement se fera depuis un poste de dev avec
+  `supabase functions deploy create-checkout-session stripe-webhook`.
+- **Pas de table `stripe_events`** : la dédup repose sur `adhesions.stripe_subscription_id`
+  UNIQUE. Si Stripe rejoue massivement, on ajoutera la table à l'étape 8+.
+- **Pas de portail client Stripe** : la résiliation se fera depuis le
+  profil utilisateur (placeholder à brancher à l'étape 8) ou par la suite
+  via un endpoint dédié.
+
+### Prochaines étapes (fin Sprint 1 — étape 8)
+
+1. **OAuth Google + Instagram** : boutons sociaux dans `AuthModal`,
+   gestion des erreurs de consentement, page de callback `/auth/callback`.
+2. **Magic link** (alternative passwordless à `signInWithOtp`) déjà
+   exposée par `useAuthStore`, à brancher sur l'`AuthModal`.
+3. À l'issue : Sprint 1 complet (auth + profil + adhésion + T99CP). On
+   pourra basculer sur **Sprint 2 (contenu militant)** — pétitions CRUD,
+   mobilisations, campagnes.
+
+---
+
+## Étape 8 — OAuth Google + Instagram + magic link + callback ✅
+
+**Branche** : `claude/review-project-rules-BqjpH` (imposée par l'harness).
+Merge initial : `git merge --no-ff origin/claude/review-project-setup-QwLHV`
+récupère les commits `feat(adhesion): step 7 …` (45bb74a) + `docs(handoff):
+step 8 prompt` (bf99d43) avant d'attaquer l'étape.
+
+### Pré-requis exécutés
+
+1. `git fetch origin claude/review-project-setup-QwLHV` puis merge `--no-ff`
+   pour récupérer la racine de l'étape 7.
+2. `cd web && npm install --legacy-peer-deps` (lockfile non versionné,
+   conflit ESLint 10 ↔ eslint-plugin-jsx-a11y).
+3. Pas de `supabase start` : Docker indisponible dans la sandbox. OAuth
+   est entièrement testé via mocks Vitest (`signInWithOAuth`,
+   `exchangeCodeForSession`).
+
+### OAuth Google + Instagram (`web/src/lib/oauth.ts`)
+
+Nouveau module dédié `web/src/lib/oauth.ts` qui expose :
+
+- `type SocialProvider = 'google' | 'instagram'` — domaine restreint
+  côté UI, distinct du `Provider` interne de @supabase/auth-js (qui
+  liste ~25 providers).
+- `signInWithProvider(provider): Promise<{ error }>` — appelle
+  `supabase.auth.signInWithOAuth({ provider, options: { redirectTo } })`
+  avec `redirectTo = ${window.location.origin}/auth/callback`. La
+  promise résolue reflète l'erreur Supabase ; en cas de succès le
+  navigateur est en train de naviguer vers le consent screen du
+  fournisseur (rien à faire côté React).
+- Pour Instagram, le `Provider` natif de @supabase/auth-js (v2.x
+  packagé avec @supabase/supabase-js) ne liste pas encore `'instagram'`.
+  On utilise `as Provider` ciblé, justifié dans un commentaire : la
+  résolution effective se fait via la config OIDC custom dans le
+  dashboard Supabase Auth (Settings → Providers → Instagram).
+
+### Callback page `/auth/callback` (`web/src/pages/AuthCallbackPage.tsx`)
+
+- Détection synchrone du payload (`?code=…` ou fragment
+  `#access_token=…` ou `?error=…`) via `hasCallbackPayload(href)` ; la
+  fonction est isolée pour rester testable sans monter le composant.
+- État initial calculé hors `useEffect` (compatible règle ESLint
+  `react-hooks/set-state-in-effect` du preset React 19) : `status =
+  'exchanging' | 'success' | 'error'`.
+- L'`useEffect` appelle `supabase.auth.exchangeCodeForSession(href)`,
+  passe le `href` complet (Supabase v2 accepte cette forme et lit
+  `code` / `provider` dans l'URL elle-même).
+- Sur succès → `navigate('/profile', { replace: true })`.
+- Sur erreur → mappée par `authErrorMessage(error)` puis affichée dans
+  un `<div role="alert">`.
+- Affiche un état intermédiaire `« Validation du lien d'authentification.
+  Cette opération prend quelques secondes. »` pendant l'échange.
+- Route branchée dans `web/src/router.tsx` : `path: 'auth/callback'`.
+
+### Magic link UI (`AuthModal.tsx`)
+
+- Nouveau `Mode = 'login' | 'signup' | 'forgot' | 'magic'` (4ᵉ écran).
+- Bouton « Lien magique par email » visible uniquement en mode
+  `login`, sous les boutons OAuth, qui bascule sur le mode `magic`.
+- Le mode `magic` réutilise le même formulaire (sans champ mot de
+  passe) et appelle `signInWithMagicLink({ email })` (déjà exposé par
+  le store Zustand depuis l'étape 5).
+- Message de succès : « Lien envoyé. Vérifiez votre boîte mail pour
+  finaliser la connexion. »
+- Retour à la connexion via un bouton lien `linkBtnStyle` cohérent
+  avec les autres écrans.
+
+### Boutons OAuth dans `AuthModal.tsx`
+
+- Visible en modes `login` et `signup`, en haut du formulaire, avant
+  un divider `« ou par email »`.
+- Trois boutons : Google (avec `IconGoogle`), Instagram (avec
+  `IconInstagram`), Lien magique (avec `IconLink`, en mode login
+  uniquement).
+- `oauthBtnStyle` : surface neutre (`var(--mn-bg)` + bordure 1.5 px),
+  hauteur 46 px, hover natif (cursor pointer). Pas de gradient pour
+  laisser respirer les logos officiels.
+- `handleOAuth(provider)` désactive temporairement le bouton via
+  `submitting=true`, map les erreurs en FR via `authErrorMessage`,
+  laisse le navigateur faire la redirection.
+
+### Icônes (`web/src/components/icons.tsx`)
+
+Trois nouvelles icônes ajoutées :
+
+- `IconGoogle` — SVG officiel multi-color (4 chemins jaune / rouge /
+  vert / bleu). **Exception currentColor justifiée en commentaire** :
+  les guidelines de Google et Meta imposent les couleurs officielles
+  pour les boutons OAuth.
+- `IconInstagram` — SVG avec radial gradient officiel (jaune → orange
+  → magenta → bleu), cercle blanc + point blanc. Idem : exception
+  currentColor justifiée.
+- `IconLink` — chaîne classique (deux maillons), suit `currentColor`
+  comme les autres icônes du design system.
+
+### Mapping d'erreurs (`web/src/lib/auth.ts::authErrorMessage`)
+
+Codes Supabase Auth ajoutés (tous mappés en FR) :
+
+| Code Supabase                       | Message FR                                            |
+| ----------------------------------- | ----------------------------------------------------- |
+| `access_denied`                     | Vous avez refusé l'accès. Réessayez et acceptez…     |
+| `unauthorized_client`               | (idem `access_denied`)                                |
+| `provider_email_needs_verification` | Email non vérifié chez le fournisseur. Confirmez-le… |
+| `provider_disabled`                 | Ce mode de connexion est actuellement désactivé.      |
+| `oauth_provider_not_supported`      | Ce fournisseur n'est pas encore configuré…           |
+| `bad_oauth_callback`                | Lien d'authentification invalide ou expiré.           |
+| `bad_oauth_state`                   | (idem `bad_oauth_callback`)                           |
+| `flow_state_not_found`              | Session d'authentification expirée.                   |
+| `flow_state_expired`                | (idem `flow_state_not_found`)                         |
+
+### Tests (Vitest + Testing Library)
+
+10 nouveaux tests, total **83 tests verts** (73 → 83) :
+
+- `src/lib/oauth.test.ts` (3 cas) — Google + Instagram + erreur
+  réseau (`AuthRetryableFetchError`).
+- `src/pages/AuthCallbackPage.test.tsx` (4 cas) — code valide →
+  redirection `/profile`, code absent → message d'erreur, erreur
+  Supabase mappée FR, paramètre `error=access_denied` mappé FR.
+- `src/components/AuthModal.test.tsx` (3 nouveaux cas) — bouton Google
+  appelle `signInWithOAuth(google)`, bouton Instagram appelle
+  `signInWithOAuth(instagram)`, bouton « Lien magique par email »
+  bascule sur le mode `magic` puis appelle `signInWithOtp`.
+
+### Décisions (provider id Instagram, OIDC custom)
+
+1. **Provider id Instagram** : on conserve `'instagram'` côté domaine
+   (UI + module `oauth.ts`) avec un cast `as Provider` ciblé sur la
+   ligne d'appel `signInWithOAuth`. La résolution effective côté
+   Supabase Auth se fait via la config OIDC custom dans le dashboard
+   (Settings → Auth → Providers → Instagram custom OIDC, app_id de
+   l'app Meta Instagram Basic Display ou Threads). Décision réversible :
+   si une future version de `@supabase/auth-js` ajoute `'instagram'`
+   au type `Provider`, le cast disparaîtra naturellement.
+2. **`exchangeCodeForSession` avec `href` complet** : Supabase v2
+   accepte la signature `(input: string)` où `input` peut être soit le
+   `code` brut, soit l'URL complète. On passe l'URL complète pour
+   bénéficier de la détection automatique des paramètres `code`,
+   `state`, `provider` et des fragments hash le cas échéant.
+3. **Pas de bouton OAuth en mode `forgot` ni `magic`** : flux
+   incohérent (réinitialisation = pas OAuth) et focus mental réduit.
+4. **`IconGoogle` et `IconInstagram` figés en couleur** : exception
+   documentée à la règle currentColor du design system, exigée par les
+   guidelines de marque Google et Meta.
+5. **Pas d'environnement Supabase local** : OAuth en local nécessite
+   un tunnel ngrok ou supabase.com en mode dev. Pour l'étape 8, on
+   reste sur les mocks Vitest ; l'intégration sera testée manuellement
+   à la prochaine étape de déploiement.
+
+### Vérifications passées
+
+- `npm run typecheck` ✅
+- `npm run lint` ✅ (preset ESLint flat + react-hooks 6)
+- `npm test -- --run` ✅ — 83 tests verts (13 fichiers).
+- `npm run build` ✅ — bundle 295 kB (gzip 85 kB), aucune
+  augmentation perceptible (logos OAuth = SVG inline, pas d'asset
+  externe).
+- `npm run format:check` ✅.
+
+### Tableau d'état global
+
+| Domaine      | Statut | Détail                                                     |
+| ------------ | :----: | ---------------------------------------------------------- |
+| Prototype    |   ✅   | Intact (`project/app/Maintenant.html` + JSX racine).       |
+| Vite skeleton|   ✅   | Étape 3.                                                   |
+| Schéma DB    |   ✅   | 36 tables + 119 policies RLS + bucket avatars + RPC T99CP. |
+| Auth         |   ✅   | Étape 5 + étape 8 (OAuth Google/Instagram + magic link).   |
+| Profil       |   ✅   | Étape 6.                                                   |
+| Adhésion     |   ✅   | Étape 7 — Stripe Checkout + webhook + JoinPage.            |
+| Pétitions    |   ⬜   | Sprint 2 (étape 9).                                        |
+
+### Prochaines étapes (Sprint 2 — étape 9)
+
+Sprint 1 complet. On bascule sur le Sprint 2 (contenu militant) :
+
+1. **Étape 9 — Pétitions CRUD côté front** : listing public, fiche
+   détail, signature authentifiée, formulaire de création, soft-delete
+   et modération (statut `draft / pending / published / closed`).
+   Les tables et policies RLS existent déjà depuis l'étape 4
+   (`petitions`, `petition_signatures`).
+2. Puis : mobilisations (étape 10), campagnes (étape 11), sondages /
+   audit fin sprint 2 (étape 12).
+
+---
+
+## Étape 9 — Sprint 2 / Pétitions CRUD côté front ✅
+
+**Branche** : `claude/review-project-rules-6SadH` (l'étape 8 a été mergée
+depuis `claude/review-project-rules-BqjpH` @ `600287c` au début de cette
+session).
+
+### Pré-requis exécutés
+
+- `git fetch origin claude/review-project-rules-BqjpH` puis
+  `git merge --no-ff 600287c` pour récupérer le tip de l'étape 8
+  (OAuth + magic link + callback).
+- `cd web && npm install --legacy-peer-deps` (lockfile non versionné +
+  conflit `eslint-plugin-jsx-a11y` ↔ ESLint 10).
+
+### Module `web/src/lib/petitions.ts`
+
+API typée intégralement via `Database['public']['Tables']['petitions']`
+et `Database['public']['Tables']['signatures']`. Toutes les fonctions
+renvoient `{ data | signed, error: PostgrestError | null }` pour partager
+le mapper FR `postgrestErrorMessage`.
+
+| Fonction                      | Rôle                                                                 |
+| ----------------------------- | -------------------------------------------------------------------- |
+| `listPetitions(params)`       | Listing public (status='published' par défaut) trié par compteur     |
+| `getPetition(slug)`           | Lecture par slug (maybeSingle → 404 silencieux)                      |
+| `createPetition(input)`       | Validation FR + slugify + insert avec retry slug-collision (jusqu'à 5)|
+| `signPetition(pid, uid)`      | Insert dans `signatures` (RLS authenticated_self)                    |
+| `unsignPetition(pid, uid)`    | Delete RGPD (1 user / 1 pétition)                                    |
+| `hasUserSigned(pid, uid)`     | Single-row check via maybeSingle                                     |
+| `listPetitionSignatures(pid)` | Liste anonymisable des signataires (top 20)                          |
+| `slugify(input)`              | Port TS de `public.slugify(text)` — usable côté front sans round-trip|
+| `validatePetitionInput(in)`   | Validation pure (titre 8–80, résumé 40–240, body ≥ 200, target 100–1M)|
+
+### Hooks
+
+- `web/src/hooks/usePetitions.ts` : listing avec filtres `search`,
+  `category`, `status`, `limit`. Refetch automatique quand le `filterKey`
+  (JSON.stringify) change. Pattern « set state during render » + reset
+  + `queueMicrotask` repris de `useAdhesion` pour respecter
+  `react-hooks/set-state-in-effect`.
+- `web/src/hooks/usePetition.ts` : fiche détail par slug + check
+  `hasUserSigned` en parallèle quand `userId` est fourni. Status UI étendu
+  avec `notfound` (data=null sur slug) → la page redirige vers `/petitions`.
+
+### Pages
+
+- `web/src/pages/PetitionsPage.tsx` : hero + barre de recherche + select
+  catégorie + bouton « Créer une pétition ». Cards `PetitionCard` avec
+  compteur dénormalisé + barre de progression rose
+  (`var(--mn-gradient)`). État vide + erreurs Postgrest mappées en FR.
+- `web/src/pages/PetitionDetailPage.tsx` : fiche complète avec bouton
+  signer / retirer signature. Utilisateur anonyme → CTA
+  « Se connecter pour signer » avec `?auth=login&next=...`. Compteur live
+  via `refresh()` après chaque action. `Navigate replace` vers
+  `/petitions` quand le slug n'existe pas (`status === 'notfound'`).
+- `web/src/pages/PetitionCreatePage.tsx` : formulaire avec validation
+  client (mêmes seuils que `validatePetitionInput`). Réussite → redirige
+  vers la fiche `/petitions/<slug>`. La page est protégée par
+  `RequireAuth` dans le router.
+
+### Router
+
+3 nouvelles routes dans `web/src/router.tsx` :
+
+| URL                  | Composant              | Garde         |
+| -------------------- | ---------------------- | ------------- |
+| `/petitions`         | `PetitionsPage`        | aucune        |
+| `/petitions/new`     | `PetitionCreatePage`   | `RequireAuth` |
+| `/petitions/:slug`   | `PetitionDetailPage`   | aucune        |
+
+### Schéma SQL — `db/schema.sql`
+
+Section 4 mise à jour (idempotente) :
+
+- Colonne `petitions.signature_count integer not null default 0
+  check (signature_count >= 0)` ajoutée à la définition ; et complétée
+  via `alter table … add column if not exists` + `add constraint …`
+  pour les bases déjà initialisées avec l'ancien schéma.
+- Index `petitions_status_idx` ajouté (les listings filtrent toujours
+  par status).
+- Section 4.b : fonction `public.touch_petition_signature_count()` +
+  triggers `signatures_count_inc` (AFTER INSERT) et `signatures_count_dec`
+  (AFTER DELETE). Le décrément utilise `greatest(signature_count - 1, 0)`
+  pour respecter le `CHECK >= 0` en cas de désynchronisation.
+- Section 4.c : fonction `public.slugify(text)` (immutable + strict)
+  qui translate les accents latins courants sans dépendance à l'extension
+  `unaccent`, puis collapse `[^a-z0-9]+ → '-'`, puis trim. Cas de test
+  documentés en commentaire SQL.
+- `web/src/types/database.ts` patché à la main : ajout de
+  `signature_count` aux Row/Insert/Update de `petitions`, et ajout de
+  `slugify` dans `Functions`.
+
+### Icônes ajoutées (`web/src/components/icons.tsx`)
+
+5 nouvelles icônes SVG (currentColor) : `IconFlame`, `IconPen`,
+`IconSearch`, `IconArrowLeft`, `IconUsers`.
+
+### Tests (44 nouveaux, total 127)
+
+| Fichier                                         | Cas | Couverture                                                          |
+| ----------------------------------------------- | --: | ------------------------------------------------------------------- |
+| `src/lib/petitions.test.ts`                     |  23 | slugify (3), validate (5), listPetitions (4), getPetition (2), createPetition (4), signPetition (2), unsignPetition (1), hasUserSigned (2) |
+| `src/hooks/usePetitions.test.tsx`               |   3 | mount + refetch sur changement filterKey + état erreur              |
+| `src/hooks/usePetition.test.tsx`                |   4 | anonymous (signed=false), notfound, signed=true, refresh           |
+| `src/pages/PetitionsPage.test.tsx`              |   5 | rendu listing, état vide, soumission recherche, filtre catégorie, erreur RLS |
+| `src/pages/PetitionDetailPage.test.tsx`         |   5 | rendu fiche, anonymous → lien login, sign → refresh, unsign, 404 → redirect |
+| `src/pages/PetitionCreatePage.test.tsx`         |   4 | rendu formulaire, validation FR, submit valide → redirect, erreur 42501 |
+
+Mocks Supabase :
+
+- Pour `petitions.test.ts`, le builder est « thenable » : la fonction
+  `resolveChain(chain, result)` mock `.then` pour faire passer
+  `await query` proprement. Les chaînes terminées par `.maybeSingle()`
+  utilisent toujours `.mockResolvedValueOnce()`.
+- Pour les hooks et pages, `vi.importActual` puis surcharge fonction par
+  fonction (pattern repris de `useAdhesion.test.tsx`) — préserve les
+  constantes (`PETITION_CATEGORIES`, seuils de validation) tout en
+  isolant les appels réseau.
+
+### Vérifications passées
+
+- `npm run typecheck` : ✅ aucune erreur
+- `npm run lint` : ✅ 0 problème
+- `npm test -- --run` : ✅ 127/127 tests passent (19 fichiers)
+- `npm run build` : ✅ build OK (`dist/` ~ 295 kB JS, 1.09 kB CSS)
+- `npm run format:check` : ✅ tous les fichiers conformes
+
+### Décisions / arbitrages
+
+- **Slug auto, pas de saisie utilisateur** : le slug est généré à partir
+  du titre via la fonction TS `slugify()`. En cas de collision (code
+  Postgrest 23505 sur `petitions_slug_key`), on retente avec suffixe
+  `-2`, `-3`, … jusqu'à 5. Au-delà, on renvoie une erreur explicite
+  (`PETITION_SLUG_COLLISION`) qui invite à modifier le titre.
+- **Compteur dénormalisé `signature_count`** : maintenu via trigger
+  Postgres → aucune logique applicative ne touche le compteur. Pour
+  rester cohérent avec la sémantique « 1 user / 1 pétition », l'unicité
+  est garantie par la contrainte `unique (petition_id, user_id)` côté
+  `signatures` (déjà présente à l'étape 4).
+- **Modération** : le statut `published` par défaut autorise tout
+  utilisateur authentifié à publier instantanément. La modération a
+  posteriori reste prévue côté admin (Sprint 5) — `petitions_select_public`
+  ne sert que les `status='published'` aux anonymes (sinon visible par
+  l'auteur ou un admin uniquement).
+- **Public vs privé des signataires** : la table `signatures` est
+  lisible publiquement (compteur + display_name via jointure facultative)
+  ; la liste affichée côté UI sera anonymisée (initiales) lors de l'étape
+  ultérieure. Pour l'instant la fonction `listPetitionSignatures` est
+  exposée mais non encore branchée sur la fiche détail — la liste
+  publique des signataires viendra avec les commentaires / réactions
+  (Sprint 4 réseau social).
+- **Recherche** : `ilike` sur `title` + `summary`. Les méta-caractères
+  `% _ ,` sont échappés côté front avant injection dans `.or()`. Sur
+  gros volume on basculera sur `tsvector` + index GIN (Sprint 6 perf).
+- **Filtre `status`** : exposé dans `ListPetitionsParams` mais limité à
+  `published` côté UI pour l'instant. Quand la modération arrivera, on
+  ajoutera un onglet « brouillons » dans le profil.
+- **i18n** : tous les messages utilisateurs sont déjà en FR (alignés
+  sur `postgrestErrorMessage`). Le projet ne charge pas de lib i18n
+  pour l'instant (cf. HANDOFF §5).
+
+### Prochaines étapes (étape 10)
+
+1. Mobilisations CRUD (port du prototype Pages_Services.jsx, mêmes
+   patterns que pétitions — table `mobilizations` + `participations`).
+2. Suivi RGPD : ajouter une bannière « contenus créés visibles
+   publiquement » sur la page de création (étape 12 — audit fin sprint 2).
+3. Branchement admin pour modération a posteriori (Sprint 5).
+4. Réutiliser `slugify()` côté front sur mobilizations / articles
+   (mêmes patterns d'unicité avec retry).
+
+---
+
+## Étape 10 — Sprint 2 / Mobilisations CRUD côté front ✅
+
+**Branche** : `claude/read-project-rules-IyheS` (l'étape 9 a été mergée
+depuis `claude/review-project-rules-6SadH` @ `b0ec67b` au début de
+cette session).
+
+### Pré-requis exécutés
+
+- `git fetch origin claude/review-project-rules-6SadH` puis
+  `git merge --no-ff b0ec67b` pour récupérer le tip de l'étape 9
+  (pétitions CRUD côté front).
+- `cd web && npm install --legacy-peer-deps` (lockfile non versionné +
+  conflit `eslint-plugin-jsx-a11y` ↔ ESLint 10).
+
+### Module `web/src/lib/slug.ts` (factorisation)
+
+`slugify()` extraite de `petitions.ts` vers un module dédié partageable
+par tous les modules de contenu militant (pétitions, mobilisations,
+articles à venir). `petitions.ts` re-exporte `slugify` pour garder la
+compatibilité avec les imports existants (tests + pages).
+
+### Module `web/src/lib/mobilizations.ts`
+
+API typée intégralement via `Database['public']['Tables']['mobilizations']`
+et `Database['public']['Tables']['participations']`. Toutes les fonctions
+renvoient `{ data | rsvp, error: PostgrestError | null }` pour partager
+le mapper FR `postgrestErrorMessage`.
+
+| Fonction                          | Rôle                                                                 |
+| --------------------------------- | -------------------------------------------------------------------- |
+| `listMobilizations(params)`       | Listing public (status='published' par défaut) trié par `starts_at` ASC |
+| `getMobilization(slug)`           | Lecture par slug (maybeSingle → 404 silencieux)                       |
+| `createMobilization(input)`       | Validation FR + slugify + insert avec retry slug-collision (jusqu'à 5)|
+| `rsvpMobilization(mid, uid)`      | Insert dans `participations` (RLS authenticated_self)                 |
+| `cancelRsvp(mid, uid)`            | Delete RGPD (1 user / 1 mobilisation)                                 |
+| `hasUserRsvp(mid, uid)`           | Single-row check via maybeSingle                                      |
+| `validateMobilizationInput(in)`   | Validation pure (titre 8–80, résumé 40–240, body ≥ 100 si non vide,  |
+|                                   | ville 2–80, `startsAt` valide, `endsAt` ≥ `startsAt` si fourni)       |
+
+Constantes exportées : `MOBILIZATION_TITLE_MIN/MAX`,
+`MOBILIZATION_SUMMARY_MIN/MAX`, `MOBILIZATION_BODY_MIN`,
+`MOBILIZATION_CITY_MIN/MAX`. Filtres supportés sur `listMobilizations` :
+`status`, `search`, `city` (ilike), `startsAfter`/`startsBefore` (ISO),
+`limit`.
+
+### Helper `web/src/lib/mobilizationFormat.ts`
+
+Trois formatters Intl FR (`longDateFormatter`, `shortDateFormatter`,
+`timeFormatter`) + `formatMobilizationDate(iso, 'long' | 'short')` +
+`formatMobilizationTime(iso)`. Placé dans `lib/` (et non dans la page)
+pour respecter la règle ESLint `react-refresh/only-export-components`
+— un fichier de page ne doit exporter que des composants.
+
+### Hooks
+
+- `web/src/hooks/useMobilizations.ts` : listing avec filtres `search`,
+  `city`, `startsAfter`, `startsBefore`, `limit`. Refetch automatique
+  quand le `filterKey` (JSON.stringify) change. Même pattern « set state
+  during render » + `queueMicrotask` que `usePetitions`.
+- `web/src/hooks/useMobilization.ts` : fiche détail par slug + check
+  `hasUserRsvp` en parallèle quand `userId` est fourni. Status UI étendu
+  avec `notfound` (data=null sur slug) → la page redirige vers
+  `/mobilizations`.
+
+### Pages
+
+- `web/src/pages/MobilizationsPage.tsx` : hero + barre de recherche +
+  filtre ville (input texte) + filtre date « à partir du » (input
+  date) + bouton « Créer un événement ». Cards `MobilizationCard` avec
+  date courte FR, ville, compteur d'inscrits. État vide + erreurs
+  Postgrest mappées en FR.
+- `web/src/pages/MobilizationDetailPage.tsx` : fiche complète avec
+  bouton « Je participe » / « me désinscrire ». Anonymes → CTA « Se
+  connecter pour participer » avec `?auth=login&next=...`. Compteur
+  live via `refresh()` après chaque action. Bouton « Partager » qui
+  bascule sur `navigator.share` (mobile) puis fallback
+  `navigator.clipboard.writeText`. Date longue FR via `Intl.DateTimeFormat`.
+  `isPast` calculé dans un `useEffect + queueMicrotask` pour éviter
+  `Date.now()` en pleine render (règle ESLint `react-hooks/purity`).
+- `web/src/pages/MobilizationCreatePage.tsx` : formulaire avec
+  validation client (mêmes seuils que `validateMobilizationInput`).
+  Date+heure séparées côté UI, recombinées en ISO côté soumission.
+  Réussite → redirige vers la fiche `/mobilizations/<slug>`. Protégée
+  par `RequireAuth` dans le router.
+
+### Router
+
+3 nouvelles routes dans `web/src/router.tsx` :
+
+| URL                    | Composant                | Garde         |
+| ---------------------- | ------------------------ | ------------- |
+| `/mobilizations`       | `MobilizationsPage`      | aucune        |
+| `/mobilizations/new`   | `MobilizationCreatePage` | `RequireAuth` |
+| `/mobilizations/:slug` | `MobilizationDetailPage` | aucune        |
+
+### Schéma SQL — `db/schema.sql`
+
+Section 5 mise à jour (idempotente) :
+
+- Colonne `mobilizations.participation_count integer not null default 0
+  check (participation_count >= 0)` ajoutée à la définition ;
+  complétée via `alter table … add column if not exists` +
+  `add constraint …` pour les bases déjà initialisées avec l'ancien
+  schéma.
+- Index `mobilizations_status_idx` et `mobilizations_city_idx` ajoutés
+  (les listings filtrent par status + city).
+- Section 5.b : fonction
+  `public.touch_mobilization_participation_count()` + triggers
+  `participations_count_inc` (AFTER INSERT) et `participations_count_dec`
+  (AFTER DELETE). Le décrément utilise
+  `greatest(participation_count - 1, 0)` pour respecter le `CHECK >= 0`.
+  Cas de test documentés en commentaire SQL (insert/delete + tentative
+  de doublon).
+- `web/src/types/database.ts` patché à la main : ajout de
+  `participation_count: number` aux Row/Insert/Update de `mobilizations`.
+
+### Icônes ajoutées (`web/src/components/icons.tsx`)
+
+3 nouvelles icônes SVG (currentColor) : `IconCalendar`, `IconPin`,
+`IconShare`. Toutes en `viewBox="0 0 24 24"`, stroke 2,
+`stroke-linecap/linejoin: round`.
+
+### Tests (48 nouveaux, total 175)
+
+| Fichier                                         | Cas | Couverture                                                          |
+| ----------------------------------------------- | --: | ------------------------------------------------------------------- |
+| `src/lib/slug.test.ts`                          |   4 | normalisation accents, trim tirets, casse+chiffres, chaîne vide     |
+| `src/lib/mobilizations.test.ts`                 |  24 | validate (8), listMobilizations (5), getMobilization (2), createMobilization (4), rsvpMobilization (2), cancelRsvp (1), hasUserRsvp (2) |
+| `src/hooks/useMobilizations.test.tsx`           |   3 | mount + refetch sur changement filterKey + état erreur              |
+| `src/hooks/useMobilization.test.tsx`            |   4 | anonymous (rsvp=false), notfound, rsvp=true, refresh                |
+| `src/pages/MobilizationsPage.test.tsx`          |   5 | rendu listing, état vide, soumission recherche, filtre ville, erreur RLS |
+| `src/pages/MobilizationDetailPage.test.tsx`     |   5 | rendu fiche+dates, anonymous → lien login, rsvp → refresh, cancel, 404 → redirect |
+| `src/pages/MobilizationCreatePage.test.tsx`     |   3 | validation FR, submit valide → redirect, erreur 42501               |
+
+Mocks Supabase :
+
+- `mobilizations.test.ts` : même builder « thenable »
+  (`resolveChain(chain, result)`) que pour pétitions, étendu avec
+  `ilike`, `gte`, `lte` pour couvrir tous les filtres.
+- Hooks et pages : `vi.importActual` puis surcharge fonction par
+  fonction — préserve les constantes (`MOBILIZATION_*`, types) tout
+  en isolant les appels réseau.
+
+### Vérifications passées
+
+- `npm run typecheck` : ✅ aucune erreur
+- `npm run lint` : ✅ 0 problème
+- `npm test -- --run` : ✅ 175/175 tests passent (26 fichiers)
+- `npm run build` : ✅ build OK (`dist/` ~ 295 kB JS, 1.09 kB CSS)
+- `npm run format:check` : ✅ tous les fichiers conformes
+
+### Décisions / arbitrages
+
+- **Date d'événement obligatoire** : la mobilisation a un sens
+  temporel fort (« quand a lieu la marche ? »). Le champ `startsAt`
+  est requis côté validation, contrairement aux pétitions qui n'ont
+  pas de date d'expiration explicite. `endsAt` reste facultatif.
+- **Formatage Intl FR** : utilisation de
+  `new Intl.DateTimeFormat('fr-FR', …)` avec trois variantes (long /
+  short / time) plutôt qu'une lib externe (date-fns, dayjs) — bundle
+  size + zéro dépendance. Les formatters sont instanciés une seule
+  fois au top du module.
+- **Partage de la fiche** : `navigator.share` (mobile / desktop
+  moderne) en priorité, fallback `navigator.clipboard.writeText` qui
+  copie l'URL canonique (`origin + pathname`). Un feedback éphémère
+  « Lien copié. » s'affiche à droite du bouton après succès.
+- **`isPast` calculé en effect** : Le linter
+  `react-hooks/purity` interdit `Date.now()` en pleine render. La
+  comparaison est portée par un `useState` + `useEffect +
+  queueMicrotask` (même pattern que `useMobilizations` /
+  `useMobilization`). Conséquence : `isPast` reste `false` pendant
+  un microtask au mount — acceptable pour un état CTA (le bouton
+  passe en `disabled` juste après la frame initiale).
+- **Pas d'emojis** : aucun emoji dans le code TS — toutes les
+  icônes passent par `IconCalendar`, `IconPin`, `IconShare`,
+  `IconUsers`, etc. (currentColor).
+- **Recherche par ville** : `ilike` exact (sans wildcard) côté
+  Postgres. À surveiller : on bascule sur `tsvector` + index GIN
+  (Sprint 6 perf) si on veut une recherche libre sur ville+adresse.
+- **Compteur dénormalisé `participation_count`** : maintenu via
+  trigger Postgres (cf. section 5.b de `db/schema.sql`). La
+  contrainte `unique (mobilization_id, user_id)` (déjà présente à
+  l'étape 4) empêche les doublons.
+- **Body facultatif** : la mobilisation peut tenir uniquement avec
+  un résumé (cas d'une marche simple « Le 1er mai à République,
+  14h »). La validation ne refuse qu'un body trop court si l'utilisateur
+  l'a saisi (≥ 100 caractères). Sinon body=null.
+
+### Prochaines étapes (étape 11)
+
+1. Sondages CRUD (port du prototype `Pages_Services.jsx` /
+   `Pages_Home.jsx`, table `polls` + `poll_options` + `votes` —
+   mêmes patterns que pétitions / mobilisations).
+2. Campagnes CRUD (table `campaigns` + `campaign_actions`) — peut
+   être groupé avec sondages ou faire l'objet d'une étape 12.
+3. Audit RGPD fin Sprint 2 (étape 13) : bannière « contenus
+   créés visibles publiquement », CGU minimales, page « Mentions
+   légales ».
+4. Sprint 3 (services communautaires) — hébergement, covoiturage,
+   marketplace, prêt, jardins, SEL, cagnottes : à attaquer une fois
+   le Sprint 2 fini.
+
+---
+
+## Prompt pour la session N+4 (étape 10)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD).
+> 2. `HANDOFF.md` §3 (architecture pages) + §7.2 (tables `mobilizations`,
+>    `participations`) + §10 Sprint 2.
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 9 ✅ — étape 10 à faire).
+> 4. `Pages_Services.jsx` / racine prototype : composants
+>    `MobilizationsPage` / `MobilizationDetail`. Chercher `Mobilization`
+>    / `participations` / `rsvp`.
+> 5. `web/src/lib/petitions.ts`, `web/src/hooks/usePetitions.ts`,
+>    `web/src/hooks/usePetition.ts`, `web/src/pages/PetitionsPage.tsx`,
+>    `web/src/pages/PetitionDetailPage.tsx`,
+>    `web/src/pages/PetitionCreatePage.tsx` — patterns à reproduire pour
+>    `mobilizations`.
+> 6. `db/schema.sql` §5 — tables `mobilizations` + `participations` +
+>    policies RLS. Vérifier que toutes les colonnes nécessaires sont
+>    présentes (compteur dénormalisé `participation_count`, trigger
+>    d'incrément, contraintes d'unicité par `(mobilization_id, user_id)`).
+>
+> **État actuel à la fin de l'étape 9** (tip
+> `claude/review-project-rules-6SadH`, commit
+> `feat(petitions): step 9 — CRUD pétitions + listing + fiche + création`) :
+>
+> - Prototype intact : `project/app/Maintenant.html` + JSX racine.
+> - `web/` : Vite + React 19 + TS 6 strict, **127 tests verts**
+>   (44 nouveaux à l'étape 9), ESLint flat, Vitest, Prettier, build
+>   295 kB.
+> - Supabase : `db/schema.sql` à ~1 740 lignes (36 tables + 119 policies
+>   RLS + trigger `handle_new_user` + bucket `avatars` + RPC T99CP +
+>   compteur `signature_count` + `slugify(text)`), `web/src/types/database.ts`
+>   à ~1 715 lignes.
+> - Auth complète : signup/login/logout/reset password + OAuth Google +
+>   Instagram + magic link + callback page `/auth/callback`.
+> - Profil + adhésion Stripe + RPC T99CP opérationnels.
+> - **Pétitions complètes** : listing, fiche, signer/retirer signature,
+>   création (RequireAuth) — Sprint 2 démarré.
+>
+> **CONTEXTE D'OUVERTURE — à exécuter avant toute autre action** :
+>
+> 1. `git fetch origin claude/review-project-rules-6SadH`
+>    (retry network 2s/4s/8s/16s) pour récupérer le tip de l'étape 9.
+> 2. `git merge --no-ff <sha-tip-de-6SadH>` pour intégrer le commit
+>    `feat(petitions): step 9 …`. En cas d'absence,
+>    `git checkout origin/claude/review-project-rules-6SadH -- .` puis
+>    commit.
+> 3. `cd web && npm install --legacy-peer-deps` (lockfile non versionné,
+>    option requise à cause d'`eslint-plugin-jsx-a11y` ↔ ESLint 10).
+>    À réutiliser pour tout nouvel `npm install` dans cette session.
+>
+> **ÉTAPE 10 à exécuter — Mobilisations CRUD côté front (Sprint 2)** :
+>
+> 1. **Module `web/src/lib/mobilizations.ts`** : fonctions typées via
+>    `Database` (`Tables<'mobilizations'>`, `Tables<'participations'>`) :
+>    - `listMobilizations({ status, search, city, limit })` — listing
+>      paginé (status public uniquement par défaut), trié par
+>      `starts_at` ASC.
+>    - `getMobilization(slug)` — fiche détail.
+>    - `createMobilization(input)` — insert + slug auto via
+>      `slugify()` (déjà posé à l'étape 9, à factoriser dans
+>      `web/src/lib/slug.ts` si tu veux le partager avec pétitions).
+>    - `rsvpMobilization(mobilizationId)` — insert dans
+>      `participations` (RLS authenticated_self).
+>    - `cancelRsvp(mobilizationId)` — delete via RLS owner.
+>    - `hasUserRsvp(mobilizationId, userId)` — single-row check.
+> 2. **Trigger SQL `update_mobilization_participation_count`** :
+>    si pas déjà présent dans `db/schema.sql`, ajouter un trigger
+>    AFTER INSERT/DELETE sur `participations` qui met à jour
+>    `mobilizations.participation_count`. Ajouter la colonne
+>    `participation_count integer not null default 0 check (>= 0)`
+>    à la table `mobilizations` (idempotent via
+>    `alter table … add column if not exists`). Documenter les cas
+>    de test SQL dans `db/schema.sql` (commentaires).
+> 3. **Hooks `web/src/hooks/useMobilizations.ts` +
+>    `useMobilization.ts`** : copier le pattern `usePetitions` /
+>    `usePetition`.
+> 4. **Pages** :
+>    - `web/src/pages/MobilizationsPage.tsx` — listing avec recherche +
+>      filtres (ville, fourchette de dates). Port TS strict du prototype.
+>    - `web/src/pages/MobilizationDetailPage.tsx` — fiche avec bouton
+>      « Je participe » (RequireAuth via redirect), compteur live, dates
+>      formatées en FR (`Intl.DateTimeFormat`), partage du lien.
+>    - `web/src/pages/MobilizationCreatePage.tsx` — formulaire création
+>      (RequireAuth), validation côté client (titre 8–80, description
+>      ≥ 100, date d'événement obligatoire, ville obligatoire). Réussite
+>      → redirige vers la fiche.
+> 5. **Router** : ajouter les routes `/mobilizations/:slug`,
+>    `/mobilizations/new`, et brancher `RequireAuth` sur la création.
+> 6. **Régénérer `web/src/types/database.ts`** si tu touches
+>    `db/schema.sql` (au minimum patcher à la main `mobilizations.Row`
+>    pour ajouter `participation_count`).
+> 7. **Icônes SVG** à ajouter si besoin : `IconCalendar`, `IconPin`,
+>    `IconShare` — toujours `currentColor`, pas d'emoji.
+> 8. **Tests** (Vitest + Testing Library + mocks supabase) :
+>    - `src/lib/mobilizations.test.ts` (≥ 8 cas) — listMobilizations
+>      (filtre city, filtre dates, erreur 42501), getMobilization
+>      (succès + 404), createMobilization (validation, succès, retry
+>      slug-collision), rsvpMobilization (succès + doublon),
+>      cancelRsvp, hasUserRsvp.
+>    - `src/hooks/useMobilizations.test.tsx` (≥ 3 cas).
+>    - `src/hooks/useMobilization.test.tsx` (≥ 3 cas).
+>    - `src/pages/MobilizationsPage.test.tsx` (≥ 3 cas) — rendu listing,
+>      filtres, état vide.
+>    - `src/pages/MobilizationDetailPage.test.tsx` (≥ 4 cas) — rendu
+>      fiche, bouton RSVP (non auth → redirige login, auth → appelle
+>      rsvpMobilization), compteur mis à jour, dates formatées.
+>    - `src/pages/MobilizationCreatePage.test.tsx` (≥ 3 cas) —
+>      validation, submit, erreur Postgrest mappée FR.
+>    Objectif : ≥ **150 tests verts** (127 existants + ≥ 23 nouveaux).
+> 9. **Mettre à jour `HANDOFF-PROGRESS.md`** : étape 10 ✅ avec sections
+>    « Module mobilizations.ts », « hooks », « pages », « trigger
+>    participation_count », « décisions (date obligatoire, formatage
+>    Intl, partage) », « prochaines étapes (étape 11 — campagnes ou
+>    sondages, fin Sprint 2) ». Cocher la ligne 10 et créer une ligne 11
+>    si manquante.
+> 10. **Écrire le prompt de la session N+5 (étape 11)** dans
+>     `HANDOFF-PROGRESS.md` (en bas du fichier ou en annexe), section
+>     `## Prompt pour la session N+5 (étape 11)` reprenant la même
+>     structure (contexte d'ouverture, état actuel, étape à exécuter,
+>     contraintes, fallback Docker, **double consigne récursive**).
+>     L'étape 11 cible : **campagnes ou sondages CRUD** (port du
+>     prototype, mêmes patterns que pétitions / mobilisations).
+> 11. **Coller le prompt de l'étape 11 dans la conversation finale**,
+>     en plus de l'avoir écrit dans `HANDOFF-PROGRESS.md` : à la fin de
+>     la session, le message Claude doit contenir littéralement le bloc
+>     du prompt (citation `>` ou code-fence), pour que l'utilisateur
+>     puisse le copier d'un coup. Cette consigne fait partie de la
+>     boucle récursive : tant que le Sprint 2 (contenu militant —
+>     pétitions, mobilisations, campagnes, sondages) n'est pas complet,
+>     le prompt généré doit aussi être collé dans la réponse finale de
+>     la session.
+> 12. **Commit** :
+>     `feat(mobilizations): step 10 — CRUD mobilisations + listing + fiche + création`.
+>     **Push** sur la branche imposée par l'harness avec
+>     `git push -u origin <branch>`, retry sur erreurs réseau
+>     (2s/4s/8s/16s). Pas de PR sans demande explicite.
+>
+> **Contraintes** :
+>
+> - Ne pas toucher au prototype (`project/app/Maintenant.html` et JSX
+>   racine).
+> - TS strict + no `any` : tous les types Supabase via
+>   `web/src/types/database.ts` ou `@supabase/supabase-js`.
+> - **Aucune clé `service_role` dans `web/`** : tout passe par RLS et
+>   `VITE_SUPABASE_ANON_KEY`.
+> - Pas d'emojis dans le code TS ni dans les commits (utiliser SVG —
+>   `IconCalendar`, `IconPin`, `IconShare` à ajouter si besoin).
+> - Conserver les checks verts : `typecheck`, `lint`, `test`, `build`,
+>   `format:check`. Lancer les 5 en fin de session avant de committer.
+> - Si Docker n'est pas dispo dans la sandbox, ne pas tenter
+>   `supabase start` ; les mobilisations se testent via mocks Vitest.
+>   Pour les vérifs SQL (trigger `participation_count`), documenter en
+>   commentaire dans `db/schema.sql` et tester avec un PG local si
+>   possible (`service postgresql start` + `psql -f db/schema.sql`).
+>
+> **DOUBLE CONSIGNE RÉCURSIVE** :
+>
+> 1. Écrire le prompt de l'étape 11 dans `HANDOFF-PROGRESS.md` avant
+>    le commit final.
+> 2. Coller le prompt de l'étape 11 dans la conversation (réponse
+>    finale Claude), pas seulement dans le fichier journal.
+>
+> Cette boucle s'arrête uniquement quand le Sprint 2 (contenu militant
+> — pétitions, mobilisations, campagnes, sondages) est complet, point
+> auquel le prompt généré peut basculer sur le Sprint 3 (services
+> communautaires).
+
+---
+
+## Prompt pour la session N+3 (étape 9)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS
+>    / snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD).
+> 2. `HANDOFF.md` §3 (architecture pages) + §7.2 (tables `petitions`,
+>    `petition_signatures`) + §10 Sprint 2 (contenu militant).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 8 ✅ — étape 9 à faire).
+> 4. `Pages_Services.jsx` / racine prototype : maquette pétitions
+>    (formulaire création, fiche détail, listing). Chercher `Petition`
+>    / `PetitionsPage` / `signPetition`.
+> 5. `web/src/lib/auth.ts`, `web/src/lib/profile.ts`,
+>    `web/src/lib/membership.ts`, `web/src/lib/postgrestError.ts`,
+>    `web/src/pages/PetitionsPage.tsx` (placeholder posé à l'étape 3),
+>    `web/src/router.tsx`.
+> 6. `db/schema.sql` §7 — tables `petitions` + `petition_signatures` +
+>    policies RLS. Vérifier que toutes les colonnes nécessaires sont
+>    présentes (compteur dénormalisé `signature_count`, trigger
+>    d'incrément, contraintes d'unicité par `(petition_id, user_id)`).
+>
+> **État actuel à la fin de l'étape 8** (tip de cette branche, commit
+> `feat(auth): step 8 — OAuth Google + Instagram + magic link + callback`) :
+>
+> - Prototype intact : `project/app/Maintenant.html` + JSX racine.
+> - `web/` : Vite + React 19 + TS 6 strict, **83 tests verts** (10
+>   nouveaux à l'étape 8), ESLint flat, Vitest, Prettier, build 295 kB.
+> - Supabase : `db/schema.sql` à 1 605 lignes (36 tables + 119 policies
+>   RLS + trigger `handle_new_user` + bucket avatars + RPC T99CP),
+>   `web/src/types/database.ts` à 1 699 lignes.
+> - Auth complète : signup/login/logout/reset password + OAuth Google
+>   + Instagram + magic link + callback page `/auth/callback`.
+> - Profil + adhésion Stripe + RPC T99CP opérationnels.
+> - Sprint 1 **complet**.
+>
+> **CONTEXTE D'OUVERTURE — à exécuter avant toute autre action** :
+>
+> 1. `git fetch origin <branche-précédente>` (retry network 2s/4s/8s/16s)
+>    pour récupérer le tip de l'étape 8.
+> 2. `git merge --no-ff <sha-tip>` pour intégrer le commit
+>    `feat(auth): step 8 …`. En cas d'absence,
+>    `git checkout origin/<branche-précédente> -- .` puis commit.
+> 3. `cd web && npm install --legacy-peer-deps` (lockfile non versionné,
+>    option requise à cause d'`eslint-plugin-jsx-a11y` ↔ ESLint 10). À
+>    réutiliser pour tout nouvel `npm install` dans cette session.
+>
+> **ÉTAPE 9 à exécuter — Pétitions CRUD côté front (Sprint 2)** :
+>
+> 1. **Module `web/src/lib/petitions.ts`** : fonctions typées via
+>    `Database` (`Tables<'petitions'>`, `Tables<'petition_signatures'>`) :
+>    - `listPetitions({ status, search, limit })` — listing paginé
+>      (statut public uniquement par défaut).
+>    - `getPetition(slug)` — fiche détail (jointure
+>      `petition_signatures` pour stats).
+>    - `createPetition(input)` — insert + slug auto via SQL function
+>      `slugify()` (ajouter cette fonction au schéma si absente).
+>    - `signPetition(petitionId, comment?)` — insert dans
+>      `petition_signatures` (RLS authenticated_self).
+>    - `unsignPetition(petitionId)` — delete via RLS owner.
+>    - `hasUserSigned(petitionId, userId)` — single-row check.
+> 2. **Hooks `web/src/hooks/usePetitions.ts` + `usePetition.ts`** :
+>    wrappers Zustand ou React Query (à choisir — le projet n'a pas
+>    encore React Query, donc rester sur Zustand ou un simple useState
+>    + useEffect).
+> 3. **Pages** :
+>    - `web/src/pages/PetitionsPage.tsx` — listing avec recherche +
+>      filtres (statut, ville, thématique). Port TS strict du
+>      prototype.
+>    - `web/src/pages/PetitionDetailPage.tsx` — fiche pétition avec
+>      bouton « Signer » (authenticated only via `RequireAuth`),
+>      compteur live, liste des signataires (anonymisée si non public).
+>    - `web/src/pages/PetitionCreatePage.tsx` — formulaire création
+>      (RequireAuth), validation côté client (titre 8–80 caractères,
+>      description ≥ 200 caractères, image optionnelle).
+> 4. **Router** : ajouter les routes `/petitions/:slug`,
+>    `/petitions/new`, et brancher `RequireAuth` sur la création.
+> 5. **Trigger SQL `update_petition_signature_count`** : si pas déjà
+>    présent dans `db/schema.sql`, ajouter un trigger AFTER
+>    INSERT/DELETE qui met à jour `petitions.signature_count`. Sinon
+>    documenter dans HANDOFF-PROGRESS.md que c'est déjà en place.
+> 6. **Tests** (Vitest + Testing Library + mocks supabase) :
+>    - `src/lib/petitions.test.ts` (≥ 6 cas) — listPetitions,
+>      getPetition (succès + 404), createPetition, signPetition,
+>      unsignPetition, hasUserSigned.
+>    - `src/hooks/usePetitions.test.tsx` (≥ 2 cas).
+>    - `src/pages/PetitionsPage.test.tsx` (≥ 3 cas) — rendu listing,
+>      filtres, état vide.
+>    - `src/pages/PetitionDetailPage.test.tsx` (≥ 4 cas) — rendu fiche,
+>      bouton signer (non auth → redirige login, auth → appelle
+>      `signPetition`), compteur mis à jour.
+>    - `src/pages/PetitionCreatePage.test.tsx` (≥ 3 cas) — validation,
+>      submit, erreur Postgrest mappée FR.
+>    Objectif : **≥ 100 tests verts** (83 existants + ≥ 18 nouveaux).
+> 7. **Mettre à jour `HANDOFF-PROGRESS.md`** : étape 9 ✅ avec sections
+>    « Module petitions.ts », « hooks », « pages », « trigger
+>    signature_count », « décisions (slug auto, modération, public vs
+>    privé) », « prochaines étapes (étape 10 — mobilisations) ». Cocher
+>    la ligne 9 et créer une ligne 10 si manquante.
+> 8. **Écrire le prompt de la session N+4 (étape 10)** dans
+>    `HANDOFF-PROGRESS.md` (en bas du fichier ou en annexe), section
+>    `## Prompt pour la session N+4 (étape 10)` reprenant la même
+>    structure (contexte d'ouverture, état actuel, étape à exécuter,
+>    contraintes, fallback Docker, **consigne récursive**). L'étape 10
+>    cible : **mobilisations CRUD** (port du prototype, mêmes patterns
+>    que pétitions).
+> 9. **Coller le prompt de l'étape 10 dans la conversation finale**, en
+>    plus de l'avoir écrit dans HANDOFF-PROGRESS.md : à la fin de la
+>    session, le message Claude doit contenir littéralement le bloc du
+>    prompt (citation `>` ou code-fence), pour que l'utilisateur
+>    puisse le copier d'un coup. Cette consigne fait partie de la
+>    boucle récursive : tant que le Sprint 2 n'est pas complet, le
+>    prompt généré (étape 11, 12, …) doit aussi être collé dans la
+>    réponse finale de la session.
+> 10. **Commit** : `feat(petitions): step 9 — CRUD pétitions + listing +
+>     fiche + création`. Push sur la branche imposée par l'harness avec
+>     `git push -u origin <branch>`, retry sur erreurs réseau
+>     (2s/4s/8s/16s). Pas de PR sans demande explicite.
+>
+> **Contraintes** :
+>
+> - Ne pas toucher au prototype (`project/app/Maintenant.html` et JSX
+>   racine).
+> - TS strict + no `any` : tous les types Supabase via
+>   `web/src/types/database.ts` ou `@supabase/supabase-js`.
+> - **Aucune clé `service_role` dans `web/`** : tout passe par RLS et
+>   `VITE_SUPABASE_ANON_KEY`.
+> - Pas d'emojis dans le code TS ni dans les commits (utiliser SVG —
+>   `IconFlame`, `IconPen` à ajouter si besoin pour pétitions /
+>   création).
+> - Conserver les checks verts : `typecheck`, `lint`, `test`, `build`,
+>   `format:check`. Lancer les 5 en fin de session avant de committer.
+> - Si Docker n'est pas dispo dans la sandbox, ne pas tenter
+>   `supabase start` ; les pétitions se testent via mocks Vitest. Pour
+>   les vérifs SQL (slug, triggers), documenter en commentaire dans
+>   `db/schema.sql` et tester avec un PG local si possible (`service
+>   postgresql start` + `psql -f db/schema.sql`).
+> - **DOUBLE CONSIGNE RÉCURSIVE** :
+>   1. Écrire le prompt de l'étape 10 dans `HANDOFF-PROGRESS.md` avant
+>      le commit final.
+>   2. **Coller le prompt de l'étape 10 dans la conversation** (réponse
+>      finale Claude), pas seulement dans le fichier journal.
+>
+> Cette boucle s'arrête uniquement quand le Sprint 2 (contenu militant
+> — pétitions, mobilisations, campagnes, sondages) est complet, point
+> auquel le prompt généré peut basculer sur le Sprint 3 (services
+> communautaires).
+
+---
+
+## Prompt pour la session N+2 (étape 8)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness — typiquement
+> `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD).
+> 2. `HANDOFF.md` §5 (auth) et §10 Sprint 1 (OAuth final).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 7 ✅ — étape 8 à faire).
+> 4. `web/src/components/AuthModal.tsx`, `web/src/lib/auth.ts`,
+>    `web/src/router.tsx` — modules posés à l'étape 5–7.
+>
+> **État actuel à la fin de l'étape 7** (tip de `claude/review-project-setup-QwLHV`,
+> commit `feat(adhesion): step 7 — Stripe checkout + webhook + RPC T99CP + JoinPage`) :
+>
+> - Prototype intact : `project/app/Maintenant.html` + JSX racine.
+> - `web/` : Vite + React 19 + TS 6 strict, 73 tests verts, ESLint flat,
+>   Vitest, Prettier, build 295 kB.
+> - Supabase : `db/schema.sql` à 1 605 lignes (36 tables + 119 policies RLS
+>   + trigger `handle_new_user` + bucket `avatars` + 4 policies storage
+>   + RPC `credit_t99cp` / `debit_t99cp`), `web/src/types/database.ts`
+>   à 1 699 lignes (fonctions custom incluses).
+> - Auth applicative : `web/src/lib/auth.ts` (Zustand), `AuthModal` 3 écrans
+>   (login + signup + forgot), `RequireAuth`, `RootLayout` avec bouton
+>   login + menu utilisateur + profil.
+> - Profil : `web/src/lib/profile.ts`, `web/src/hooks/useProfile.ts`,
+>   `web/src/pages/ProfilePage.tsx` (lecture + édition + avatar), bucket
+>   Storage `avatars`.
+> - Adhésion : `web/src/lib/membership.ts`, `web/src/hooks/useAdhesion.ts`,
+>   `web/src/pages/JoinPage.tsx` (3 tiers + Stripe Checkout via Edge
+>   Function), `supabase/functions/create-checkout-session/` et
+>   `supabase/functions/stripe-webhook/`.
+>
+> **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
+>
+> 1. `git fetch origin claude/review-project-setup-QwLHV` (retry network
+>    2s/4s/8s/16s).
+> 2. `git merge --no-ff <tip-de-l-étape-7>` (récupérer le tip
+>    `feat(adhesion): step 7 …`). En cas d'absence,
+>    `git checkout origin/claude/review-project-setup-QwLHV -- .` puis
+>    commit.
+> 3. `cd web && npm install --legacy-peer-deps` (lockfile non versionné,
+>    option requise à cause d'`eslint-plugin-jsx-a11y` ↔ ESLint 10). À
+>    réutiliser pour tout nouvel `npm install` dans cette session.
+>
+> **ÉTAPE 8 à exécuter — OAuth Google + Instagram + magic link** :
+>
+> 1. **Page callback `/auth/callback`** : nouvelle route
+>    `web/src/pages/AuthCallbackPage.tsx` qui lit le code OAuth dans l'URL
+>    via `supabase.auth.exchangeCodeForSession(window.location.href)` et
+>    redirige vers `/profile` (ou `/?error=...` si erreur). Affiche un
+>    state intermédiaire « Connexion en cours… ». Brancher dans
+>    `web/src/router.tsx`.
+> 2. **Boutons OAuth dans `AuthModal.tsx`** : ajouter `IconGoogle`,
+>    `IconInstagram` à `web/src/components/icons.tsx` (SVG officiels
+>    multi-color OK, exception à la règle currentColor justifiée en
+>    commentaire). Trois boutons : « Continuer avec Google », « Continuer
+>    avec Instagram », « Lien magique par email ». Click Google →
+>    `supabase.auth.signInWithOAuth({ provider: 'google', options: {
+>    redirectTo: <origin>/auth/callback } })`. Idem Instagram (provider:
+>    `'instagram'`). Click magic link → mode dédié dans `AuthModal` qui
+>    appelle `signInWithMagicLink` (déjà exposé par le store).
+> 3. **Gestion des erreurs de consentement** : si OAuth retourne
+>    `provider_email_needs_verification` ou si l'utilisateur annule
+>    (`access_denied`), mapper l'erreur en FR dans `authErrorMessage`.
+> 4. **Module `web/src/lib/oauth.ts`** : `signInWithProvider(provider)`
+>    typé sur `'google' | 'instagram'`, retourne `{ error }` aligné sur
+>    les autres méthodes du store. Optionnel : passer par le store Zustand
+>    plutôt que par un module dédié si plus simple.
+> 5. **Tests Vitest** (≥ 8 nouveaux) :
+>    - `src/lib/oauth.test.ts` (≥ 3) — signInWithProvider Google +
+>      Instagram + erreur réseau.
+>    - `src/pages/AuthCallbackPage.test.tsx` (≥ 3) — code valide →
+>      redirige vers profile, code absent → message d'erreur, exchange en
+>      erreur → message FR mappé.
+>    - `src/components/AuthModal.test.tsx` (≥ 2 nouveaux cas) —
+>      bouton Google appelle signInWithOAuth, bouton magic link bascule
+>      en mode dédié + appelle `signInWithMagicLink`.
+> 6. **Mettre à jour `HANDOFF-PROGRESS.md`** : étape 8 ✅ avec sections
+>    « OAuth Google + Instagram », « Callback page », « magic link UI »,
+>    « décisions (provider id Instagram = `azure`/`facebook`?) »,
+>    « prochaines étapes (Sprint 2 — contenu militant : pétitions CRUD) ».
+>    Cocher la ligne 8 et créer une ligne 9 si manquante.
+> 7. **Écrire le prompt de la session N+3** dans `HANDOFF-PROGRESS.md`
+>    (en bas du fichier ou en annexe), section `## Prompt pour la
+>    session N+3 (étape 9)` reprenant la même structure (contexte
+>    d'ouverture, état actuel, étape à exécuter, contraintes, fallback
+>    Docker, consigne récursive). **L'étape 9 cible : Sprint 2 — pétitions
+>    CRUD côté front** (le Sprint 1 est complet à l'issue de l'étape 8).
+>    Cette consigne récursive doit être présente à chaque étape : tant
+>    que le Sprint 2 n'est pas complet, le journal auto-prépare la
+>    session suivante.
+> 8. **Coller le prompt de l'étape 9 dans la conversation finale**, en
+>    plus de l'avoir écrit dans `HANDOFF-PROGRESS.md` : à la fin de la
+>    session, le message Claude doit contenir littéralement le bloc du
+>    prompt (citation `>` ou code-fence), afin que l'utilisateur puisse le
+>    copier d'un coup pour lancer la session N+3 sans rouvrir le fichier.
+>    Cette consigne fait partie de la boucle récursive : tant que le
+>    Sprint 2 n'est pas complet, le prompt généré (étapes 10, 11, …) doit
+>    aussi être collé dans la réponse finale de la session.
+> 9. **Commit** : `feat(auth): step 8 — OAuth Google + Instagram + magic
+>    link + callback`. **Push** sur la branche imposée par l'harness avec
+>    `git push -u origin <branch>`, retry sur erreurs réseau
+>    (2s/4s/8s/16s). Pas de PR sans demande explicite.
+>
+> **Contraintes** :
+>
+> - Ne pas toucher au prototype (`project/app/Maintenant.html` et JSX racine).
+> - TS strict + no `any` : tous les types Supabase via `web/src/types/database.ts`
+>   ou `@supabase/supabase-js`.
+> - **Aucune clé `service_role` dans `web/`** : OAuth est géré côté
+>   Supabase Auth, le front n'a accès qu'à `VITE_SUPABASE_ANON_KEY`.
+> - **Aucune clé Google/Instagram secret dans `web/`** : les
+>   client-secret OAuth sont stockés dans la dashboard Supabase Auth
+>   uniquement.
+> - Pas d'emojis dans le code TS ni dans les commits (utiliser SVG —
+>   `IconGoogle`, `IconInstagram`, `IconLink` à ajouter).
+> - Conserver les checks verts : `typecheck`, `lint`, `test`, `build`,
+>   `format:check`. Lancer les 5 en fin de session avant de committer.
+> - Si Docker n'est pas dispo dans la sandbox, ne pas tenter
+>   `supabase start` ; OAuth se teste uniquement avec des mocks côté
+>   front (`supabase.auth.signInWithOAuth` mocké).
+>
+> Le prompt de l'étape 9 doit impérativement contenir la **même double
+> consigne récursive** :
+>
+> 1. « écrire le prompt de l'étape 10 dans `HANDOFF-PROGRESS.md` avant le
+>    commit final »,
+> 2. « **coller le prompt de l'étape 10 dans la conversation** (réponse
+>    finale Claude), pas seulement dans le fichier journal ».
+>
+> Cette boucle s'arrête uniquement quand le Sprint 2 (contenu militant —
+> pétitions, mobilisations, campagnes) est complet, point auquel le
+> prompt généré peut basculer sur le Sprint 3 (services communautaires).
+
+---
+
+## Prompt pour la session N+1 (étape 7)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness — typiquement
+> `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD).
+> 2. `HANDOFF.md` §6 (adhésion + T99CP), §7.2 (tables `adhesions`,
+>    `members`, `t99cp_transactions`), §10 Sprint 1 (T99CP wallet).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 6 ✅ — étape 7 à faire).
+> 4. `Theme.jsx` (prototype) — chercher `JoinPage` / tunnel adhésion pour
+>    récupérer la maquette.
+> 5. `Pages_Home.jsx` ou la racine du prototype — composants existants
+>    pour la page d'adhésion.
+> 6. `web/src/lib/auth.ts`, `web/src/lib/profile.ts`, `web/src/lib/supabase.ts`,
+>    `web/src/router.tsx`, `web/src/components/RequireAuth.tsx` — modules
+>    posés à l'étape 6.
+>
+> **État actuel à la fin de l'étape 6** (tip de `claude/review-project-setup-UbcCi`,
+> commit `feat(profile): step 6 …`) :
+>
+> - Prototype intact : `project/app/Maintenant.html` + JSX racine.
+> - `web/` : Vite + React 19 + TS 6 strict, router avec route protégée
+>   `/profile` (RequireAuth) et `/auth/reset-password`, ESLint flat,
+>   Vitest, Prettier.
+> - Supabase : schéma `db/schema.sql` à 1 488 lignes (36 tables + 119
+>   policies RLS + trigger `handle_new_user` + bucket `avatars` + 4
+>   policies storage), `web/src/types/database.ts` (1 674 lignes).
+> - Auth applicative : `web/src/lib/auth.ts` (Zustand), `AuthModal` 3 écrans,
+>   `RequireAuth`, RootLayout avec bouton login + menu utilisateur +
+>   profil.
+> - Profil : `web/src/lib/profile.ts`, `web/src/hooks/useProfile.ts`,
+>   `web/src/pages/ProfilePage.tsx` (lecture + édition + avatar),
+>   `web/src/lib/postgrestError.ts`, bucket Storage `avatars`.
+> - **50 tests verts** (smoke routing + auth + profil + reset password +
+>   RequireAuth).
+>
+> **CONTEXTE D'OUVERTURE — à exécuter avant toute autre action** :
+>
+> 1. `git fetch origin claude/review-project-setup-UbcCi`
+> 2. `git merge --no-ff <sha-tip-de-UbcCi>` (récupérer le tip actuel, qui
+>    doit pointer sur le commit `feat(profile): step 6 …`). En cas
+>    d'absence, `git checkout origin/claude/review-project-setup-UbcCi -- .`
+>    puis commit.
+> 3. `cd web && npm install --legacy-peer-deps` (lockfile non versionné,
+>    option requise à cause d'`eslint-plugin-jsx-a11y` ↔ ESLint 10). À
+>    réutiliser pour tout nouvel `npm install` dans cette session.
+>
+> **ÉTAPE 7 à exécuter — Adhésion Stripe (3 tiers) + RPC T99CP** :
+>
+> 1. **RPC SQL T99CP** : ajouter à `db/schema.sql` (nouvelle section 20)
+>    les fonctions `credit_t99cp(p_user uuid, p_amount integer, p_reason text)`
+>    et `debit_t99cp(p_user uuid, p_amount integer, p_reason text)`, toutes
+>    deux `SECURITY DEFINER` + `set search_path = public, pg_temp`. Le crédit
+>    insère dans `t99cp_transactions` avec `kind='credit'` puis met à jour
+>    `users.t99cp_balance` (atomique). Le débit vérifie d'abord
+>    `users.t99cp_balance >= p_amount` (sinon `raise exception 'insufficient_balance'`),
+>    insère `kind='debit'` et décrémente. `revoke all … from public` +
+>    `grant execute … to authenticated`. Le check positif sur
+>    `users.t99cp_balance` (déjà présent à l'étape 4) garantit le non-overflow.
+> 2. **Régénérer les types** : `node db/gen-types.mjs > web/src/types/database.ts`.
+>    Le générateur ne récupère pas encore les fonctions custom — étendre
+>    `Functions` dans le générateur pour inclure `credit_t99cp` / `debit_t99cp`
+>    avec `Args: { p_user: string; p_amount: number; p_reason: string }`
+>    et `Returns: void`.
+> 3. **Edge Function `create-checkout-session`** :
+>    `supabase/functions/create-checkout-session/index.ts` (Deno). Prend
+>    `{ tier: 'soutien' | 'engage' }`, lit `STRIPE_SECRET_KEY`,
+>    `STRIPE_PRICE_SOUTIEN`, `STRIPE_PRICE_ENGAGE`, et `SUPABASE_URL` depuis
+>    les env vars. Authentifie l'appelant via JWT (anon key → user id).
+>    Crée une Stripe Checkout session en mode `subscription`, success_url
+>    `/profile?adhesion=ok`, cancel_url `/join?canceled=1`. Retourne
+>    `{ url }`.
+> 4. **Edge Function `stripe-webhook`** :
+>    `supabase/functions/stripe-webhook/index.ts`. Vérifie la signature
+>    `Stripe.webhooks.constructEvent(body, sig, STRIPE_WEBHOOK_SECRET)`.
+>    Sur `checkout.session.completed` : upsert dans `public.adhesions`
+>    (`user_id`, `tier`, `status='active'`, `stripe_customer_id`,
+>    `stripe_subscription_id`, `current_period_end`). Sur
+>    `customer.subscription.deleted` ou `customer.subscription.updated`
+>    avec status `canceled`/`unpaid` : mettre `status='cancelled'` ou
+>    `'expired'`. Sur `invoice.payment_succeeded` : appeler la RPC
+>    `credit_t99cp(user_id, 60, 'adhesion_renewal')` pour crédit mensuel.
+>    Utiliser `service-role` (Edge Function tourne côté serveur, OK).
+> 5. **Module `web/src/lib/membership.ts`** : `getCurrentAdhesion(userId)`,
+>    `createCheckoutSession(tier)` qui appelle l'Edge Function via
+>    `supabase.functions.invoke('create-checkout-session', { body: { tier } })`,
+>    puis `window.location.assign(url)`. Tous typés via `Database`.
+> 6. **`web/src/pages/JoinPage.tsx`** : port TS strict du tunnel
+>    d'adhésion du prototype. 3 cartes (gratuit, soutien, engagé) avec
+>    prix mensuel + bénéfices + bouton « Devenir <tier> ». Le tier gratuit
+>    est immédiat (insert dans `adhesions` via RLS authenticated_self).
+>    Les 2 autres lancent `createCheckoutSession`. Si l'utilisateur est
+>    déjà adhérent (récupéré via `useAdhesion`), griser les tiers
+>    inférieurs et afficher « Tier actuel ».
+> 7. **Hook `web/src/hooks/useAdhesion.ts`** : retourne
+>    `{ adhesion: AdhesionRow | null, status, refresh }`.
+> 8. **Tests** (Vitest + Testing Library + mocks supabase) :
+>    - `src/lib/membership.test.ts` (≥ 4 cas) — getCurrentAdhesion,
+>      createCheckoutSession (succès + erreur), tier déjà actif.
+>    - `src/hooks/useAdhesion.test.tsx` (≥ 3 cas).
+>    - `src/pages/JoinPage.test.tsx` (≥ 5 cas) — rendu 3 tiers, click
+>      gratuit → insert, click soutien → invoke + redirect, tier déjà
+>      actif grisé, erreur Postgrest mappée FR.
+>    - Tests SQL (commentaires dans `db/schema.sql`) — décrire les cas
+>      à vérifier en local : crédit augmente la balance, débit refuse si
+>      solde insuffisant, idempotence des inserts par
+>      `(user_id, stripe_session_id)`.
+>    Tous les checks doivent rester verts. Objectif total : ≥ **62 tests**
+>    (50 existants + ≥ 12 nouveaux).
+> 9. **Mettre à jour `HANDOFF-PROGRESS.md`** : étape 7 ✅ avec sections
+>    « RPC T99CP », « Edge Functions Stripe », « membership.ts +
+>    useAdhesion », « JoinPage », « décisions Stripe (mode test vs live,
+>    rate-limit, idempotence) », « prochaines étapes (Sprint 1 fin —
+>    OAuth Google + Instagram + magic link, puis Sprint 2 contenu
+>    militant) ». Cocher la ligne 7 et créer une ligne 8 si manquante.
+>    Brancher Stripe / adhésion dans le tableau d'état global.
+> 10. **Écrire le prompt de la session N+2** : dans
+>     `HANDOFF-PROGRESS.md` (en bas du fichier ou en annexe), ajouter une
+>     section `## Prompt pour la session N+2` reprenant la même structure
+>     que ce prompt (contexte d'ouverture avec le tip de cette étape, état
+>     actuel, étape à exécuter, contraintes, fallback Docker, et **la
+>     consigne récursive de générer le prompt de la session N+3 avant le
+>     commit final**). L'étape 8 cible : OAuth Google + Instagram (boutons
+>     sociaux dans `AuthModal`, gestion des erreurs de consentement, page
+>     de callback `/auth/callback`) **OU** le passage à Sprint 2 (contenu
+>     militant — pétitions CRUD) si le sprint 1 est complet à l'issue
+>     de cette étape. Cette consigne doit être présente à chaque étape :
+>     tant que le sprint 1 n'est pas terminé, le journal de bord
+>     auto-prépare la session suivante.
+> 11. **Commit** : `feat(adhesion): step 7 — Stripe checkout + webhook +
+>     RPC T99CP + JoinPage`. Push sur la branche imposée par l'harness
+>     avec `git push -u origin <branch>`, retry sur erreurs réseau
+>     (2s/4s/8s/16s). Pas de PR sans demande explicite.
+>
+> **Contraintes** :
+>
+> - Ne pas toucher au prototype (`project/app/Maintenant.html` et JSX racine).
+> - TS strict + no `any` : tous les types Supabase via `web/src/types/database.ts`
+>   ou `@supabase/supabase-js`.
+> - **Aucune clé `service_role` dans `web/`** : la clé côté Edge Function
+>   est lue via `Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')`, jamais
+>   exportée vers le bundle front.
+> - **Aucune clé `STRIPE_SECRET_KEY` dans `web/`** : idem, Edge Function only.
+> - Pas d'emojis dans le code TS ni dans les commits (utiliser SVG —
+>   `IconCart`, `IconCheckCircle` à ajouter si besoin).
+> - Conserver les checks verts : `typecheck`, `lint`, `test`, `build`,
+>   `format:check`. Lancer les 5 en fin de session avant de committer.
+> - Si Docker n'est pas dispo dans la sandbox, ne pas tenter
+>   `supabase start` ; appliquer le schéma à un PG local comme aux
+>   étapes 4, 5 et 6 (`service postgresql start` + auth stub + storage
+>   stub + `psql -f db/schema.sql`). Pour tester les Edge Functions sans
+>   `supabase functions serve`, les écrire de façon à pouvoir être
+>   testées en isolation (Deno `import.meta.main` guard) et créer un
+>   harness Node minimaliste si nécessaire.
+>
+> Le prompt de l'étape 8 doit impérativement contenir la même consigne
+> récursive : « écrire le prompt de l'étape 9 dans
+> `HANDOFF-PROGRESS.md` avant le commit final ». Cette boucle s'arrête
+> uniquement quand le sprint 1 (auth + profil + adhésion + T99CP) est
+> complet, point auquel le prompt généré peut basculer sur le sprint 2
+> (contenu militant — pétitions, mobilisations, campagnes).
+
+---
+
+## Étape 11 — Sprint 2 / Sondages CRUD côté front ✅
+
+**Branche** : `claude/review-project-setup-AjlyB`
+**Commit** : `feat(polls): step 11 — CRUD sondages + listing + fiche + création`
+
+### Module `web/src/lib/polls.ts`
+
+Types Supabase via `Database['public']['Tables']<'polls'|'poll_options'|'votes'>`.
+Helper `PollWithOptions` qui agrège le `poll` et ses `options[]` pour la fiche.
+
+API exposée :
+
+- `listPolls({ status, search, limit })` — listing public (`status='published'`
+  par défaut, tri `created_at DESC`, limite 50). Recherche `.or()` sur
+  `question` + `description`, échappement des méta-caractères `%`, `_`, `,`.
+- `getPoll(slug)` — fiche détail : deux requêtes (poll par slug, puis options
+  par `poll_id` triées par `position`). `data: null` propre si introuvable.
+- `createPoll(input)` — validation FR, slug auto via `slugify(question)` avec
+  retry incrémental sur collision `23505` (jusqu'à 5 essais), insert poll +
+  insert options en cascade, rollback manuel (DELETE poll) si l'insertion des
+  options échoue.
+- `votePoll(pollId, optionId, userId)` — insert `votes` (la contrainte UNIQUE
+  `(poll_id, user_id)` empêche le double-vote ; RLS `votes_insert_member`
+  vérifie `auth.uid() = user_id` et l'appartenance adhérent si `members_only`).
+- `unvotePoll(pollId, userId)` — delete RGPD (retrait du vote).
+- `hasUserVoted(pollId, userId)` — single-row check (boolean).
+- `getUserVote(pollId, userId)` — renvoie `optionId | null` (pour pré-cocher
+  l'option dans la fiche).
+
+Validation côté client (`validatePollInput`) :
+
+- Question : 8–200 caractères.
+- Description : 40–400 caractères.
+- Options : 2–8 options, chaque option 2–80 caractères, toutes distinctes.
+- `closesAt` (facultatif) : doit être dans le futur si fourni.
+
+### Hooks
+
+- `usePolls(params)` — liste + states `idle/loading/ready/error` + `refresh`.
+- `usePoll(slug, userId)` — fiche + options + `userOptionId` (option votée par
+  l'utilisateur, lue via `getUserVote` quand `userId` est fourni).
+
+Patterns identiques à `usePetitions`/`usePetition` et
+`useMobilizations`/`useMobilization` : `queueMicrotask` au mount, reset des
+states locaux quand les clés tracées (`slug:userId`) changent.
+
+### Pages
+
+- `web/src/pages/PollsPage.tsx` — listing avec hero brand, barre de recherche
+  + filtre statut (Ouvert / Publié / Archivé), grille cards (auto-fill,
+  min 280 px). Le CTA « Créer un sondage » est désactivé tant que l'état auth
+  n'est pas connu (`authStatus === 'loading'`).
+- `web/src/pages/PollDetailPage.tsx` — fiche avec radio-like buttons par
+  option : tant que l'utilisateur n'a pas voté on cache les compteurs, dès
+  qu'il a voté (ou que le sondage est clos) on affiche les barres de
+  progression (`var(--mn-gradient)`) + pourcentage + nombre de votes. CTA
+  « Se connecter pour voter » pour l'anonyme, sinon « Valider mon vote » /
+  « Vote enregistré — retirer mon vote ». Partage `navigator.share` →
+  fallback `clipboard.writeText`. Le calcul `isClosed` est porté par un
+  `useEffect + queueMicrotask` pour éviter `Date.now()` pendant le render
+  (règle `react-hooks/purity`).
+- `web/src/pages/PollCreatePage.tsx` — formulaire (RequireAuth via router) :
+  question, description, options dynamiques (2 par défaut, max 8, avec boutons
+  ajouter/retirer), date de clôture (datetime-local, facultative), case
+  « Réservé aux adhérent·es » (cochée par défaut). Sur succès → redirige
+  vers `/polls/<slug>` en `replace`.
+
+Icônes ajoutées : `IconBarChart` (4 barres verticales, `currentColor`).
+`IconCheck` réutilisé tel quel.
+
+### Trigger SQL `vote_count`
+
+Ajout dans `db/schema.sql` §12 :
+
+- Colonne `poll_options.vote_count integer not null default 0 check (>= 0)`
+  (ajout idempotent via `alter table … add column if not exists`).
+- Trigger `votes_count_inc` / `votes_count_dec` (AFTER INSERT/DELETE) qui
+  appelle `public.touch_poll_option_vote_count` — même pattern que
+  `petitions.signature_count` et `mobilizations.participation_count`.
+- Colonne `polls.slug text not null unique` (ajout idempotent + backfill via
+  `slugify(question) || '-' || substr(id::text, 1, 8)` pour les lignes
+  préexistantes).
+- Index `polls_status_idx` (filtre listing).
+
+Cas de test SQL documentés en commentaires : insert/delete votes met à jour
+`vote_count`, cascade DELETE poll → options → votes propre, contrainte UNIQUE
+`(poll_id, user_id)` empêche le double-vote. Pas de validation runtime
+possible sans Docker (cf. fallback ci-dessous).
+
+### Types Supabase
+
+`web/src/types/database.ts` patché à la main :
+
+- `polls.Row` / `.Insert` / `.Update` → ajout de `slug: string`.
+- `poll_options.Row` / `.Insert` / `.Update` → ajout de `vote_count: number`.
+
+Régénération automatique reportée au moment où on rebrancherea Docker
+Supabase (cf. note `--legacy-peer-deps` + fallback).
+
+### Router
+
+Trois routes ajoutées dans `web/src/router.tsx` :
+
+```
+/polls          → PollsPage          (public)
+/polls/new      → PollCreatePage     (RequireAuth)
+/polls/:slug    → PollDetailPage     (public)
+```
+
+### Tests Vitest
+
+- `src/lib/polls.test.ts` : **29 cas** — `validatePollInput` (8),
+  `listPolls` (4), `getPoll` (3), `createPoll` (5 dont rollback), `votePoll`
+  (2), `unvotePoll`, `hasUserVoted` (2), `getUserVote` (2), constantes (1).
+- `src/hooks/usePolls.test.tsx` : **3 cas** — mount/ready, erreur, ré-exécution
+  sur changement de `search`.
+- `src/hooks/usePoll.test.tsx` : **4 cas** — anonyme (pas de getUserVote),
+  notfound, fetch userOptionId, refresh + mise à jour.
+- `src/pages/PollsPage.test.tsx` : **4 cas** — listing, état vide, recherche,
+  erreur Postgrest FR.
+- `src/pages/PollDetailPage.test.tsx` : **5 cas** — rendu, anonyme, vote (sel +
+  validate → `votePoll` + refresh), retrait du vote (`unvotePoll`),
+  redirection 404.
+- `src/pages/PollCreatePage.test.tsx` : **4 cas** — rendu, validation FR
+  sur soumission vide, succès → redirect, erreur 42501 FR.
+
+**Total** : **49 nouveaux tests** (≥ 25 requis), **224 tests verts** sur
+l'ensemble du projet (175 hérités + 49). `npm run typecheck`, `npm run lint`,
+`npm run test`, `npm run build` (295 kB), `npm run format:check` → tous verts.
+
+### Décisions de design
+
+- **Pas de transaction native** : Supabase via PostgREST n'expose pas de
+  transaction côté client. On insère le poll d'abord, puis le tableau
+  d'options en un seul `insert(arr)`. En cas d'erreur sur les options,
+  rollback manuel via `delete().eq('id', poll.id)`. Risque résiduel : si le
+  rollback échoue, on a un poll orphelin sans options ; la fiche est alors
+  illisible (0 option) mais reste invisible côté front (cache busté au
+  refresh). Si le risque devient gênant, on basculera plus tard sur une
+  RPC SQL `public.create_poll_with_options(input jsonb)` qui fera une
+  transaction côté serveur.
+- **Vote unique, pas de pondération** : le prototype `PollsPage.jsx` avait
+  un calcul INSEE-style avec pondération démographique (`computeReliability`
+  + 15 questions de profil). On part sur du « 1 user = 1 vote » strict pour
+  l'étape 11 ; la pondération sera ajoutée au Sprint 5 (audit RGPD + admin)
+  via une RPC dédiée. Décision documentée dans le code.
+- **Partage** : `navigator.share` (mobile) → fallback `clipboard.writeText`.
+  Pareil que MobilizationDetailPage. La constante `shared` se réinitialise à
+  chaque clic (toast éphémère).
+- **`isClosed` calculé en `useEffect`** : la règle ESLint
+  `react-hooks/purity` interdit `Date.now()` pendant le render. On copie le
+  pattern de `MobilizationDetailPage.tsx` (`useEffect + queueMicrotask + state`)
+  pour rester dans les règles React 19.
+
+### Prochaines étapes (étape 12)
+
+1. **Campagnes CRUD** (`web/src/lib/campaigns.ts`, hooks, pages) — port du
+   prototype `Pages_Services.jsx` (composant Campagnes). Spécifique :
+   `campaigns` agrège plusieurs `campaign_actions` (FK vers `petitions`,
+   `mobilizations`, `polls`, `crowdfunding_campaigns`) — il faudra prévoir la
+   sélection multi-cibles dans le formulaire de création.
+2. Sinon, basculer sur **audit RGPD fin Sprint 2** (bannière cookies, page
+   politique de confidentialité, vérif que `service_role` n'est jamais
+   exposée côté front, audit des logs Sentry pour qu'aucune donnée perso
+   n'y atterrisse).
+
+### Fallback Docker / Supabase local
+
+Pas de validation runtime des triggers `vote_count` cette session (sandbox
+sans Docker). À refaire en local quand on a Postgres :
+
+```bash
+service postgresql start
+createdb maintenant_test
+psql maintenant_test < db/schema.sql
+psql maintenant_test -c "insert into public.users(id, email) values ('u1', 'a@b.c');"
+psql maintenant_test -c "insert into public.polls(author_id, slug, question) values ('u1', 's1', 'Q?');"
+# … puis valider que le trigger met bien à jour poll_options.vote_count.
+```
+
+---
+
+## Prompt pour la session N+5 (étape 11)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD).
+> 2. `HANDOFF.md` §3 (architecture pages) + §7.2 (tables `polls`,
+>    `poll_options`, `votes`) + §10 Sprint 2.
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 10 ✅ — étape 11 à faire).
+> 4. `Pages_Services.jsx` / `Pages_Home.jsx` / racine prototype :
+>    composants liés aux sondages (chercher `Polls`, `poll`,
+>    `Sondages`, `PollDetail`, `vote`, `pondération`).
+> 5. `web/src/lib/petitions.ts`, `web/src/lib/mobilizations.ts`,
+>    `web/src/lib/slug.ts`, `web/src/hooks/usePetitions.ts`,
+>    `web/src/hooks/useMobilizations.ts`,
+>    `web/src/pages/PetitionsPage.tsx`, `web/src/pages/MobilizationsPage.tsx`,
+>    `web/src/pages/PetitionDetailPage.tsx`,
+>    `web/src/pages/MobilizationDetailPage.tsx`,
+>    `web/src/pages/PetitionCreatePage.tsx`,
+>    `web/src/pages/MobilizationCreatePage.tsx` — patterns à reproduire
+>    pour `polls`.
+> 6. `db/schema.sql` §12 (sondages) — tables `polls`, `poll_options`,
+>    `votes` + policies RLS. Vérifier que toutes les colonnes nécessaires
+>    sont présentes (compteur dénormalisé `vote_count` sur `poll_options`,
+>    trigger d'incrément, contraintes d'unicité par `(poll_id, user_id)`
+>    sur `votes`).
+>
+> **État actuel à la fin de l'étape 10** (tip
+> `claude/read-project-rules-IyheS`, commit
+> `feat(mobilizations): step 10 — CRUD mobilisations + listing + fiche + création`) :
+>
+> - Prototype intact : `project/app/Maintenant.html` + JSX racine.
+> - `web/` : Vite + React 19 + TS 6 strict, **175 tests verts** (48
+>   nouveaux à l'étape 10), ESLint flat, Vitest, Prettier,
+>   build 295 kB.
+> - Supabase : `db/schema.sql` à ~1 790 lignes (36 tables + 119
+>   policies RLS + trigger `handle_new_user` + bucket avatars + RPC
+>   T99CP + compteur `signature_count` + compteur `participation_count`
+>   + slugify(text)), `web/src/types/database.ts` à ~1 720 lignes.
+> - Auth complète : signup/login/logout/reset password + OAuth Google
+>   + Instagram + magic link + callback page `/auth/callback`.
+> - Profil + adhésion Stripe + RPC T99CP opérationnels.
+> - **Pétitions complètes** : listing, fiche, signer/retirer signature,
+>   création (`RequireAuth`) — Sprint 2 démarré.
+> - **Mobilisations complètes** : listing avec filtres ville+date,
+>   fiche avec « Je participe » / « me désinscrire » + partage
+>   (`navigator.share` / clipboard) + dates FR Intl, création
+>   (`RequireAuth`) — Sprint 2 poursuivi.
+> - `slugify()` factorisé dans `web/src/lib/slug.ts` (partagé par
+>   pétitions et mobilisations, prêt pour articles + sondages).
+>
+> **CONTEXTE D'OUVERTURE — à exécuter avant toute autre action** :
+>
+> 1. `git fetch origin claude/read-project-rules-IyheS` (retry network
+>    2s/4s/8s/16s) pour récupérer le tip de l'étape 10.
+> 2. `git merge --no-ff <tip-sha>` pour intégrer le commit
+>    `feat(mobilizations): step 10 …`. En cas d'absence,
+>    `git checkout origin/claude/read-project-rules-IyheS -- .` puis
+>    commit.
+> 3. `cd web && npm install --legacy-peer-deps` (lockfile non
+>    versionné, option requise à cause d'`eslint-plugin-jsx-a11y` ↔
+>    ESLint 10). À réutiliser pour tout nouvel `npm install` dans cette
+>    session.
+>
+> **ÉTAPE 11 à exécuter — Sondages CRUD côté front (Sprint 2)** :
+>
+> 1. Module `web/src/lib/polls.ts` : fonctions typées via `Database`
+>    (`Tables<'polls'>`, `Tables<'poll_options'>`, `Tables<'votes'>`) :
+>    - `listPolls({ status, search, limit })` — listing paginé (status
+>      public uniquement par défaut), trié par `created_at` DESC.
+>    - `getPoll(slug)` — fiche détail (jointure avec options +
+>      compteur de votes par option).
+>    - `createPoll(input)` — insert poll + insert options en
+>      transaction (ou enchaînement front avec rollback manuel si
+>      Supabase n'expose pas de tx). Validation FR. Slug auto via
+>      `slugify()` factorisé.
+>    - `votePoll(pollId, optionId, userId)` — insert dans `votes`
+>      (RLS authenticated_self). Sémantique « 1 user / 1 sondage »
+>      via contrainte UNIQUE `(poll_id, user_id)`.
+>    - `unvotePoll(pollId, userId)` — delete RGPD.
+>    - `hasUserVoted(pollId, userId)` — single-row check.
+>    - `getUserVote(pollId, userId)` — renvoie l'option votée (pour
+>      afficher le choix de l'utilisateur).
+> 2. Trigger SQL `update_poll_option_vote_count` : si pas déjà
+>    présent dans `db/schema.sql` §12, ajouter un trigger AFTER
+>    INSERT/DELETE sur `votes` qui met à jour
+>    `poll_options.vote_count`. Ajouter la colonne `vote_count integer
+>    not null default 0 check (>= 0)` à `poll_options` (idempotent via
+>    `alter table … add column if not exists`). Documenter les cas de
+>    test SQL dans `db/schema.sql` (commentaires).
+> 3. Hooks `web/src/hooks/usePolls.ts` + `usePoll.ts` : copier le
+>    pattern `usePetitions` / `usePetition` / `useMobilizations` /
+>    `useMobilization`.
+> 4. Pages :
+>    - `web/src/pages/PollsPage.tsx` — listing avec recherche +
+>      filtre statut (ouvert / clos). Port TS strict du prototype.
+>    - `web/src/pages/PollDetailPage.tsx` — fiche avec radio
+>      buttons (ou cards cliquables) pour chaque option,
+>      `RequireAuth` via redirect, compteur live + barres de
+>      progression par option (`var(--mn-gradient)`), partage du lien.
+>    - `web/src/pages/PollCreatePage.tsx` — formulaire création
+>      (`RequireAuth`), validation côté client (question 8–200,
+>      description 40–400, ≥ 2 options et ≤ 8 options, chaque option
+>      2–80 caractères). Réussite → redirige vers la fiche.
+> 5. Router : ajouter les routes `/polls/:slug`, `/polls/new`, et
+>    brancher `RequireAuth` sur la création.
+> 6. Régénérer `web/src/types/database.ts` si tu touches
+>    `db/schema.sql` (au minimum patcher à la main `poll_options.Row`
+>    pour ajouter `vote_count`).
+> 7. Icônes SVG à ajouter si besoin : `IconBarChart`, `IconCheck` —
+>    toujours currentColor, pas d'emoji.
+> 8. Tests (Vitest + Testing Library + mocks supabase) :
+>    - `src/lib/polls.test.ts` (≥ 10 cas) — `listPolls` (filtres),
+>      `getPoll` (succès + 404), `createPoll` (validation, succès,
+>      retry slug-collision, rollback en cas d'erreur sur insert
+>      d'options), `votePoll`, `unvotePoll`, `hasUserVoted`,
+>      `getUserVote`.
+>    - `src/hooks/usePolls.test.tsx` (≥ 3 cas).
+>    - `src/hooks/usePoll.test.tsx` (≥ 3 cas).
+>    - `src/pages/PollsPage.test.tsx` (≥ 3 cas).
+>    - `src/pages/PollDetailPage.test.tsx` (≥ 4 cas) — rendu fiche,
+>      vote anonyme → redirige login, vote authentifié →
+>      `votePoll` + refresh, barres de progression mises à jour.
+>    - `src/pages/PollCreatePage.test.tsx` (≥ 3 cas).
+>    - Objectif : ≥ 200 tests verts (175 existants + ≥ 25 nouveaux).
+> 9. Mettre à jour `HANDOFF-PROGRESS.md` : étape 11 ✅ avec sections
+>    « Module polls.ts », « hooks », « pages », « trigger
+>    vote_count », « décisions (insertion options en cascade,
+>    pondération éventuelle, partage) », « prochaines étapes (étape
+>    12 — campagnes ou audit RGPD fin Sprint 2) ». Cocher la ligne 11
+>    et créer une ligne 12 si manquante.
+> 10. Écrire le prompt de la session N+6 (étape 12) dans
+>     `HANDOFF-PROGRESS.md` (en bas du fichier ou en annexe), section
+>     `## Prompt pour la session N+6 (étape 12)` reprenant la même
+>     structure (contexte d'ouverture, état actuel, étape à exécuter,
+>     contraintes, fallback Docker, double consigne récursive).
+>     L'étape 12 cible : **campagnes CRUD** (port du prototype, mêmes
+>     patterns que pétitions / mobilisations / sondages) ; ou bien
+>     audit RGPD fin Sprint 2 si les campagnes sont fines à traiter
+>     d'un coup.
+> 11. **Coller le prompt de l'étape 12 dans la conversation finale**,
+>     en plus de l'avoir écrit dans `HANDOFF-PROGRESS.md` : à la fin
+>     de la session, le message Claude doit contenir littéralement le
+>     bloc du prompt (citation `>` ou code-fence), pour que
+>     l'utilisateur puisse le copier d'un coup. Cette consigne fait
+>     partie de la boucle récursive : tant que le Sprint 2 (contenu
+>     militant — pétitions, mobilisations, campagnes, sondages) n'est
+>     pas complet, le prompt généré doit aussi être collé dans la
+>     réponse finale de la session.
+> 12. **Commit** : `feat(polls): step 11 — CRUD sondages + listing +
+>     fiche + création`. Push sur la branche imposée par l'harness
+>     avec `git push -u origin <branch>`, retry sur erreurs réseau
+>     (2s/4s/8s/16s). Pas de PR sans demande explicite.
+>
+> **Contraintes** :
+>
+> - Ne pas toucher au prototype (`project/app/Maintenant.html` et JSX
+>   racine).
+> - TS strict + no `any` : tous les types Supabase via
+>   `web/src/types/database.ts` ou `@supabase/supabase-js`.
+> - **Aucune clé `service_role` dans `web/`** : tout passe par RLS et
+>   `VITE_SUPABASE_ANON_KEY`.
+> - Pas d'emojis dans le code TS ni dans les commits (utiliser SVG —
+>   `IconBarChart`, `IconCheck`, etc. à ajouter si besoin).
+> - Conserver les checks verts : `typecheck`, `lint`, `test`, `build`,
+>   `format:check`. Lancer les 5 en fin de session avant de committer.
+> - Si Docker n'est pas dispo dans la sandbox, ne pas tenter
+>   `supabase start` ; les sondages se testent via mocks Vitest. Pour
+>   les vérifs SQL (trigger `vote_count`), documenter en commentaire
+>   dans `db/schema.sql` et tester avec un PG local si possible
+>   (`service postgresql start` + `psql -f db/schema.sql`).
+>
+> **DOUBLE CONSIGNE RÉCURSIVE** :
+>
+> 1. Écrire le prompt de l'étape 12 dans `HANDOFF-PROGRESS.md`
+>    **avant** le commit final.
+> 2. Coller le prompt de l'étape 12 dans la conversation (réponse
+>    finale Claude), pas seulement dans le fichier journal.
+>
+> Cette boucle s'arrête uniquement quand le Sprint 2 (contenu militant
+> — pétitions, mobilisations, campagnes, sondages) est complet, point
+> auquel le prompt généré peut basculer sur le Sprint 3 (services
+> communautaires).
+
+---
+
+## Prompt pour la session N+6 (étape 12)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD).
+> 2. `HANDOFF.md` §3 (architecture pages) + §7.2 (tables `campaigns`,
+>    `campaign_actions`) + §10 Sprint 2.
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 11 ✅ — étape 12 à faire).
+> 4. `Pages_Services.jsx` racine prototype : composants liés aux campagnes
+>    (chercher `Campagnes`, `Campaign`, `CampaignDetail`, `campaign_actions`,
+>    `selected items`). En particulier les commits `d97d272` (6 templates
+>    pré-remplis) et `01f4d73` (sélection multi-items inline) pour comprendre
+>    la sémantique d'une campagne « multi-actions ».
+> 5. `web/src/lib/petitions.ts`, `web/src/lib/mobilizations.ts`,
+>    `web/src/lib/polls.ts`, `web/src/lib/slug.ts`, hooks correspondants,
+>    pages `PetitionsPage.tsx`, `MobilizationsPage.tsx`, `PollsPage.tsx`,
+>    leurs fiches et leurs formulaires de création — patterns à reproduire
+>    pour `campaigns`.
+> 6. `db/schema.sql` §13 (campagnes) — tables `campaigns`, `campaign_actions`
+>    + policies RLS. Vérifier que toutes les colonnes nécessaires sont
+>    présentes (notamment la nature des FK : `petition_id`, `mobilization_id`,
+>    `poll_id`, `crowdfunding_id` toutes `nullable`).
+>
+> **État actuel à la fin de l'étape 11** (tip
+> `claude/review-project-setup-AjlyB`, commit
+> `feat(polls): step 11 — CRUD sondages + listing + fiche + création`) :
+>
+> - Prototype intact : `project/app/Maintenant.html` + JSX racine.
+> - `web/` : Vite + React 19 + TS 6 strict, **224 tests verts** (49 nouveaux
+>   à l'étape 11), ESLint flat, Vitest, Prettier, build 295 kB.
+> - Supabase : `db/schema.sql` ≈ 1 880 lignes (36 tables + 119 policies RLS
+>   + trigger `handle_new_user` + bucket avatars + RPC T99CP + compteur
+>   `signature_count` + compteur `participation_count` + compteur
+>   `vote_count` sur `poll_options` + colonne `polls.slug` + slugify(text)),
+>   `web/src/types/database.ts` ≈ 1 720 lignes.
+> - Auth complète : signup/login/logout/reset password + OAuth Google +
+>   Instagram + magic link + callback page `/auth/callback`.
+> - Profil + adhésion Stripe + RPC T99CP opérationnels.
+> - **Pétitions** complètes : listing, fiche, signer/retirer signature,
+>   création (RequireAuth) — Sprint 2 démarré.
+> - **Mobilisations** complètes : listing avec filtres ville+date, fiche
+>   avec « Je participe » / partage / dates FR Intl, création (RequireAuth)
+>   — Sprint 2 poursuivi.
+> - **Sondages** complets : listing, fiche avec radio buttons + barres de
+>   progression `var(--mn-gradient)`, vote unique « 1 user / 1 sondage » via
+>   contrainte UNIQUE, retrait RGPD, création (RequireAuth) — Sprint 2
+>   poursuivi.
+> - `slugify()` partagé via `web/src/lib/slug.ts`.
+>
+> **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
+>
+> 1. `git fetch origin claude/review-project-setup-AjlyB` (retry network
+>    2s/4s/8s/16s) pour récupérer le tip de l'étape 11.
+> 2. `git merge --no-ff <SHA-étape-11>` pour intégrer le commit
+>    `feat(polls): step 11 …`. En cas d'absence,
+>    `git checkout origin/claude/review-project-setup-AjlyB -- .` puis
+>    commit.
+> 3. `cd web && npm install --legacy-peer-deps` (lockfile non versionné,
+>    option requise à cause d'`eslint-plugin-jsx-a11y` ↔ ESLint 10). À
+>    réutiliser pour tout nouvel `npm install` dans cette session.
+>
+> **ÉTAPE 12 à exécuter — Campagnes CRUD côté front (Sprint 2)** :
+>
+> 1. **Module `web/src/lib/campaigns.ts`** — fonctions typées via `Database`
+>    (`Tables<'campaigns'>`, `Tables<'campaign_actions'>`) :
+>    - `listCampaigns({ status, search, limit })` — listing public,
+>      `status='published'`, tri `created_at DESC`. Filtre `search` via
+>      `.or()` sur `title`+`summary`.
+>    - `getCampaign(slug)` — fiche détail : poll par slug, puis
+>      `campaign_actions` triées par `position`, avec **jointures** vers
+>      les ressources cibles (`petition_id → petitions(*)`, etc.). Astuce :
+>      utiliser la syntaxe Supabase `select('*, petition:petitions(*), …')`
+>      ou faire des requêtes séparées si la jointure est trop lourde.
+>    - `createCampaign(input)` — insert campaign + insert
+>      campaign_actions[]. Validation FR. Slug auto via `slugify()`
+>      factorisé. Retry incrémental sur collision (5 essais).
+>    - `addCampaignAction(campaignId, ref)` / `removeCampaignAction(id)`
+>      pour ajouter / retirer une action liée à une campagne existante
+>      (admin / owner uniquement, vérifié par RLS).
+>    - `validateCampaignInput(input)` — title 8–80, summary 40–240, body
+>      facultatif (si présent ≥ 100), ≥ 1 action et ≤ 12 actions.
+> 2. **Hooks `useCampaigns.ts` + `useCampaign.ts`** : copier le pattern
+>    `usePetitions / usePetition / useMobilizations / useMobilization /
+>    usePolls / usePoll`.
+> 3. **Pages** :
+>    - `web/src/pages/CampaignsPage.tsx` — listing avec recherche + filtre
+>      statut. Port TS strict du prototype (cf. commits `d97d272` et
+>      `01f4d73`).
+>    - `web/src/pages/CampaignDetailPage.tsx` — fiche avec hero, body,
+>      liste des `campaign_actions` (cards cliquables vers
+>      `/petitions/<slug>`, `/mobilizations/<slug>`, `/polls/<slug>`,
+>      `/services/crowdfunding/<slug>`). Partage du lien.
+>    - `web/src/pages/CampaignCreatePage.tsx` — formulaire création
+>      (RequireAuth), sélection multi-items inline (l'utilisateur peut
+>      ajouter à la volée des actions existantes — un combobox `search` qui
+>      tape sur les listings publics + sélection multiple).
+> 4. **Router** : ajouter les routes `/campaigns/:slug`, `/campaigns/new`,
+>    et brancher `RequireAuth` sur la création.
+> 5. **Schéma DB** : vérifier que `db/schema.sql` §13 est complet (slug
+>    unique sur campaigns ✅, mais pas de compteur dénormalisé — pas besoin
+>    pour les campagnes, on remontera juste le nombre d'actions via la
+>    jointure). Si manquant, ajouter index `campaigns_status_idx` et
+>    `campaign_actions_position_idx`.
+> 6. **Régénérer** `web/src/types/database.ts` si tu touches `db/schema.sql`
+>    (au minimum patcher à la main).
+> 7. **Icônes SVG** à ajouter si besoin : `IconMegaphone`, `IconList` —
+>    toujours `currentColor`, pas d'emoji.
+> 8. **Tests** (Vitest + Testing Library + mocks Supabase) :
+>    - `src/lib/campaigns.test.ts` (≥ 10 cas) — `listCampaigns` (filtres),
+>      `getCampaign` (succès + 404), `createCampaign` (validation, succès,
+>      retry slug-collision, rollback en cas d'erreur sur insert d'actions),
+>      `addCampaignAction`, `removeCampaignAction`.
+>    - `src/hooks/useCampaigns.test.tsx` (≥ 3 cas).
+>    - `src/hooks/useCampaign.test.tsx` (≥ 3 cas).
+>    - `src/pages/CampaignsPage.test.tsx` (≥ 3 cas).
+>    - `src/pages/CampaignDetailPage.test.tsx` (≥ 4 cas) — rendu fiche,
+>      actions cliquables, partage, redirection 404.
+>    - `src/pages/CampaignCreatePage.test.tsx` (≥ 3 cas) — rendu, validation
+>      FR, succès → redirect.
+>    - Objectif : **≥ 250 tests verts** (224 existants + ≥ 25 nouveaux).
+> 9. Mettre à jour `HANDOFF-PROGRESS.md` : étape 12 ✅ avec sections
+>    « Module campaigns.ts », « hooks », « pages », « jointures campaign_actions »,
+>    « décisions (multi-items inline, RLS owner) »,
+>    « prochaines étapes (étape 13 — audit RGPD fin Sprint 2 OU bascule sur
+>    Sprint 3 — services communautaires) ». Cocher la ligne 12 et créer
+>    une ligne 13 si manquante.
+> 10. Écrire le prompt de la session N+7 (étape 13) dans
+>     `HANDOFF-PROGRESS.md` (en bas du fichier ou en annexe), section
+>     `## Prompt pour la session N+7 (étape 13)` reprenant la même
+>     structure. L'étape 13 cible : audit RGPD fin Sprint 2 (bannière
+>     cookies + page politique de confidentialité + audit RLS final +
+>     vérif Sentry no-PII) ou bascule Sprint 3 (Hébergement +
+>     Covoiturage).
+> 11. **Coller le prompt de l'étape 13 dans la conversation finale**, en
+>     plus de l'avoir écrit dans `HANDOFF-PROGRESS.md` : à la fin de la
+>     session, le message Claude doit contenir littéralement le bloc du
+>     prompt (citation `>` ou code-fence), pour que l'utilisateur puisse
+>     le copier d'un coup. Cette consigne fait partie de la boucle
+>     récursive : tant que le Sprint 2 (contenu militant — pétitions,
+>     mobilisations, campagnes, sondages) n'est pas complet, le prompt
+>     généré doit aussi être collé dans la réponse finale de la session.
+> 12. **Commit** :
+>     `feat(campaigns): step 12 — CRUD campagnes + listing + fiche + création`.
+>     Push sur la branche imposée par l'harness avec
+>     `git push -u origin <branch>`, retry sur erreurs réseau
+>     (2s/4s/8s/16s). Pas de PR sans demande explicite.
+>
+> **Contraintes** :
+>
+> - Ne pas toucher au prototype (`project/app/Maintenant.html` et JSX
+>   racine).
+> - TS strict + no `any` : tous les types Supabase via
+>   `web/src/types/database.ts` ou `@supabase/supabase-js`.
+> - Aucune clé `service_role` dans `web/` : tout passe par RLS et
+>   `VITE_SUPABASE_ANON_KEY`.
+> - Pas d'emojis dans le code TS ni dans les commits (utiliser SVG —
+>   `IconMegaphone`, `IconList`, etc. à ajouter si besoin).
+> - Conserver les checks verts : `typecheck`, `lint`, `test`, `build`,
+>   `format:check`. Lancer les 5 en fin de session avant de committer.
+> - Si Docker n'est pas dispo dans la sandbox, ne pas tenter
+>   `supabase start` ; les campagnes se testent via mocks Vitest. Pour
+>   les vérifs SQL (jointures `campaign_actions`), documenter en
+>   commentaire dans `db/schema.sql` et tester avec un PG local si
+>   possible (`service postgresql start` + `psql -f db/schema.sql`).
+>
+> **DOUBLE CONSIGNE RÉCURSIVE** :
+>
+> 1. Écrire le prompt de l'étape 13 dans `HANDOFF-PROGRESS.md` **avant**
+>    le commit final.
+> 2. Coller le prompt de l'étape 13 dans la conversation (réponse finale
+>    Claude), pas seulement dans le fichier journal.
+>
+> Cette boucle s'arrête uniquement quand le Sprint 2 (contenu militant —
+> pétitions, mobilisations, campagnes, sondages) est complet, point auquel
+> le prompt généré peut basculer sur le Sprint 3 (services communautaires).
+
+---
+
+## Étape 12 — Sprint 2 / Campagnes CRUD côté front ✅
+
+**Branche** : `claude/add-polls-module-lv84O` (merge `claude/review-project-setup-AjlyB`
+@ `8b81644` → étape 11 puis travail étape 12)
+**Commit cible** : `feat(campaigns): step 12 — CRUD campagnes + listing + fiche + création`
+
+### Module `web/src/lib/campaigns.ts`
+
+- Types `CampaignRow`, `CampaignInsert`, `CampaignStatus`, `CampaignActionRow`,
+  `CampaignActionInsert` dérivés de `Database['public']`.
+- `CampaignWithActions = { campaign, actions }` pour la fiche.
+- `CampaignActionRef` (FK optionnelles : `petitionId` / `mobilizationId` /
+  `pollId` / `crowdfundingId` + `label` libre) — au moins une FK obligatoire.
+- Constantes de validation : `CAMPAIGN_TITLE_MIN = 8`, `MAX = 80`,
+  `CAMPAIGN_SUMMARY_MIN = 40`, `MAX = 240`, `CAMPAIGN_BODY_MIN = 100` (si
+  renseigné), `CAMPAIGN_ACTIONS_MIN_COUNT = 1`, `MAX_COUNT = 12`.
+- `validateCampaignInput(input)` — retourne `[]` ou un tableau d'issues
+  `{ field, message }`. Vérifie chaque action a au moins une FK (sinon
+  `actions` invalide).
+- `listCampaigns({ status, search, limit })` — public, `status='published'`
+  par défaut, tri `created_at DESC`, `.or('title.ilike.%X%,summary.ilike.%X%')`
+  avec échappement des méta-caractères `%`, `_`, `,`.
+- `getCampaign(slug)` — 2 requêtes successives (campaign + actions triées
+  par `position ASC`). Décision : pas de jointure Postgrest imbriquée (cf.
+  « Décisions » plus bas) — la fiche enrichit la cible côté UI seulement
+  via le lien `/petitions/<id>` etc.
+- `createCampaign(input)` — validation → insert campaign avec slug
+  `slugify(title)` (retry incrémental sur `23505`, 5 essais) → insert
+  `campaign_actions[]` → rollback manuel `DELETE FROM campaigns` si
+  l'insertion des actions échoue. Renvoie `CampaignWithActions`.
+- `addCampaignAction(campaignId, ref, position)` — insert single (RLS
+  vérifie author). Refuse une ref sans FK avec code `CAMPAIGN_VALIDATION`.
+- `removeCampaignAction(id)` — delete (RLS owner-only via la policy
+  `campaign_actions_write_author`).
+
+### Hooks `useCampaigns.ts` + `useCampaign.ts`
+
+- Pattern identique à `usePolls / usePoll` : reset des états locaux
+  pendant le render quand `filterKey` (search/status/limit) ou le slug
+  change, `queueMicrotask(() => listCampaigns(...))` pour découpler le
+  fetch du render, `refresh()` exposé pour rejouer la requête.
+- `useCampaign` ne charge pas la cible des actions (jointures) — c'est la
+  fiche qui résout `petition_id → /petitions/<id>` etc. côté UI.
+
+### Pages
+
+- **`CampaignsPage`** — listing avec hero `var(--mn-gradient)`, recherche
+  + filtre statut, état vide + erreur Postgrest mappée FR. Card
+  `<Link to="/campaigns/:slug">` avec badge `IconMegaphone`.
+- **`CampaignDetailPage`** — header (badge, titre, résumé, body
+  `whiteSpace: pre-wrap`), bouton « Partager » (`navigator.share` →
+  `clipboard.writeText` fallback), liste des actions sous `<ul>` avec
+  routage par type (`resolveAction(action)` → `kind` + `href` +
+  `fallbackLabel` + icône). Si aucune FK n'est plus là (delete cascade
+  `set null`), l'action s'affiche en mode « lien rompu » non cliquable.
+- **`CampaignCreatePage`** — formulaire `RequireAuth` avec 3 onglets de
+  picker (Pétitions / Mobilisations / Sondages), recherche live
+  (`listPetitions({ search })`, `listMobilizations`, `listPolls` — limit
+  8), clic sur résultat → ajout à `selected[]`. Cagnottes pas exposées
+  pour l'instant (pas de listing public côté front, à brancher au
+  Sprint 3). Slug auto, redirect `/campaigns/<slug>` après succès.
+
+### Router
+
+- `/campaigns` (public), `/campaigns/new` (`RequireAuth`),
+  `/campaigns/:slug` (public).
+
+### Schéma DB
+
+- `campaigns_status_idx ON campaigns(status)` ajouté (cohérence avec
+  petitions/mobilizations/polls).
+- `campaign_actions_position_idx ON campaign_actions(campaign_id, position)`
+  ajouté pour le `ORDER BY position ASC` de la fiche.
+- Pas de compteur dénormalisé : le nombre d'actions est lu directement
+  depuis le tableau retourné par `getCampaign`. RLS déjà en place
+  (`campaigns_select_public`, `campaigns_insert_self`,
+  `campaigns_update_owner`, `campaigns_delete_owner`,
+  `campaign_actions_select_public`, `campaign_actions_write_author`).
+- `web/src/types/database.ts` déjà à jour (campaigns + campaign_actions
+  étaient présents — pas de re-génération nécessaire).
+
+### Icônes
+
+- `IconMegaphone` (haut-parleur, baseProps `currentColor`).
+- `IconList` (liste avec puces, baseProps `currentColor`).
+
+### Jointures `campaign_actions` — décisions
+
+- **Pas de `select('*, petition:petitions(slug,title), …')` imbriqué**
+  pour cette étape : on n'a pas encore les compteurs front, et chaque
+  type a déjà un listing dédié (`/petitions/<slug>`). La fiche se
+  contente du `*` pour afficher le label libre + l'icône + le lien
+  vers la ressource cible. L'enrichissement (vrai titre / nb signatures
+  côté pétition) viendra à l'étape 14 quand on aura besoin d'un
+  « card preview » riche.
+- Side effect : si l'utilisateur supprime une pétition, l'action
+  `campaign_actions` se met à `petition_id = null` (FK `on delete set
+  null`) → la fiche détecte l'orphelin et l'affiche sans lien.
+
+### Décisions
+
+- **Multi-items inline** : un combobox unique par type (`PickerKind`)
+  avec recherche live. Le formulaire évite le « créer en place » du
+  prototype (commits `d97d272` / `01f4d73`) — on garde la création
+  séparée par type, les utilisateurs peuvent ouvrir `/petitions/new`
+  avant de revenir à la création de campagne. Plus simple côté UX,
+  moins risqué côté RLS (pas de fanout de policies).
+- **RLS owner** : `campaign_actions_write_author` utilise
+  `author_id` de la campagne — donc seul l'auteur de la campagne peut
+  ajouter/retirer des actions. C'est cohérent avec le sens d'une
+  campagne (un porteur principal qui orchestre les actions). Pas
+  d'invitation co-auteur pour l'instant.
+- **Validation côté front + DB** : on valide en TS + on laisse les
+  contraintes DB protéger (NOT NULL, UNIQUE slug, FK).
+
+### Tests
+
+- `src/lib/campaigns.test.ts` — **24 cas** : validation (10), listCampaigns
+  (4), getCampaign (3), createCampaign (5 dont retry + rollback),
+  addCampaignAction (2), removeCampaignAction (1), constantes (1).
+- `src/hooks/useCampaigns.test.tsx` — 3 cas (mount, error, search rerun).
+- `src/hooks/useCampaign.test.tsx` — 3 cas (mount, notfound, refresh).
+- `src/pages/CampaignsPage.test.tsx` — 4 cas (listing, empty, search,
+  erreur FR).
+- `src/pages/CampaignDetailPage.test.tsx` — 4 cas (rendu, liens
+  cliquables vers /petitions/mobilizations/polls, partage, 404 →
+  redirect).
+- `src/pages/CampaignCreatePage.test.tsx` — 3 cas (rendu, validation,
+  succès → redirect).
+- **Total : 42 nouveaux tests** (224 + 42 = **266 tests verts**).
+
+### Checks finaux
+
+- `typecheck` : OK (TS 6 strict, pas de `any`).
+- `lint` : OK (ESLint flat, jsx-a11y + react-hooks).
+- `test` : 266 passed.
+- `build` : 295 kB minified, 85 kB gzip.
+- `format:check` : OK (prettier 3).
+
+### Prochaines étapes
+
+- **Étape 13** : audit RGPD de fin Sprint 2 (bannière cookies + page
+  politique de confidentialité + audit RLS final + vérif Sentry no-PII)
+  **OU** bascule Sprint 3 (Hébergement + Covoiturage).
+- Sprint 3 commence côté schéma : tables `housing`, `housing_bookings`,
+  `carpool_offers`, `carpool_seats` déjà posées (cf. `db/schema.sql`
+  §15-16) — RLS déjà en place. Reste : libs + hooks + pages.
+
+---
+
+## Prompt pour la session N+7 (étape 13)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD).
+> 2. `HANDOFF.md` §5 (sécurité/RGPD) + §10 Sprint 2 (fin) + §10 Sprint 3
+>    (services communautaires — Hébergement, Covoiturage).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 12 ✅ — étape 13 à faire).
+> 4. `db/schema.sql` — RLS finale : passer en revue chaque policy table
+>    par table et vérifier qu'il n'y a pas de `using (true)` non voulu,
+>    qu'aucune table privée n'est `select public`, que `is_admin` filtre
+>    bien les opérations sensibles.
+> 5. `Theme.jsx` + `Pages_Services.jsx` — composants `CookieBanner`,
+>    `PrivacyPage`, mentions légales du prototype.
+> 6. `web/src/lib/campaigns.ts`, `web/src/lib/polls.ts`,
+>    `web/src/lib/mobilizations.ts`, `web/src/lib/petitions.ts` — pour
+>    vérifier que tout le contenu militant respecte le retrait RGPD.
+>
+> **État actuel à la fin de l'étape 12** (tip `claude/add-polls-module-lv84O`,
+> commit `feat(campaigns): step 12 — CRUD campagnes + listing + fiche + création`) :
+>
+> - Prototype intact : `project/app/Maintenant.html` + JSX racine.
+> - `web/` : Vite + React 19 + TS 6 strict, **266 tests verts** (42 nouveaux
+>   à l'étape 12), ESLint flat, Vitest, Prettier, build 295 kB.
+> - Supabase : `db/schema.sql` ≈ 1 885 lignes (36 tables + 119 policies RLS
+>   + index `campaigns_status_idx` + `campaign_actions_position_idx`),
+>   `web/src/types/database.ts` ≈ 1 720 lignes.
+> - Auth complète : signup/login/logout/reset password + OAuth Google +
+>   Instagram + magic link + callback page `/auth/callback`.
+> - Profil + adhésion Stripe + RPC T99CP opérationnels.
+> - **Sprint 2 complet** : pétitions, mobilisations, sondages, campagnes —
+>   chaque module a `lib + hooks + listing + fiche + création RequireAuth +
+>   tests` et utilise `slugify()` partagé via `web/src/lib/slug.ts`.
+> - Campagnes : module `campaigns.ts` + hooks `useCampaigns` / `useCampaign`,
+>   pages `/campaigns`, `/campaigns/:slug`, `/campaigns/new`, picker multi-
+>   items inline (Pétitions / Mobilisations / Sondages).
+>
+> **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
+>
+> 1. `git fetch origin claude/add-polls-module-lv84O` (retry network
+>    2s/4s/8s/16s) pour récupérer le tip de l'étape 12.
+> 2. `git merge --no-ff <SHA-étape-12>` pour intégrer le commit
+>    `feat(campaigns): step 12 …`. En cas d'absence,
+>    `git checkout origin/claude/add-polls-module-lv84O -- .` puis commit.
+> 3. `cd web && npm install --legacy-peer-deps` (lockfile non versionné,
+>    option requise à cause d'`eslint-plugin-jsx-a11y` ↔ ESLint 10).
+>
+> **ÉTAPE 13 à exécuter — Audit RGPD fin Sprint 2 (recommandée) OU bascule
+> Sprint 3** :
+>
+> ### Option A — Audit RGPD fin Sprint 2 (préférée pour solder Sprint 2)
+>
+> 1. **Bannière cookies** :
+>    - `web/src/components/CookieBanner.tsx` — bannière minimale conforme
+>      CNIL (catégorisation strictement nécessaire / mesure d'audience
+>      anonymisée). Pas de tracking pub. Persistance dans `localStorage`
+>      (clé `mn:cookie-consent` avec un objet `{ version, choice, at }`).
+>    - Brancher dans `RootLayout` au-dessus de `<Outlet />`. Apparaît au
+>      premier render si pas de consentement enregistré.
+>    - Boutons : « Tout accepter », « Tout refuser », « Personnaliser »
+>      (modale détaillée). Accessible clavier + ARIA.
+>    - Tests : ≥ 5 cas (rendu sans consentement, click accept/refuse,
+>      persistance, masquage si déjà consenti).
+> 2. **Page politique de confidentialité** :
+>    - `web/src/pages/PrivacyPage.tsx` (route `/legal/privacy`) — port du
+>      contenu prototype, fait office de page légale RGPD. Sections :
+>      responsable, finalités, base légale (consentement + intérêt
+>      légitime + contrat), durées de conservation, droits RGPD, contact
+>      DPO, sous-traitants (Supabase EU, Stripe, etc.).
+>    - Tests : ≥ 2 cas (rendu titre + ancres).
+> 3. **Page mentions légales** :
+>    - `web/src/pages/LegalNoticePage.tsx` (route `/legal/notice`) —
+>      éditeur, hébergeur, directeur publication.
+> 4. **Footer global** : ajouter liens `/legal/privacy`, `/legal/notice`,
+>    `/legal/cookies` dans `RootLayout` (ou créer `Footer.tsx`).
+> 5. **Audit RLS final** : parcourir `db/schema.sql` table par table.
+>    Documenter dans `HANDOFF-PROGRESS.md` chaque table : niveau d'accès
+>    SELECT (public / authenticated / owner / admin), niveau INSERT, UPDATE,
+>    DELETE. Vérifier que `is_admin()` est bien la seule porte d'entrée
+>    admin. Vérifier qu'aucune table contenant des données perso (users,
+>    profiles, signatures, votes, participations) n'a `using (true)` en
+>    SELECT.
+> 6. **Audit Sentry no-PII** : si `web/src/lib/sentry.ts` n'existe pas
+>    encore, créer le scaffold avec `beforeSend(event)` qui scrub
+>    `event.user`, `event.request.cookies`, `event.extra.email`,
+>    `event.extra.phone`, et toute clé contenant `email` / `phone` /
+>    `address`. Si Sentry déjà branché, vérifier le scrub.
+> 7. **Tests** : objectif **≥ 280 tests verts** (266 existants + ≥ 14
+>    nouveaux).
+> 8. Mettre à jour `HANDOFF-PROGRESS.md` : étape 13 ✅ avec sections
+>    « Bannière cookies », « Pages légales », « Audit RLS », « Audit Sentry
+>    no-PII », « prochaines étapes (Sprint 3 — services communautaires) ».
+> 9. **Écrire le prompt de la session N+8 (étape 14)** dans
+>    `HANDOFF-PROGRESS.md` : démarrage Sprint 3 — Hébergement + Covoiturage
+>    CRUD côté front. Reproduire la structure habituelle (lib + hooks +
+>    pages + tests).
+> 10. **Coller le prompt de l'étape 14 dans la conversation finale**.
+> 11. **Commit** : `chore(rgpd): step 13 — bannière cookies + pages légales + audit RLS/Sentry`.
+>     Push sur la branche imposée par l'harness.
+>
+> ### Option B — Bascule Sprint 3 (si on préfère avancer)
+>
+> Démarrer Hébergement + Covoiturage directement (lib + hooks + pages
+> + tests). Reproduire le pattern des étapes 9-12. L'audit RGPD peut
+> alors être repoussé à l'étape 15.
+>
+> **Contraintes** :
+>
+> - Ne pas toucher au prototype (`project/app/Maintenant.html` et JSX
+>   racine).
+> - TS strict + no `any`.
+> - Conserver les checks verts : `typecheck`, `lint`, `test`, `build`,
+>   `format:check`.
+> - Pas d'emojis dans le code TS ni dans les commits.
+>
+> **NOTE sur la boucle récursive** :
+>
+> Le Sprint 2 (contenu militant — pétitions, mobilisations, campagnes,
+> sondages) est **complet** à la fin de l'étape 12. À partir de
+> l'étape 13, la double consigne (écrire le prompt N+1 + le coller dans
+> la réponse Claude) reste utile pour fluidifier la passation entre
+> sessions, mais elle est désormais **facultative** côté boucle
+> récursive — l'agent peut basculer sur la convention git-flow standard
+> du projet si l'utilisateur le souhaite.
+
+---
+
+## Étape 13 — Fin Sprint 2 / Audit RGPD ✅
+
+**Branche** : `claude/add-campaigns-module-FHBHA` (merge `claude/add-polls-module-lv84O`
+@ `9193afa` → étape 12 puis travail étape 13)
+**Commit cible** : `chore(rgpd): step 13 — bannière cookies + pages légales + audit RLS/Sentry`
+
+### Bannière cookies
+
+- `web/src/lib/consent.ts` — helpers typés `readConsent`, `writeConsent`,
+  `clearConsent` autour de la clé `mn:cookie-consent` (localStorage).
+  Schéma versionné `{ version, choice, categories, at }` : tout bump de
+  `CONSENT_VERSION` invalide automatiquement les choix passés (ré-affichage
+  forcé de la bannière). Pas de dépendance externe.
+- `web/src/components/CookieBanner.tsx` — bannière fixée en bas, conforme
+  CNIL :
+  - Catégorisation **strictement nécessaire** (toujours active) + **mesure
+    d'audience anonymisée** (opt-in). Pas de tracking publicitaire, pas de
+    profilage cross-site.
+  - Trois actions principales : « Tout accepter », « Tout refuser »,
+    « Personnaliser » (panneau inline avec checkboxes par catégorie).
+  - Le refus est aussi facile que l'acceptation (même hiérarchie de
+    bouton). La bannière disparaît après choix et persiste jusqu'à un bump
+    de version ou un reset utilisateur via `/legal/cookies`.
+  - Accessible clavier : tous les boutons natifs, `aria-expanded`,
+    `aria-controls`, `role="region"` avec `aria-labelledby`/`aria-describedby`.
+- Branchée dans `RootLayout` (sous `<Outlet />` + `Footer`) → s'affiche
+  partout au premier render si pas de consentement.
+
+### Pages légales
+
+- `web/src/pages/PrivacyPage.tsx` — route `/legal/privacy`. Sommaire avec
+  ancres : `#responsable`, `#finalites`, `#base-legale`, `#donnees`,
+  `#conservation`, `#sous-traitants`, `#droits`, `#dpo`. Couvre :
+  - Identité du responsable de traitement.
+  - Finalités (gestion compte, contenu militant, services, adhésions
+    T99CP, messagerie, audience anonymisée, modération).
+  - Triple base légale (contrat / consentement / intérêt légitime) avec
+    détail par finalité.
+  - Catégories de données collectées + précision sur signatures/votes
+    (transparence des soutiens publics).
+  - Durées de conservation (compte, contenus, messages 24 mois, logs
+    12 mois, comptabilité 10 ans).
+  - Sous-traitants : Supabase EU (Francfort), Vercel EU, Stripe (PCI-DSS
+    niveau 1), Sentry (scrub PII avant envoi).
+  - Droits RGPD + lien CNIL.
+- `web/src/pages/LegalNoticePage.tsx` — route `/legal/notice`. Éditeur
+  (forme juridique, siège, SIRET, directeur publication — placeholders à
+  compléter avant mise en prod), hébergeurs (Vercel + Supabase + Stripe),
+  propriété intellectuelle.
+- `web/src/pages/CookiesPage.tsx` — route `/legal/cookies`. Tableau des
+  cookies (`sb-auth-token`, `mn:cookie-consent`, `_mn_audience`) avec
+  finalité / durée / catégorie. Affichage de l'état courant
+  (« vous avez accepté tous les cookies » / « vous avez refusé… »).
+  Bouton « Modifier mes choix » qui purge le consentement et déclenche
+  la ré-apparition de la bannière au prochain chargement.
+- `web/src/components/Footer.tsx` — pied de page global accessible
+  (`aria-label="Pied de page"`, sous-nav `aria-label="Liens légaux"`)
+  avec les 3 liens `/legal/privacy`, `/legal/notice`, `/legal/cookies`.
+  Branché dans `RootLayout` au-dessus du `CookieBanner`.
+
+### Routes
+
+- `/legal` (nested) avec enfants `privacy`, `notice`, `cookies`. Public.
+
+### Audit RLS final — passage en revue table par table
+
+Légende des colonnes :
+
+- **R** = SELECT (lecture)
+- **W** = INSERT / UPDATE / DELETE (écriture)
+- `pub` = public / anon ; `auth` = utilisateur connecté ; `own` = propriétaire ;
+  `party` = partie prenante de la ligne ; `admin` = `is_admin(auth.uid())`.
+
+| Table                       | R                       | W                        | Verdict RGPD                                              |
+| --------------------------- | :---------------------- | :----------------------- | :-------------------------------------------------------- |
+| `users`                     | `pub` (profil)          | INS self / UP self+admin / DEL admin | **À durcir** : email présent dans la table → exposé via `select *`. Cf. action #1 ci-dessous. |
+| `petitions`                 | published / own / admin | INS self / UP+DEL own+admin | OK. Brouillons protégés.                                   |
+| `signatures`                | `pub` (compteur)        | INS self / DEL self+admin | OK (acceptable). user_id projeté = opinion politique liée → couvert par la politique de confidentialité (transparence des soutiens). |
+| `mobilizations`             | published / own / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `participations`            | `pub` (compteur)        | INS self / DEL self+admin | OK (idem signatures).                                     |
+| `housing`                   | is_published / own / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `housing_requests`          | requester+host+admin    | INS self / UP+DEL parties+admin | OK (strictement privé).                                    |
+| `carpooling`                | is_published / driver / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `lending`                   | `pub`                   | INS self / UP+DEL own+admin | OK (annonces objet — pas de PII sensible).                 |
+| `marketplace_items`         | `pub`                   | INS self / UP+DEL own+admin | OK.                                                       |
+| `garden_plots`              | `pub`                   | INS self / UP+DEL own+admin | OK.                                                       |
+| `sel_offers`                | is_active / own / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `sel_demands`               | is_active / own / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `crowdfunding_campaigns`    | published / own / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `contributions`             | contributor+organizer+admin | INS self (UP/DEL interdits) | OK (privé, intégrité comptable préservée).                 |
+| `articles`                  | published / author / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `comments`                  | `pub` sauf is_flagged   | INS self / UP+DEL own+admin | OK.                                                       |
+| `reactions`                 | `pub`                   | INS self / DEL self+admin | OK.                                                       |
+| `posts`                     | visibility-based        | INS self / UP+DEL own+admin | OK (`public` / `members` / `private` respectés).           |
+| `post_likes`                | `pub`                   | INS self / DEL self+admin | OK.                                                       |
+| `post_comments`             | `pub` sauf is_flagged   | INS self / UP+DEL own+admin | OK.                                                       |
+| `polls`                     | published / author / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `poll_options`              | `pub`                   | FOR ALL → author du poll + admin | OK.                                                       |
+| `votes`                     | `pub` (compteur)        | INS self+members_only / DEL self+admin | OK (idem signatures, transparence assumée).                |
+| `campaigns`                 | published / author / admin | INS self / UP+DEL own+admin | OK.                                                       |
+| `campaign_actions`          | `pub`                   | FOR ALL → author de la campaign + admin | OK.                                                       |
+| `communes`                  | `pub`                   | FOR ALL → admin uniquement | OK (politique éditoriale).                                 |
+| `commune_members`           | `pub`                   | INS self / UP admin+treasurer / DEL self+admin | OK.                                                       |
+| `conversations`             | user_a / user_b / admin | INS+UP party / DEL party+admin | OK (strictement privé).                                    |
+| `messages`                  | party / admin           | INS party / UP admin only | OK (body figé).                                            |
+| `notifications`             | recipient only          | INS admin / UP recipient / DEL recipient+admin | OK (admins exclus de la lecture — c'est volontaire).       |
+| `members`                   | `pub` (badge)           | FOR ALL → admin uniquement | À surveiller : badge adhérent public — affiliation à une association politique → couvert par la politique de confidentialité. |
+| `adhesions`                 | self / admin            | INS self / UP admin only  | OK.                                                       |
+| `t99cp_transactions`        | self / admin            | INS admin only (RPC SECURITY DEFINER) | OK (intégrité monétaire).                                 |
+| `admin_logs`                | admin only              | admin only                | OK.                                                       |
+| `email_campaigns`           | admin only              | admin only                | OK.                                                       |
+| `storage.objects` (avatars) | `pub` (bucket public)   | INS+UP+DEL owner sous `<uid>/` | OK (path-scoped, pas d'écrasement croisé).                 |
+
+#### Findings principaux
+
+1. **`users.email` exposé via `select *`** (table en lecture publique).
+   Aucune table privée n'est `using (true)` en SELECT — sauf `users`,
+   qui *est* publique par design, mais l'email s'y trouve. **À faire
+   avant mise en prod** : soit créer une vue `public_users` (id,
+   display_name, avatar, ville, badges) et révoquer `select` sur
+   `users` au rôle anon, soit utiliser `GRANT SELECT (cols…)` pour
+   masquer la colonne `email`. Suivi : ticket à ouvrir au Sprint 6
+   (« hardening final »).
+2. **`signatures` / `participations` / `votes`** : `user_id` projeté
+   publiquement = donnée d'opinion politique liée à l'identité. C'est
+   un trade-off RGPD assumé (transparence des soutiens militants),
+   désormais explicité dans `PrivacyPage` §4 (« données collectées »).
+3. **`members.user_id`** : badge adhérent public = donnée d'appartenance
+   à une organisation politique. Idem — assumé, documenté dans
+   `PrivacyPage`. Pas de listing public des membres directement,
+   seulement le badge sur le profil de la personne qui publie.
+4. **`is_admin()` est bien la seule porte d'entrée admin** sur toutes
+   les policies — vérifié visuellement, aucune table n'a un autre
+   raccourci (pas de `auth.role() = 'service_role'` direct dans une
+   policy front-facing).
+5. **Aucune table privée n'a `using (true)` en SELECT** : housing_requests,
+   conversations, messages, notifications, adhesions, t99cp_transactions,
+   contributions, admin_logs, email_campaigns sont toutes party-only ou
+   self-only ou admin-only.
+
+#### Décisions
+
+- L'audit ne modifie pas le schéma à cette étape — les findings #1, #2,
+  #3 sont documentés ici et dans `PrivacyPage`. La création d'une vue
+  `public_users` + retrait de `select` direct est planifiée pour le
+  Sprint 6 (hardening pré-prod).
+- Les policies utilisant `using (true)` sur des compteurs publics
+  (signatures, participations, votes, post_likes, reactions, campaign_actions,
+  poll_options) sont volontaires et alignées avec l'esprit transparence
+  du projet.
+
+### Audit Sentry no-PII
+
+- `web/src/lib/sentry.ts` — scaffold `scrubEvent(event)` à passer en
+  `beforeSend` quand le SDK Sentry sera branché. Pas de dépendance
+  `@sentry/browser` côté lib (autonome + 100 % testable).
+- Pattern `PII_KEY_PATTERN` couvre `email`, `phone`, `address`, `token`,
+  `password`, `authorization` (case-insensitive, match partiel sur
+  `streetAddress`, `userEmail`, `AuthorizationHeader`, etc.).
+- `scrubEvent` :
+  - `event.user` → `[Filtered]` complètement (pas même un id pseudonymisé
+    par défaut).
+  - `event.request.cookies` → `[Filtered]`.
+  - `event.request.headers` → scrub récursif.
+  - `event.extra`, `event.contexts`, `event.tags` → scrub récursif
+    (toute clé matchant le pattern).
+  - `event.breadcrumbs` → scrub récursif élément par élément.
+  - Immutable : ne mute pas l'événement d'origine (clone superficiel +
+    récursif des sous-objets).
+- Quand le SDK sera ajouté (clé DSN), l'init côté `main.tsx` ressemblera
+  à :
+  ```ts
+  Sentry.init({ dsn, beforeSend: scrubEvent });
+  ```
+
+### Tests
+
+- `src/lib/consent.test.ts` — **9 cas** : `readConsent` (5 : null,
+  JSON invalide, version obsolète, choice inconnu, valide),
+  `writeConsent` (2 : persistance + storage broken), `clearConsent`
+  (1), `MemoryStorage` impl test-only (intégrée dans le fichier).
+- `src/components/CookieBanner.test.tsx` — **8 cas** : affichage sans
+  consentement, masquage si déjà consenti, version obsolète →
+  réapparition, accept all, refuse all, personnaliser → ouvre panneau,
+  toggle analytics + enregistrement custom.
+- `src/pages/PrivacyPage.test.tsx` — **3 cas** : titre, toutes les
+  ancres présentes, sous-traitants listés.
+- `src/pages/LegalNoticePage.test.tsx` — **2 cas** : titre, éditeur +
+  hébergeurs.
+- `src/pages/CookiesPage.test.tsx` — **4 cas** : tableau cookies,
+  état « aucun choix », état « tout accepter », reset choix.
+- `src/lib/sentry.test.ts` — **6 cas** : pattern PII match/no-match,
+  scrub user, scrub cookies, scrub headers, scrub extra profond,
+  scrub breadcrumbs, immutabilité.
+- **Total : 32 nouveaux tests** (266 + 32 = **298 tests verts**).
+
+### Hygiène
+
+- `web/src/test/setup.ts` : ajout d'un `window.localStorage.clear()`
+  dans le `afterEach` global pour éviter que la bannière fuie entre
+  tests (RootLayout monte CookieBanner systématiquement). Wrapped
+  dans `try/catch` pour rester compatible avec les environnements où
+  `localStorage` est indisponible.
+
+### Checks finaux
+
+- `typecheck` : OK (TS 6 strict, pas de `any`).
+- `lint` : OK (ESLint flat, jsx-a11y + react-hooks).
+- `test` : **298 passed**.
+- `build` : 295 kB minified, 85 kB gzip (légère hausse vs étape 12 — pages
+  légales + bannière sont peu coûteuses).
+- `format:check` : OK (prettier 3).
+
+### Prochaines étapes
+
+- **Étape 14** : Sprint 3 — Hébergement + Covoiturage CRUD côté front.
+  Pattern habituel `lib + hooks + listing + fiche + création RequireAuth +
+  tests`. Tables déjà en place (`housing`, `housing_requests`, `carpooling`)
+  avec RLS validée à cette étape.
+- **À ouvrir en ticket avant mise en prod** : vue `public_users` masquant
+  l'email + grant SELECT colonne par colonne (cf. finding #1).
+- **À brancher quand DSN dispo** : `Sentry.init({ beforeSend: scrubEvent })`
+  dans `web/src/main.tsx`.
+
+---
+
+## Prompt pour la session N+8 (étape 14)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD).
+> 2. `HANDOFF.md` §10 Sprint 3 (services communautaires — Hébergement,
+>    Covoiturage).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 13 ✅ — étape 14 à faire).
+> 4. `db/schema.sql` §10-11 (`housing`, `housing_requests`, `carpooling`)
+>    + leurs policies RLS.
+> 5. `web/src/lib/campaigns.ts` + `web/src/lib/mobilizations.ts` — patterns
+>    de référence pour la lib (validation, slug, retry 23505, listing avec
+>    or-search échappée).
+> 6. `web/src/pages/CampaignDetailPage.tsx` + `MobilizationDetailPage.tsx` —
+>    patterns de fiche détaillée.
+>
+> **État actuel à la fin de l'étape 13** (tip `claude/add-campaigns-module-FHBHA`,
+> commit `chore(rgpd): step 13 — bannière cookies + pages légales + audit RLS/Sentry`) :
+>
+> - Sprint 2 complet (pétitions / mobilisations / sondages / campagnes).
+> - Bannière cookies + 3 pages légales (`/legal/privacy`, `/legal/notice`,
+>   `/legal/cookies`) opérationnelles.
+> - Footer global avec liens légaux dans `RootLayout`.
+> - Sentry no-PII scaffold (`web/src/lib/sentry.ts`) prêt — DSN à brancher.
+> - `web/` : 298 tests verts, build 295 kB.
+> - RLS auditée table par table, findings documentés (vue `public_users`
+>   à créer avant prod).
+>
+> **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
+>
+> 1. `git fetch origin claude/add-campaigns-module-FHBHA` (retry 2s/4s/8s/16s
+>    sur erreur réseau).
+> 2. `git merge --no-ff <SHA-étape-13>` pour intégrer
+>    `chore(rgpd): step 13 …`. Fallback :
+>    `git checkout origin/claude/add-campaigns-module-FHBHA -- .` + commit.
+> 3. `cd web && npm install --legacy-peer-deps`.
+> 4. `npm run typecheck && npm run lint && npx vitest run && npm run build`
+>    pour vérifier 298 tests verts au point de départ.
+>
+> **ÉTAPE 14 à exécuter — Sprint 3 / Hébergement + Covoiturage** :
+>
+> 1. **Module `web/src/lib/housing.ts`** :
+>    - Types `HousingRow`, `HousingInsert`, `HousingRequestRow` dérivés de
+>      `Database['public']`.
+>    - `listHousing({ city, search, dateRange, limit })` — filtre
+>      `is_published=true` par défaut, tri `created_at DESC`. Search
+>      `or('title.ilike.%X%,city.ilike.%X%,description.ilike.%X%')` avec
+>      échappement %/_/,.
+>    - `getHousing(id)` — la fiche est par ID (pas de slug pour le moment —
+>      table sans colonne slug). Si on veut un slug, ajouter d'abord
+>      `housing.slug` + index unique au schéma.
+>    - `createHousing(input)` — validation (title 4-80, city obligatoire,
+>      capacity ≥ 1, available_from < available_to), insert RLS-checked.
+>    - `requestHousing(housingId, { message, dates })` — insert
+>      `housing_requests` (status `pending`), RLS empêche un host de se
+>      contacter lui-même.
+>    - Helpers `cancelRequest(id)`, `acceptRequest(id)`, `refuseRequest(id)`.
+> 2. **Module `web/src/lib/carpooling.ts`** :
+>    - Types `CarpoolingRow`, `CarpoolingInsert`.
+>    - `listCarpooling({ from, to, dateRange, search, limit })`.
+>    - `getCarpooling(id)`.
+>    - `createCarpooling(input)` — validation (depart/arrivée obligatoires,
+>      depart_at futur, seats ≥ 1 ≤ 8, price_eur ≥ 0).
+> 3. **Hooks `useHousing` / `useHousingItem` / `useCarpooling` /
+>    `useCarpoolingItem`** — pattern polls/campaigns.
+> 4. **Pages** :
+>    - `HousingPage` (`/services/housing`) — listing avec filtres (ville,
+>      capacité min, dates).
+>    - `HousingDetailPage` (`/services/housing/:id`) — hero photo, infos,
+>      bouton « Faire une demande » (modale ou page séparée, au choix —
+>      page séparée plus simple).
+>    - `HousingCreatePage` (`/services/housing/new`, RequireAuth).
+>    - `HousingRequestPage` (`/services/housing/:id/request`, RequireAuth).
+>    - `CarpoolingPage` (`/services/carpooling`) — listing avec filtres
+>      (départ, arrivée, date).
+>    - `CarpoolingDetailPage` (`/services/carpooling/:id`).
+>    - `CarpoolingCreatePage` (`/services/carpooling/new`, RequireAuth).
+> 5. **Router** : ajouter les routes ci-dessus en respectant la
+>    structure existante (`children` sous `services`).
+> 6. **Tests** : objectif ≥ 340 tests verts (298 + ≥ 42 nouveaux,
+>    pattern habituel : lib 12-15 / hooks 6 / pages 18-25).
+> 7. **HANDOFF-PROGRESS.md** : étape 14 ✅ avec sections « Module housing »,
+>    « Module carpooling », « Hooks », « Pages », « Tests », « Décisions ».
+> 8. **Prompt étape 15** : suite Sprint 3 (Lending + Marketplace + Garden
+>    + SEL + Crowdfunding).
+> 9. **Commit** : `feat(services): step 14 — hébergement + covoiturage CRUD`.
+>    Push sur la branche imposée par l'harness.
+>
+> **Contraintes** :
+>
+> - Ne pas toucher au prototype.
+> - TS strict + no `any`.
+> - Conserver les checks verts.
+> - Pas d'emojis dans le code TS ni dans les commits.
+> - Réutiliser `slugify()` si on décide d'ajouter `housing.slug` (préférer
+>   alors une migration séparée — modifier `db/schema.sql` + régénérer
+>   `web/src/types/database.ts`).
