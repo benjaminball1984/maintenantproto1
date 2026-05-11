@@ -1440,5 +1440,55 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 -- =====================================================================================
+-- 19 · Bucket Supabase Storage `avatars` + policies RLS
+-- =====================================================================================
+-- Bucket public en lecture (les avatars sont visibles par tous), mais l'écriture
+-- (insert / update / delete) est strictement réservée au propriétaire de l'objet,
+-- avec contrainte de path : <user_id>/<filename>. Cette discipline évite qu'un
+-- utilisateur authentifié écrase un avatar tiers.
+
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
+
+-- Lecture publique : n'importe qui peut afficher un avatar (le bucket est public,
+-- les URLs publiques `…/storage/v1/object/public/avatars/…` doivent répondre).
+drop policy if exists avatars_public_read on storage.objects;
+create policy avatars_public_read on storage.objects
+  for select using (bucket_id = 'avatars');
+
+-- Insertion : seul l'utilisateur authentifié peut uploader un avatar, et seulement
+-- sous le préfixe correspondant à son auth.uid() (<uid>/...). On bloque ainsi
+-- toute tentative d'upload sur le dossier d'un autre utilisateur.
+drop policy if exists avatars_authenticated_insert on storage.objects;
+create policy avatars_authenticated_insert on storage.objects
+  for insert with check (
+    bucket_id = 'avatars'
+    and auth.uid() is not null
+    and owner = auth.uid()
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+-- Mise à jour : même contrainte (le owner ne change pas, le path reste sous <uid>/).
+drop policy if exists avatars_authenticated_update on storage.objects;
+create policy avatars_authenticated_update on storage.objects
+  for update using (
+    bucket_id = 'avatars'
+    and owner = auth.uid()
+  ) with check (
+    bucket_id = 'avatars'
+    and owner = auth.uid()
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+-- Suppression : un utilisateur peut supprimer ses propres avatars uniquement.
+drop policy if exists avatars_authenticated_delete on storage.objects;
+create policy avatars_authenticated_delete on storage.objects
+  for delete using (
+    bucket_id = 'avatars'
+    and owner = auth.uid()
+  );
+
+-- =====================================================================================
 -- FIN du schéma. Régénérer les types : `supabase gen types typescript --local`.
 -- =====================================================================================

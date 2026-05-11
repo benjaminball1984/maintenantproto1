@@ -14,7 +14,8 @@
 | 3. Squelette Vite + React + TS dans `web/`              |   ✅   |
 | 4. Schéma DB Supabase + RLS                             |   ✅   |
 | 5. Brancher Supabase Auth sur `AuthModal`               |   ✅   |
-| 6. Migration page par page (cf. sprints HANDOFF §10)    |   ⬜   |
+| 6. Page profil + reset password + avatars bucket        |   ✅   |
+| 7. Adhésion Stripe (3 tiers) + RPC T99CP (Sprint 1)     |   ⬜   |
 
 ---
 
@@ -578,3 +579,430 @@ chargement.
    nouveau mot de passe).
 5. **OAuth Google + Instagram** : créer les OAuth credentials, configurer
    Supabase Auth providers, ajouter les boutons sociaux dans `AuthModal`.
+
+---
+
+## Étape 6 — Page profil + reset password + avatars bucket + RequireAuth ✅
+
+**Branche** : `claude/review-project-setup-UbcCi` (étape 5 mergée depuis
+`claude/review-project-setup-r2FSV` @ `3a45184` au début de cette session).
+
+### Pré-requis exécutés
+
+- `git fetch origin claude/review-project-setup-r2FSV` puis `git merge --no-ff 3a45184`
+  pour récupérer le tip de l'étape 5 (Supabase Auth + AuthModal + handle_new_user).
+- `npm install --legacy-peer-deps` dans `web/`.
+- `service postgresql start` + base `maintenant` (utilisateur `maintenant/dev`)
+  + stub `auth` + stub `storage` (sandbox sans Docker, comme étapes 4 et 5).
+
+### Bucket Supabase Storage `avatars` + RLS
+
+Ajouté à `db/schema.sql` (nouvelle **section 19**) :
+
+```sql
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
+```
+
+Quatre policies RLS sur `storage.objects`, restreintes à `bucket_id = 'avatars'` :
+
+| Policy | Action | Contrainte |
+| ------ | ------ | ---------- |
+| `avatars_public_read`            | `select` | toujours (bucket public) |
+| `avatars_authenticated_insert`   | `insert` | `auth.uid() = owner` ET `(storage.foldername(name))[1] = auth.uid()::text` |
+| `avatars_authenticated_update`   | `update` | `owner = auth.uid()` (using + with check) |
+| `avatars_authenticated_delete`   | `delete` | `owner = auth.uid()` |
+
+La contrainte de path empêche qu'un utilisateur authentifié écrase l'avatar
+d'un tiers : un upload doit obligatoirement aller sous `<uid>/...`.
+
+**Stub `/tmp/auth_stub.sql`** étendu à `schema storage` (`storage.buckets`,
+`storage.objects` avec colonne `path_tokens` générée, RLS activée), plus la
+fonction `storage.foldername(text) returns text[]` (Supabase la fournit
+nativement). Vérifications après `psql -f db/schema.sql` :
+
+```
+public.users      : 0 rows
+public policies   : 119
+storage policies  : 4
+storage.buckets   : 'avatars' (public)
+```
+
+### Régénération des types
+
+`node db/gen-types.mjs > web/src/types/database.ts` → fichier **identique**
+à celui de l'étape 5 (1 674 lignes après formatage Prettier). Le générateur
+filtre `c.relnamespace = 'public'::regnamespace` : le schéma `storage` est
+volontairement ignoré (les buckets ne sont pas typés côté `Database`).
+Idempotence confirmée : `git diff web/src/types/database.ts` après
+régénération + format = vide.
+
+### `web/src/lib/postgrestError.ts`
+
+Mapping FR des codes Postgres / PostgREST les plus courants : `23505` unique
+violation, `23503` FK invalide, `23502` not null, `23514` check constraint,
+`22001` value too long, `22P02` invalid input, `42501` permission denied,
+`PGRST116` no rows, `PGRST301` session expired, `PGRST204` no content.
+Fallback sur `error.message` puis sur un message générique. Utilisé partout
+où une erreur Postgrest doit être affichée à l'utilisateur (édition profil,
+upload avatar).
+
+### `web/src/lib/profile.ts`
+
+Trois primitives strictement typées via `Database['public']['Tables']['users']` :
+
+- `getProfile(userId): Promise<{ data: UserRow | null, error: PostgrestError | null }>`
+- `updateProfile(userId, patch: UserUpdate)` — `UserUpdate` interdit toute
+  clé hors schéma à la compilation, zéro `any`.
+- `uploadAvatar(userId, file: File)` — validation client (`AVATAR_MAX_BYTES`
+  = 2 Mo, types `image/jpeg|png|webp|gif`), path déterministe
+  `<userId>/avatar-<timestamp>.<ext>`, upload Supabase Storage avec
+  `upsert: true`, renvoie `{ path, publicUrl }` issu de `getPublicUrl`.
+
+Les erreurs locales (validation + erreur de Storage) sont remontées comme de
+vraies `new PostgrestError({...})` (classe importée depuis
+`@supabase/supabase-js`) pour rester compatibles avec le typage Postgrest
+côté hook. Codes maison `AVATAR_INVALID_TYPE` / `AVATAR_TOO_LARGE` (non
+mappés par `postgrestErrorMessage`) → le message FR de la validation est
+préservé.
+
+### `web/src/hooks/useProfile.ts`
+
+Hook React qui consomme `useAuth().user.id` et expose :
+
+```ts
+{
+  profile: UserRow | null;
+  status: 'idle' | 'loading' | 'ready' | 'error';
+  error: PostgrestError | null;
+  refresh: () => Promise<void>;
+  update: (patch: UserUpdate) => Promise<{ error: PostgrestError | null }>;
+}
+```
+
+- Status dérivé : `authStatus === 'loading'` ⇒ `loading`. Sinon reflète
+  `fetchStatus`.
+- Reset automatique du state quand l'utilisateur change (pattern « set state
+  during render » avec clé `trackedUserId`), compatible avec la règle
+  React Hooks 7 `react-hooks/set-state-in-effect`.
+- Fetch initial déclenché via `queueMicrotask` dans `useEffect` (le setState
+  synchrone qui marque `loading` se fait par le pattern de clé, hors effet).
+
+### `web/src/pages/ProfilePage.tsx` — port TS strict
+
+Remplace le placeholder. Affiche, en mode lecture :
+
+- en-tête : avatar (image ou initiale, gradient brand) + nom + email,
+- bio (si présente), badges (tags `var(--mn-brand-light)`),
+- carte « Informations » : ville, code postal, membre depuis (formaté
+  fr-FR),
+- wallet T99CP (carte sombre, font Sora, balance affichée).
+
+En mode édition (bouton « Modifier ») :
+
+- formulaire inline avec `display_name` (obligatoire), bio (`textarea`
+  ≥ 96 px), ville, code postal,
+- avatar : bouton « Changer l'avatar » + `<input type="file" accept="image/*">`
+  caché + label cliquable au survol de l'avatar,
+- preview avant upload (`URL.createObjectURL`), validation client (2 Mo,
+  formats image),
+- erreurs Postgrest mappées en FR via `postgrestErrorMessage`,
+- boutons « Enregistrer » / « Annuler » (≥ 44 px, ARIA labels, `aria-describedby`
+  vers l'erreur de formulaire).
+
+Aucun hex en dur : 100 % des couleurs via `var(--mn-*)`. Aucun emoji : icônes
+SVG `IconEdit`, `IconCheck`, `IconUpload`, `IconBadge`, `IconClose`,
+`IconUser` (`web/src/components/icons.tsx`).
+
+### `web/src/pages/ResetPasswordPage.tsx` + route `/auth/reset-password`
+
+- Lit le `code` depuis `searchParams.get('code')` ou le hash (`extractCodeFromLocation`).
+- Initialise le status en `'exchanging'` ou `'expired'` (lazy initializer
+  → pas de setState dans un effect).
+- `supabase.auth.exchangeCodeForSession(code)` au mount (effect). En cas
+  d'erreur, message FR via `authErrorMessage`.
+- Formulaire : nouveau mot de passe + confirmation (≥ 8 caractères,
+  identiques). Submit → `supabase.auth.updateUser({ password })` puis
+  redirection `setTimeout(navigate('/profile'), 800)`.
+- Mise à jour de `auth.ts::resetPasswordForEmail` : passe désormais
+  `{ redirectTo: ${window.location.origin}/auth/reset-password }` (avec
+  fallback `undefined` en SSR).
+
+### `web/src/components/RequireAuth.tsx`
+
+Wrapper de route minimal :
+
+- `status === 'loading'` → spinner (texte « Chargement… », `role="status"`).
+- `status === 'anonymous'` → `<Navigate to="/?auth=login" replace />`,
+  conserve la route d'origine dans `location.state.from`.
+- `status === 'authenticated'` → rend `children`.
+
+Appliqué à `/profile` dans `web/src/router.tsx`. `RootLayout` consomme le
+query param `?auth=login` (pattern « set state during render ») pour
+ouvrir automatiquement la modale d'authentification, et le supprime de
+l'URL une fois l'utilisateur authentifié.
+
+### `RootLayout` — adaptations
+
+- Entrée « Profil » de la navigation conditionnelle : visible uniquement
+  quand `status === 'authenticated'`.
+- Menu compact `[IconUser display_name]` désormais cliquable → navigate
+  vers `/profile`.
+- Bouton « Se déconnecter » inchangé.
+- Effets refactorés (pattern de clé sur `authQuery|status`) pour rester
+  conformes à la règle `react-hooks/set-state-in-effect`.
+
+### Tests
+
+| Fichier                                         | Couverture                            |
+| ----------------------------------------------- | ------------------------------------- |
+| `src/lib/profile.test.ts`                       | 9 cas — getProfile/updateProfile,     |
+|                                                 | erreurs RLS/unique violation FR,      |
+|                                                 | uploadAvatar (type, taille, succès,   |
+|                                                 | erreur Storage)                       |
+| `src/hooks/useProfile.test.tsx`                 | 4 cas — fetch au mount, error RLS,    |
+|                                                 | refresh, update                       |
+| `src/pages/ProfilePage.test.tsx`                | 6 cas — rendu lecture, bascule édition |
+|                                                 | submit avec trim, erreur 42501 FR,    |
+|                                                 | upload avatar (mock File), annulation |
+| `src/pages/ResetPasswordPage.test.tsx`          | 6 cas — code absent, exchange OK,     |
+|                                                 | password < 8 char, mismatch, submit + |
+|                                                 | redirect /profile, code expiré FR     |
+| `src/components/RequireAuth.test.tsx`           | 3 cas — spinner loading, redirect     |
+|                                                 | anonymous, rend children authenticated |
+
+Total : **50 tests** (22 existants + 28 nouveaux), tous verts.
+
+Note d'implémentation tests : `useAuth()` interne appelle
+`supabase.auth.getSession()` au mount et écrase l'état local s'il résout
+avec `{ session: null }`. Pour les tests qui dépendent d'un utilisateur
+authentifié, on stub `getSession` pour retourner directement la session
+attendue (sinon race condition entre l'état manuel et la résolution du
+promise).
+
+### Vérifications passées
+
+- `npm run typecheck` : ✅ aucune erreur
+- `npm run lint` : ✅ 0 problème
+- `npm test` : ✅ **50/50** tests passent
+- `npm run build` : ✅ `dist/` 295 kB JS / 1,09 kB CSS (gzip 85 kB / 0,56 kB)
+- `npm run format:check` : ✅ tous les fichiers conformes
+
+### Décisions UX
+
+- **Pas d'onglets** (Activité/Services/Paramètres) sur la première version
+  de `/profile` : le prototype les expose mais ils dépendent de données
+  encore absentes (mobilisations, T99CP transactions). On reviendra dessus
+  au Sprint 2 (contenu militant) avec un vrai feed dérivé de Supabase.
+- **Avatar bucket public** : choix RGPD assumé — un avatar est par essence
+  un identifiant visuel public ; pour les profils privés (mineurs, lanceurs
+  d'alerte) on bascule plus tard sur un bucket privé + URL signée.
+- **Limite 2 Mo, formats JPEG/PNG/WebP/GIF** : aligné avec les standards
+  produits comme Mastodon / Bluesky. Le PNG transparent (logos) est admis.
+  Le WebP est encouragé (compression).
+- **Reset password redirect** : `${window.location.origin}/auth/reset-password`.
+  Ne dépend pas d'une variable d'env → fonctionne en preview Vercel et en
+  prod sans configuration supplémentaire. Côté Supabase Dashboard, il
+  faudra ajouter `/auth/reset-password` à la whitelist des redirect URLs
+  avant la mise en prod.
+- **Guard `RequireAuth`** : pour l'instant on redirige vers `/?auth=login`
+  qui ouvre la modale. Quand on aura plusieurs pages protégées (`/admin`,
+  `/messaging`), on stockera la route d'origine dans `location.state.from`
+  pour rediriger automatiquement après login. La logique est déjà prête,
+  il reste juste à l'exploiter côté `AuthModal` (à brancher au Sprint 1
+  Stripe quand on aura le tunnel d'adhésion).
+
+### Tableau d'état global
+
+`/profile` est désormais une route protégée qui consomme la table
+`public.users` via `getProfile` et y écrit via `updateProfile`. Le bucket
+Storage `avatars` est branché avec policies RLS strictes. Le flow forgot
+password est complet de bout en bout (modale → email → page de reset →
+redirection vers `/profile`).
+
+### Prochaines étapes (Sprint 1 — adhésion Stripe + RPC T99CP)
+
+1. **Adhésion Stripe (3 tiers : gratuit / soutien / engagé)** :
+   - Frontend : `/join` avec le tunnel d'adhésion (cartes tier + Stripe
+     Checkout via `loadStripe`).
+   - Backend : Edge Function Supabase `create-checkout-session`
+     (`SUPABASE_SERVICE_ROLE_KEY` côté serveur uniquement), puis webhook
+     `stripe-webhook` qui synchronise `public.adhesions` + `public.members`.
+   - Stocker `stripe_customer_id` / `stripe_subscription_id` sur
+     `public.adhesions`. Variables d'env : `STRIPE_SECRET_KEY`,
+     `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_SOUTIEN`, `STRIPE_PRICE_ENGAGE`.
+2. **RPC T99CP** : `credit_t99cp(p_user uuid, p_amount integer, p_reason text)`
+   / `debit_t99cp(...)` (SECURITY DEFINER + check de solde, écrit dans
+   `t99cp_transactions` et met à jour `users.t99cp_balance` dans une
+   transaction). Déjà cadré par la policy `t99cp_insert_admin` (insertion
+   réservée aux admins / via RPC).
+3. **OAuth Google + Instagram** : reporté tant que les OAuth credentials
+   ne sont pas créés (hors scope Claude — décision produit).
+
+---
+
+## Prompt pour la session N+1 (étape 7)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness — typiquement
+> `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD).
+> 2. `HANDOFF.md` §6 (adhésion + T99CP), §7.2 (tables `adhesions`,
+>    `members`, `t99cp_transactions`), §10 Sprint 1 (T99CP wallet).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 6 ✅ — étape 7 à faire).
+> 4. `Theme.jsx` (prototype) — chercher `JoinPage` / tunnel adhésion pour
+>    récupérer la maquette.
+> 5. `Pages_Home.jsx` ou la racine du prototype — composants existants
+>    pour la page d'adhésion.
+> 6. `web/src/lib/auth.ts`, `web/src/lib/profile.ts`, `web/src/lib/supabase.ts`,
+>    `web/src/router.tsx`, `web/src/components/RequireAuth.tsx` — modules
+>    posés à l'étape 6.
+>
+> **État actuel à la fin de l'étape 6** (tip de `claude/review-project-setup-UbcCi`,
+> commit `feat(profile): step 6 …`) :
+>
+> - Prototype intact : `project/app/Maintenant.html` + JSX racine.
+> - `web/` : Vite + React 19 + TS 6 strict, router avec route protégée
+>   `/profile` (RequireAuth) et `/auth/reset-password`, ESLint flat,
+>   Vitest, Prettier.
+> - Supabase : schéma `db/schema.sql` à 1 488 lignes (36 tables + 119
+>   policies RLS + trigger `handle_new_user` + bucket `avatars` + 4
+>   policies storage), `web/src/types/database.ts` (1 674 lignes).
+> - Auth applicative : `web/src/lib/auth.ts` (Zustand), `AuthModal` 3 écrans,
+>   `RequireAuth`, RootLayout avec bouton login + menu utilisateur +
+>   profil.
+> - Profil : `web/src/lib/profile.ts`, `web/src/hooks/useProfile.ts`,
+>   `web/src/pages/ProfilePage.tsx` (lecture + édition + avatar),
+>   `web/src/lib/postgrestError.ts`, bucket Storage `avatars`.
+> - **50 tests verts** (smoke routing + auth + profil + reset password +
+>   RequireAuth).
+>
+> **CONTEXTE D'OUVERTURE — à exécuter avant toute autre action** :
+>
+> 1. `git fetch origin claude/review-project-setup-UbcCi`
+> 2. `git merge --no-ff <sha-tip-de-UbcCi>` (récupérer le tip actuel, qui
+>    doit pointer sur le commit `feat(profile): step 6 …`). En cas
+>    d'absence, `git checkout origin/claude/review-project-setup-UbcCi -- .`
+>    puis commit.
+> 3. `cd web && npm install --legacy-peer-deps` (lockfile non versionné,
+>    option requise à cause d'`eslint-plugin-jsx-a11y` ↔ ESLint 10). À
+>    réutiliser pour tout nouvel `npm install` dans cette session.
+>
+> **ÉTAPE 7 à exécuter — Adhésion Stripe (3 tiers) + RPC T99CP** :
+>
+> 1. **RPC SQL T99CP** : ajouter à `db/schema.sql` (nouvelle section 20)
+>    les fonctions `credit_t99cp(p_user uuid, p_amount integer, p_reason text)`
+>    et `debit_t99cp(p_user uuid, p_amount integer, p_reason text)`, toutes
+>    deux `SECURITY DEFINER` + `set search_path = public, pg_temp`. Le crédit
+>    insère dans `t99cp_transactions` avec `kind='credit'` puis met à jour
+>    `users.t99cp_balance` (atomique). Le débit vérifie d'abord
+>    `users.t99cp_balance >= p_amount` (sinon `raise exception 'insufficient_balance'`),
+>    insère `kind='debit'` et décrémente. `revoke all … from public` +
+>    `grant execute … to authenticated`. Le check positif sur
+>    `users.t99cp_balance` (déjà présent à l'étape 4) garantit le non-overflow.
+> 2. **Régénérer les types** : `node db/gen-types.mjs > web/src/types/database.ts`.
+>    Le générateur ne récupère pas encore les fonctions custom — étendre
+>    `Functions` dans le générateur pour inclure `credit_t99cp` / `debit_t99cp`
+>    avec `Args: { p_user: string; p_amount: number; p_reason: string }`
+>    et `Returns: void`.
+> 3. **Edge Function `create-checkout-session`** :
+>    `supabase/functions/create-checkout-session/index.ts` (Deno). Prend
+>    `{ tier: 'soutien' | 'engage' }`, lit `STRIPE_SECRET_KEY`,
+>    `STRIPE_PRICE_SOUTIEN`, `STRIPE_PRICE_ENGAGE`, et `SUPABASE_URL` depuis
+>    les env vars. Authentifie l'appelant via JWT (anon key → user id).
+>    Crée une Stripe Checkout session en mode `subscription`, success_url
+>    `/profile?adhesion=ok`, cancel_url `/join?canceled=1`. Retourne
+>    `{ url }`.
+> 4. **Edge Function `stripe-webhook`** :
+>    `supabase/functions/stripe-webhook/index.ts`. Vérifie la signature
+>    `Stripe.webhooks.constructEvent(body, sig, STRIPE_WEBHOOK_SECRET)`.
+>    Sur `checkout.session.completed` : upsert dans `public.adhesions`
+>    (`user_id`, `tier`, `status='active'`, `stripe_customer_id`,
+>    `stripe_subscription_id`, `current_period_end`). Sur
+>    `customer.subscription.deleted` ou `customer.subscription.updated`
+>    avec status `canceled`/`unpaid` : mettre `status='cancelled'` ou
+>    `'expired'`. Sur `invoice.payment_succeeded` : appeler la RPC
+>    `credit_t99cp(user_id, 60, 'adhesion_renewal')` pour crédit mensuel.
+>    Utiliser `service-role` (Edge Function tourne côté serveur, OK).
+> 5. **Module `web/src/lib/membership.ts`** : `getCurrentAdhesion(userId)`,
+>    `createCheckoutSession(tier)` qui appelle l'Edge Function via
+>    `supabase.functions.invoke('create-checkout-session', { body: { tier } })`,
+>    puis `window.location.assign(url)`. Tous typés via `Database`.
+> 6. **`web/src/pages/JoinPage.tsx`** : port TS strict du tunnel
+>    d'adhésion du prototype. 3 cartes (gratuit, soutien, engagé) avec
+>    prix mensuel + bénéfices + bouton « Devenir <tier> ». Le tier gratuit
+>    est immédiat (insert dans `adhesions` via RLS authenticated_self).
+>    Les 2 autres lancent `createCheckoutSession`. Si l'utilisateur est
+>    déjà adhérent (récupéré via `useAdhesion`), griser les tiers
+>    inférieurs et afficher « Tier actuel ».
+> 7. **Hook `web/src/hooks/useAdhesion.ts`** : retourne
+>    `{ adhesion: AdhesionRow | null, status, refresh }`.
+> 8. **Tests** (Vitest + Testing Library + mocks supabase) :
+>    - `src/lib/membership.test.ts` (≥ 4 cas) — getCurrentAdhesion,
+>      createCheckoutSession (succès + erreur), tier déjà actif.
+>    - `src/hooks/useAdhesion.test.tsx` (≥ 3 cas).
+>    - `src/pages/JoinPage.test.tsx` (≥ 5 cas) — rendu 3 tiers, click
+>      gratuit → insert, click soutien → invoke + redirect, tier déjà
+>      actif grisé, erreur Postgrest mappée FR.
+>    - Tests SQL (commentaires dans `db/schema.sql`) — décrire les cas
+>      à vérifier en local : crédit augmente la balance, débit refuse si
+>      solde insuffisant, idempotence des inserts par
+>      `(user_id, stripe_session_id)`.
+>    Tous les checks doivent rester verts. Objectif total : ≥ **62 tests**
+>    (50 existants + ≥ 12 nouveaux).
+> 9. **Mettre à jour `HANDOFF-PROGRESS.md`** : étape 7 ✅ avec sections
+>    « RPC T99CP », « Edge Functions Stripe », « membership.ts +
+>    useAdhesion », « JoinPage », « décisions Stripe (mode test vs live,
+>    rate-limit, idempotence) », « prochaines étapes (Sprint 1 fin —
+>    OAuth Google + Instagram + magic link, puis Sprint 2 contenu
+>    militant) ». Cocher la ligne 7 et créer une ligne 8 si manquante.
+>    Brancher Stripe / adhésion dans le tableau d'état global.
+> 10. **Écrire le prompt de la session N+2** : dans
+>     `HANDOFF-PROGRESS.md` (en bas du fichier ou en annexe), ajouter une
+>     section `## Prompt pour la session N+2` reprenant la même structure
+>     que ce prompt (contexte d'ouverture avec le tip de cette étape, état
+>     actuel, étape à exécuter, contraintes, fallback Docker, et **la
+>     consigne récursive de générer le prompt de la session N+3 avant le
+>     commit final**). L'étape 8 cible : OAuth Google + Instagram (boutons
+>     sociaux dans `AuthModal`, gestion des erreurs de consentement, page
+>     de callback `/auth/callback`) **OU** le passage à Sprint 2 (contenu
+>     militant — pétitions CRUD) si le sprint 1 est complet à l'issue
+>     de cette étape. Cette consigne doit être présente à chaque étape :
+>     tant que le sprint 1 n'est pas terminé, le journal de bord
+>     auto-prépare la session suivante.
+> 11. **Commit** : `feat(adhesion): step 7 — Stripe checkout + webhook +
+>     RPC T99CP + JoinPage`. Push sur la branche imposée par l'harness
+>     avec `git push -u origin <branch>`, retry sur erreurs réseau
+>     (2s/4s/8s/16s). Pas de PR sans demande explicite.
+>
+> **Contraintes** :
+>
+> - Ne pas toucher au prototype (`project/app/Maintenant.html` et JSX racine).
+> - TS strict + no `any` : tous les types Supabase via `web/src/types/database.ts`
+>   ou `@supabase/supabase-js`.
+> - **Aucune clé `service_role` dans `web/`** : la clé côté Edge Function
+>   est lue via `Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')`, jamais
+>   exportée vers le bundle front.
+> - **Aucune clé `STRIPE_SECRET_KEY` dans `web/`** : idem, Edge Function only.
+> - Pas d'emojis dans le code TS ni dans les commits (utiliser SVG —
+>   `IconCart`, `IconCheckCircle` à ajouter si besoin).
+> - Conserver les checks verts : `typecheck`, `lint`, `test`, `build`,
+>   `format:check`. Lancer les 5 en fin de session avant de committer.
+> - Si Docker n'est pas dispo dans la sandbox, ne pas tenter
+>   `supabase start` ; appliquer le schéma à un PG local comme aux
+>   étapes 4, 5 et 6 (`service postgresql start` + auth stub + storage
+>   stub + `psql -f db/schema.sql`). Pour tester les Edge Functions sans
+>   `supabase functions serve`, les écrire de façon à pouvoir être
+>   testées en isolation (Deno `import.meta.main` guard) et créer un
+>   harness Node minimaliste si nécessaire.
+>
+> Le prompt de l'étape 8 doit impérativement contenir la même consigne
+> récursive : « écrire le prompt de l'étape 9 dans
+> `HANDOFF-PROGRESS.md` avant le commit final ». Cette boucle s'arrête
+> uniquement quand le sprint 1 (auth + profil + adhésion + T99CP) est
+> complet, point auquel le prompt généré peut basculer sur le sprint 2
+> (contenu militant — pétitions, mobilisations, campagnes).

@@ -100,3 +100,71 @@ export function IconLogout({ width = 16, height = 16, ...props }: IconProps) {
     </svg>
   );
 }
+
+export function IconEdit({ width = 16, height = 16, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+    </svg>
+  );
+}
+
+export function IconCheck({ width = 16, height = 16, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+export function IconUpload({ width = 16, height = 16, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  );
+}
+
+export function IconBadge({ width = 16, height = 16, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <circle cx="12" cy="8" r="6" />
+      <path d="M8.21 13.89 7 22l5-3 5 3-1.21-8.12" />
+    </svg>
+  );
+}

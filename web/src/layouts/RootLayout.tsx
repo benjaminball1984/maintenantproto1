@@ -1,11 +1,11 @@
-import { useState, type CSSProperties } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { useEffect, useState, type CSSProperties } from 'react';
+import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom';
 
 import AuthModal from '@/components/AuthModal';
 import { IconLogout, IconUser } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 
-const navItems: { to: string; label: string }[] = [
+const baseNavItems: { to: string; label: string }[] = [
   { to: '/', label: 'Accueil' },
   { to: '/petitions', label: 'Pétitions' },
   { to: '/mobilizations', label: 'Mobilisations' },
@@ -16,7 +16,6 @@ const navItems: { to: string; label: string }[] = [
   { to: '/polls', label: 'Sondages' },
   { to: '/communes', label: 'Communes' },
   { to: '/join', label: 'Rejoindre' },
-  { to: '/profile', label: 'Profil' },
 ];
 
 const headerStyle: CSSProperties = {
@@ -97,10 +96,41 @@ function displayNameFromUser(user: { user_metadata?: { display_name?: string }; 
 export default function RootLayout() {
   const { status, user, signOut } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Synchronisation `?auth=login` ↔ modale (pattern « set state during render »
+  // pour rester compatible avec la règle react-hooks/set-state-in-effect).
+  const authQuery = searchParams.get('auth');
+  const wantsAuthOpen = authQuery === 'login' && status !== 'authenticated';
+  const [trackedKey, setTrackedKey] = useState(`${authQuery}|${status}`);
+  const currentKey = `${authQuery}|${status}`;
+  if (trackedKey !== currentKey) {
+    setTrackedKey(currentKey);
+    if (wantsAuthOpen) {
+      setAuthOpen(true);
+    } else if (status === 'authenticated' && authQuery) {
+      setAuthOpen(false);
+    }
+  }
+
+  // Une fois authentifié·e, on nettoie le query param `?auth=login` côté URL.
+  useEffect(() => {
+    if (status === 'authenticated' && searchParams.get('auth')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('auth');
+      setSearchParams(next, { replace: true });
+    }
+  }, [status, searchParams, setSearchParams]);
 
   const handleSignOut = async () => {
     await signOut();
   };
+
+  const navItems =
+    status === 'authenticated'
+      ? [...baseNavItems, { to: '/profile', label: 'Profil' }]
+      : baseNavItems;
 
   return (
     <div>
@@ -127,10 +157,20 @@ export default function RootLayout() {
 
         {status === 'authenticated' && user ? (
           <div style={userMenuStyle}>
-            <span style={userNameStyle}>
+            <button
+              type="button"
+              onClick={() => navigate('/profile')}
+              style={{
+                ...userNameStyle,
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+              aria-label="Ouvrir mon profil"
+            >
               <IconUser width={16} height={16} />
               {displayNameFromUser(user)}
-            </span>
+            </button>
             <button type="button" onClick={handleSignOut} style={logoutBtnStyle}>
               <IconLogout width={14} height={14} />
               Se déconnecter

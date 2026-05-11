@@ -103,10 +103,12 @@ describe('useAuthStore', () => {
     expect(mocks.signInWithOtp).toHaveBeenCalledWith({ email: 'm@x.org' });
   });
 
-  it('resetPasswordForEmail forwards email', async () => {
+  it('resetPasswordForEmail forwards email and redirectTo', async () => {
     mocks.resetPasswordForEmail.mockResolvedValueOnce({ data: {}, error: null });
     await useAuthStore.getState().resetPasswordForEmail('r@x.org');
-    expect(mocks.resetPasswordForEmail).toHaveBeenCalledWith('r@x.org');
+    expect(mocks.resetPasswordForEmail).toHaveBeenCalledWith('r@x.org', {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    });
   });
 
   it('signOut clears the session and switches to anonymous', async () => {

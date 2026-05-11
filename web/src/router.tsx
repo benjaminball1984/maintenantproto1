@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router-dom';
+import RequireAuth from './components/RequireAuth';
 import RootLayout from './layouts/RootLayout';
 import HomePage from './pages/HomePage';
 import PetitionsPage from './pages/PetitionsPage';
@@ -21,6 +22,7 @@ import AdminPage from './pages/AdminPage';
 import JoinPage from './pages/JoinPage';
 import CommunesPage from './pages/CommunesPage';
 import ProfilePage from './pages/ProfilePage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 export const router = createBrowserRouter([
@@ -53,7 +55,15 @@ export const router = createBrowserRouter([
       { path: 'admin', element: <AdminPage /> },
       { path: 'join', element: <JoinPage /> },
       { path: 'communes', element: <CommunesPage /> },
-      { path: 'profile', element: <ProfilePage /> },
+      {
+        path: 'profile',
+        element: (
+          <RequireAuth>
+            <ProfilePage />
+          </RequireAuth>
+        ),
+      },
+      { path: 'auth/reset-password', element: <ResetPasswordPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },
