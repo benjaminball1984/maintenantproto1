@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#E11D74">
+  <meta name="description" content="Maintenant! — Plateforme de mobilisation citoyenne et services solidaires. La voix des 99%.">
+  <meta property="og:title" content="Maintenant ! — La voix des 99%">
+  <meta property="og:description" content="Pétitions · Mobilisations · Hébergement · Covoiturage · Marketplace · SEL">
+  <meta property="og:image" content="https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=1200&q=80">
+  <title>Maintenant ! — La voix des 99%</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Runtime libs (CDN) -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <!-- Supabase JS v2 (exposes window.supabase namespace; client init happens later in app code) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" crossorigin="anonymous"></script>
+
+  <style>
+    /* ── Reset & base ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+      scroll-behavior: smooth;
+      font-size: 16px;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #FAFAF9;
+      color: #1A1A18;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow-x: hidden;
+      line-height: 1.5;
+    }
+
+    img { max-width: 100%; height: auto; display: block; }
+    input, select, textarea, button { font-family: inherit; }
+    input, select, textarea { font-size: 16px !important; -webkit-appearance: none; border-radius: 0; }
+    a { color: inherit; text-decoration: none; }
+    button { cursor: pointer; }
+
+    /* ── Scrollbar ───────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: #F5F4F2; }
+    ::-webkit-scrollbar-thumb { background: #D4D1CA; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #B0AEA7; }
+
+    /* ── Responsive breakpoints ─────────────────────────── */
+    /* Mobile first ≤ 767px (téléphone portrait & paysage)  */
+    /* Tablette portrait & paysage : 768 → 1023            */
+    /* Desktop : ≥ 1024                                     */
+
+    /* —— Globals dynamiques ——————————————————————————— */
+    /* Fluid container : padding latéral qui s'adapte */
+    .mn-container { padding-left: clamp(16px, 4vw, 48px); padding-right: clamp(16px, 4vw, 48px); }
+    /* Conteneurs scrollables horizontalement (pour tableaux/longs filtres) */
+    .mn-hscroll { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+    .mn-hscroll::-webkit-scrollbar { height: 3px; }
+    /* Tableaux qui se transforment en scroll horizontal sur mobile */
+    .mn-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; }
+    .mn-table-wrap table { min-width: 640px; }
+    /* Empêche les images SVG/photos d'être plus larges que leur conteneur */
+    svg { max-width: 100%; }
+    /* Tap targets ≥ 44px sur mobile */
+    button, [role="button"], a { min-height: auto; }
+
+    /* ===== Mobile (< 768px) ============================= */
+    @media (max-width: 767px) {
+      .mn-desk { display: none !important; }
+      .mn-mob-btn { display: flex !important; }
+      .mn-bot { display: flex !important; }
+      .mn-media-featured { grid-template-columns: 1fr !important; }
+      .mn-detail-grid { grid-template-columns: 1fr !important; }
+      .mn-reseau-grid { grid-template-columns: 1fr !important; }
+      .mn-reseau-sidebar { display: none !important; }
+      .mn-messaging-grid { grid-template-columns: 1fr !important; min-height: auto !important; }
+      .mn-footer { display: none !important; }
+
+      /* Toute grille à 2-3-4-5 colonnes → 1 colonne */
+      [data-mn-grid="2"], [data-mn-grid="3"], [data-mn-grid="4"], [data-mn-grid="auto"] {
+        grid-template-columns: 1fr !important;
+      }
+      /* Sauf les hubs / cartes service qui font 2 colonnes serrées */
+      [data-mn-grid="services"] { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
+
+      /* Hero / titres : tailles réduites */
+      [data-mn-hero] h1, [data-mn-hero] .display { font-size: clamp(28px, 8vw, 38px) !important; line-height: 1.1 !important; }
+      [data-mn-hero] { padding: 24px 0 !important; }
+
+      /* Cards / Containers : padding réduit */
+      [data-mn-card] { padding: 16px !important; }
+      [data-mn-section] { padding: 32px 0 !important; }
+
+      /* Stack : tout ce qui est en flex-row → flex-col */
+      [data-mn-stack-mob] { flex-direction: column !important; align-items: stretch !important; }
+      [data-mn-stack-mob] > * { width: 100% !important; }
+
+      /* Tableaux internes auto-scroll */
+      table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+      /* Body : laisse l'espace pour la nav du bas */
+      body { padding-bottom: 64px; }
+
+      /* Tweaks panel + assistant flottants : plus haut quand bot nav active */
+      #tweaks-panel { bottom: 80px !important; right: 8px !important; left: 8px !important; width: auto !important; }
+
+      /* Filtres/chips : scrollables horizontalement sans wrap */
+      [data-mn-chips] { flex-wrap: nowrap !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+      [data-mn-chips] > * { flex-shrink: 0; }
+
+      /* Modaux : full-screen sur mobile */
+      [data-mn-modal] {
+        max-width: 100vw !important;
+        max-height: 100vh !important;
+        height: 100vh !important;
+        border-radius: 0 !important;
+        margin: 0 !important;
+      }
+    }
+
+    /* ===== Tablette (768 → 1023) ======================== */
+    @media (min-width: 768px) and (max-width: 1023px) {
+      .mn-desk { display: flex !important; }
+      .mn-mob-btn { display: none !important; }
+      .mn-bot { display: none !important; }
+      .mn-footer { display: block !important; }
+      .mn-mob-nav-panel { display: none !important; }
+
+      /* Compactage de la nav (icônes + labels courts) */
+      [data-mn-nav-label] { font-size: 12px !important; }
+      [data-mn-nav-link] { padding: 8px 10px !important; }
+
+      /* Réseau garde sa sidebar mais plus étroite */
+      .mn-reseau-grid { grid-template-columns: minmax(0,1fr) 240px !important; gap: 16px !important; }
+
+      /* Grilles 4 → 2-3 colonnes */
+      [data-mn-grid="4"] { grid-template-columns: repeat(2, 1fr) !important; }
+      [data-mn-grid="3"] { grid-template-columns: repeat(2, 1fr) !important; }
+
+      /* Hero plus petit */
+      [data-mn-hero] h1, [data-mn-hero] .display { font-size: clamp(36px, 5vw, 56px) !important; }
+    }
+
+    /* ===== Desktop (≥ 1024px) =========================== */
+    @media (min-width: 1024px) {
+      .mn-desk { display: flex !important; }
+      .mn-mob-btn { display: none !important; }
+      .mn-bot { display: none !important; }
+      .mn-footer { display: block !important; }
+      .mn-mob-nav-panel { display: none !important; }
+    }
+
+    /* ===== Très petits mobiles (< 380px) ================ */
+    @media (max-width: 379px) {
+      [data-mn-grid="services"] { grid-template-columns: 1fr !important; }
+      [data-mn-hero] h1, [data-mn-hero] .display { font-size: 26px !important; }
+      [data-mn-card] { padding: 12px !important; }
+    }
+
+    /* ===== Polish responsive supplémentaire ============== */
+    @media (max-width: 767px) {
+      /* SectionTitle (titre + bouton action) — empile sur mobile */
+      .mn-section-title { flex-direction: column !important; align-items: stretch !important; }
+      .mn-section-title > * { width: 100% !important; }
+
+      /* PageContainer — réduit le padding latéral */
+      [data-mn-page] { padding: 18px 14px 90px !important; }
+
+      /* Toast — pleine largeur en bas */
+      .mn-toast-wrap { left: 12px !important; right: 12px !important; transform: none !important; max-width: none !important; }
+
+      /* Profile cover : moins haute */
+      .mn-profile-cover { height: 130px !important; }
+      /* Profile header : repli vertical */
+      .mn-profile-header { flex-direction: column !important; align-items: stretch !important; gap: 16px !important; }
+
+      /* Wallet/CTA dark sections : grid auto → 1 colonne */
+      .mn-wallet-card { grid-template-columns: 1fr !important; gap: 14px !important; }
+
+      /* Buttons groupés : full width côte à côte si flex */
+      .mn-btn-row { flex-direction: column !important; }
+      .mn-btn-row > * { width: 100% !important; }
+
+      /* Cards mobilisations : cache la photo en dessous de 480px (priorité au texte) */
+      .mn-mob-card-img { display: none !important; }
+    }
+
+    /* Tablette portrait spécifique */
+    @media (min-width: 600px) and (max-width: 850px) {
+      /* AppNav très compact */
+      [data-mn-nav-label] { font-size: 11px !important; }
+    }
+
+    /* Très petits écrans (galaxy fold etc.) */
+    @media (max-width: 340px) {
+      h1 { font-size: 22px !important; }
+      h2 { font-size: 18px !important; }
+      [data-mn-hero] { padding: 16px 0 !important; }
+    }
+
+    /* ===== Mobile paysage (≤ 950px && hauteur ≤ 500) === */
+    @media (max-height: 500px) and (orientation: landscape) {
+      [data-mn-hero] { padding: 18px 0 !important; }
+      [data-mn-hero] h1, [data-mn-hero] .display { font-size: 28px !important; }
+    }
+
+    /* ── Page transition ────────────────────────────────── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .page-enter { animation: fadeUp 0.24s cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+    /* ── Tweaks panel ───────────────────────────────────── */
+    #tweaks-panel {
+      position: fixed; bottom: 80px; right: 16px; z-index: 9000;
+      background: #FFFFFF; border: 1px solid #E8E6E1; border-radius: 16px;
+      padding: 16px; width: 250px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.06);
+      display: none; flex-direction: column; gap: 12px;
+    }
+    #tweaks-panel.open { display: flex; }
+    .tw-head { font-family: 'Sora',sans-serif; font-weight: 800; font-size: 13px; color: #1A1A18; border-bottom: 1px solid #F5F4F2; padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .tw-label { font-size: 10px; font-weight: 700; color: #B0AEA7; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+    .tw-row { display: flex; gap: 5px; flex-wrap: wrap; }
+    .tw-btn { padding: 5px 10px; border-radius: 9999px; border: 1.5px solid #E8E6E1; background: #fff; font-size: 11px; font-weight: 600; cursor: pointer; color: #4A4840; font-family: 'Inter',sans-serif; transition: all 0.15s; }
+    .tw-btn:hover { border-color: #E11D74; color: #E11D74; }
+    .tw-btn.active { background: linear-gradient(to right, #E11D74, #7C3AED); color: #fff; border-color: transparent; }
+
+    /* ── Utility ─────────────────────────────────────────── */
+    .mn-reseau-grid { display: grid; grid-template-columns: minmax(0,1fr) 290px; gap: 24px; align-items: start; }
+    .mn-messaging-grid { display: grid; grid-template-columns: 300px 1fr; min-height: 520px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- ──────────────────────────────────────────────────────────
+     Chargement des modules — ordre documenté (HANDOFF.md §3)
+     Les fichiers sources vivent dans project/app/ (prototype
+     intact) ; cette nouvelle entrée les réutilise tels quels.
+     ────────────────────────────────────────────────────────── -->
+
+<!-- 1. Core data -->
+<script type="text/babel" src="../project/app/AppData.jsx"></script>
+
+<!-- 2. Design system -->
+<script type="text/babel" src="../project/app/Theme.jsx"></script>
+
+<!-- 3. Compatibility shims (ancien UIKit → alias Theme) -->
+<script type="text/babel" src="../project/app/Compat.jsx"></script>
+
+<!-- 4. Pages -->
+<script type="text/babel" src="../project/app/Pages_Home.jsx"></script>
+<script type="text/babel" src="../project/app/Pages_Services.jsx"></script>
+<script type="text/babel" src="../project/app/Pages_Commerce.jsx"></script>
+<script type="text/babel" src="../project/app/Pages_Media_Profile.jsx"></script>
+<script type="text/babel" src="../project/app/CampaignPage.jsx"></script>
+<script type="text/babel" src="../project/app/ReseauPage.jsx"></script>
+<script type="text/babel" src="../project/app/PollsPage.jsx"></script>
+<script type="text/babel" src="../project/app/AdminMessagingNotifs.jsx"></script>
+<script type="text/babel" src="../project/app/AdminEmailsAPI.jsx"></script>
+<script type="text/babel" src="../project/app/JoinMovement.jsx"></script>
+<script type="text/babel" src="../project/app/CommunesLibres.jsx"></script>
+
+<script type="text/babel">
+// Re-import globals from window (Babel scripts run in isolated scope)
+const T      = window.T;
+const ICONS  = window.ICONS;
+
+// ── Tweak defaults ─────────────────────────────────────────
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "startPage": "home",
+  "adminMode": false
+}/*EDITMODE-END*/;
+
+// ── Root App ───────────────────────────────────────────────
+function App() {
+  const [page, setPageRaw] = React.useState(() => {
+    try { return localStorage.getItem('mn_v2_page') || TWEAK_DEFAULTS.startPage; } catch { return TWEAK_DEFAULTS.startPage; }
+  });
+  const [user, setUser] = React.useState(() => {
+    try { const u = localStorage.getItem('mn_v2_user'); return u ? JSON.parse(u) : null; } catch { return null; }
+  });
+  const [adminMode, setAdminMode] = React.useState(TWEAK_DEFAULTS.adminMode);
+  const [authOpen, setAuthOpen]   = React.useState(false);
+  const [tweakOpen, setTweakOpen] = React.useState(false);
+  const [tweak, setTweak]         = React.useState(TWEAK_DEFAULTS);
+
+  // Persist page & user
+  React.useEffect(() => { try { localStorage.setItem('mn_v2_page', page); } catch {} }, [page]);
+  React.useEffect(() => { try { if (user) localStorage.setItem('mn_v2_user', JSON.stringify(user)); else localStorage.removeItem('mn_v2_user'); } catch {} }, [user]);
+
+  // Tweaks protocol
+  React.useEffect(() => {
+    const h = e => {
+      if (e.data?.type === '__activate_edit_mode')   setTweakOpen(true);
+      if (e.data?.type === '__deactivate_edit_mode')  setTweakOpen(false);
+    };
+    window.addEventListener('message', h);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', h);
+  }, []);
+
+  const setPage = p => { setPageRaw(p); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const handleLogin  = u => { setUser(u); setAuthOpen(false); };
+  const handleLogout = () => { setUser(null); try { localStorage.removeItem('mn_v2_user'); } catch {} setPage('home'); };
+
+  const common = { user, setUser, adminMode, onAuth: () => setAuthOpen(true), setPage };
+  const noNav  = ['creer'].includes(page);
+
+  const renderPage = () => {
+    switch (page) {
+      case 'home':          return <div className="page-enter"><HomePage setPage={setPage} user={user} onAuth={() => setAuthOpen(true)} /></div>;
+      case 'petitions':     return <div className="page-enter"><PetitionsPage {...common} /></div>;
+      case 'mobilizations': return <div className="page-enter"><MobilizationsPage {...common} /></div>;
+      case 'crowdfunding':  return <div className="page-enter"><CrowdfundingPage {...common} /></div>;
+      case 'housing':       return <div className="page-enter"><HousingPage {...common} /></div>;
+      case 'carpooling':    return <div className="page-enter"><CarpoolingPage {...common} /></div>;
+      case 'lending':       return <div className="page-enter"><LendingPage {...common} /></div>;
+      case 'marketplace':   return <div className="page-enter"><MarketplacePage {...common} /></div>;
+      case 'media':         return <div className="page-enter"><MediaPage adminMode={adminMode} onAuth={() => setAuthOpen(true)} /></div>;
+      case 'garden':        return <div className="page-enter"><GardenPage {...common} /></div>;
+      case 'sel':           return <div className="page-enter"><SELPage {...common} /></div>;
+      case 'services':      return <div className="page-enter"><ServicesHub setPage={setPage} user={user} onAuth={() => setAuthOpen(true)} /></div>;
+      case 'creer':         return <div className="page-enter"><CreerPage setPage={setPage} user={user} onAuth={() => setAuthOpen(true)} /></div>;
+      case 'campaigns':     return <div className="page-enter"><CampaignsPage {...common} /></div>;
+      case 'reseau':        return <div className="page-enter"><ReseauPage user={user} onOpenAuth={() => setAuthOpen(true)} setActivePage={setPage} adminMode={adminMode} /></div>;
+      case 'polls':         return <div className="page-enter"><PollsPage user={user} setUser={setUser} onAuth={() => setAuthOpen(true)} setPage={setPage} /></div>;
+      case 'messaging':     return <div className="page-enter"><MessagingPage user={user} onOpenAuth={() => setAuthOpen(true)} /></div>;
+      case 'notifications': return <div className="page-enter"><NotificationsPage user={user} onOpenAuth={() => setAuthOpen(true)} /></div>;
+      case 'admin':         return <div className="page-enter"><AdminDashboard user={user} setActivePage={setPage} /></div>;
+      case 'join':          return <div className="page-enter"><JoinMovementPage user={user} setUser={setUser} onAuth={() => setAuthOpen(true)} setPage={setPage} /></div>;
+      case 'communes':      return <div className="page-enter"><CommunesLibresPage user={user} onAuth={() => setAuthOpen(true)} setPage={setPage} /></div>;
+      case 'profile':       return <div className="page-enter"><ProfilePage user={user} setUser={setUser} onAuth={() => setAuthOpen(true)} setPage={setPage} /></div>;
+      default:              return <div className="page-enter"><HomePage setPage={setPage} user={user} onAuth={() => setAuthOpen(true)} /></div>;
+    }
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', background: T.bg }}>
+      {/* Navigation */}
+      {!noNav && (
+        <AppNav
+          page={page} setPage={setPage}
+          user={user} onAuth={() => setAuthOpen(true)} onLogout={handleLogout}
+          adminMode={adminMode} setAdminMode={setAdminMode}
+        />
+      )}
+
+      {/* Main */}
+      <main style={{ paddingBottom: noNav ? 0 : 80 }}>
+        {renderPage()}
+      </main>
+
+      {/* Footer */}
+      {!noNav && (
+        <footer className="mn-footer" style={{ background: T.surface, borderTop: `1px solid ${T.border}`, padding: '28px 24px' }}>
+          <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 9, background: T.gradR, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ color: '#fff', fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 13 }}>M!</span>
+              </div>
+              <div>
+                <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 14, color: T.brand }}>Maintenant !</div>
+                <div style={{ fontSize: 10, color: T.text4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>La voix des 99%</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 20, fontSize: 13, color: T.text3, flexWrap: 'wrap', alignItems: 'center' }}>
+              {[['Services', 'services'], ['Campagnes', 'campaigns'], ['Réseau', 'reseau'], ['Média', 'media']].map(([l, p]) => (
+                <span key={p} onClick={() => setPage(p)} style={{ cursor: 'pointer', transition: 'color 0.15s' }}
+                  onMouseEnter={e => e.target.style.color = T.brand} onMouseLeave={e => e.target.style.color = T.text3}>{l}</span>
+              ))}
+              <a href="https://the99coinproject.org" target="_blank" rel="noopener noreferrer"
+                style={{ color: T.info, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+                ₮ T99CP Wallet
+              </a>
+              <span style={{ color: T.text4 }}>© 2026 THE99COINPROJECT</span>
+            </div>
+          </div>
+        </footer>
+      )}
+
+      {/* Mobile bottom nav */}
+      {!noNav && <BottomNav page={page} setPage={setPage} />}
+
+      {/* Auth modal */}
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} onLogin={handleLogin} />
+
+      {/* ── Tweaks Panel ────────────────────────────────── */}
+      <div id="tweaks-panel" className={tweakOpen ? 'open' : ''}>
+        <div className="tw-head">
+          ⚙ Tweaks
+          <button onClick={() => { setTweakOpen(false); window.parent.postMessage({ type: '__edit_mode_dismissed' }, '*'); }}
+            style={{ border: 'none', background: T.surface2, borderRadius: '50%', width: 24, height: 24, cursor: 'pointer', fontSize: 14, color: T.text3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+        </div>
+
+        <div>
+          <div className="tw-label">Page de démarrage</div>
+          <div className="tw-row">
+            {['home','join','communes','petitions','housing','marketplace','sel','carpooling','garden','lending','media','polls','campaigns','reseau','admin','profile'].map(p => (
+              <button key={p} className={`tw-btn${page === p ? ' active' : ''}`}
+                onClick={() => { setPage(p); const n = { ...tweak, startPage: p }; setTweak(n); window.parent.postMessage({ type: '__edit_mode_set_keys', edits: n }, '*'); }}>{p}</button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="tw-label">Mode admin</div>
+          <div className="tw-row">
+            <button className={`tw-btn${adminMode ? ' active' : ''}`}
+              onClick={() => { const v = !adminMode; setAdminMode(v); const n = { ...tweak, adminMode: v }; setTweak(n); window.parent.postMessage({ type: '__edit_mode_set_keys', edits: n }, '*'); }}>
+              {adminMode ? '✓ Activé' : 'Désactivé'}
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <div className="tw-label">Utilisateur simulé</div>
+          <div className="tw-row">
+            <button className={`tw-btn${!user ? ' active' : ''}`} onClick={() => setUser(null)}>Déconnecté</button>
+            <button className={`tw-btn${user && !user.is_admin ? ' active' : ''}`}
+              onClick={() => setUser({ name: 'Marie Dupont', email: 'marie@maintenant.org', t99cp_balance: 247, is_admin: false, badges: ['Militante active'], joined: '2025-06-12', location: 'Paris', bio: 'Militante écologiste et féministe engagée depuis 10 ans.' })}>
+              Connecté
+            </button>
+            <button className={`tw-btn${user?.is_admin ? ' active' : ''}`}
+              onClick={() => { setUser({ name: 'Admin', email: 'admin@maintenant.org', t99cp_balance: 500, is_admin: true, badges: ['Admin', 'Fondateur'], joined: '2025-01-01', location: 'France' }); setAdminMode(true); }}>
+              Admin
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <ToastProvider><App /></ToastProvider>
+);
+</script>
+</body>
+</html>
