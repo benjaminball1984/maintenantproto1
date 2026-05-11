@@ -462,3 +462,42 @@ export function IconShare({ width = 18, height = 18, ...props }: IconProps) {
     </svg>
   );
 }
+
+export function IconMegaphone({ width = 18, height = 18, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z" />
+      <path d="M15 8a4 4 0 0 1 0 8" />
+      <line x1="19" y1="5" x2="19" y2="19" />
+    </svg>
+  );
+}
+
+export function IconList({ width = 18, height = 18, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <line x1="8" y1="6" x2="21" y2="6" />
+      <line x1="8" y1="12" x2="21" y2="12" />
+      <line x1="8" y1="18" x2="21" y2="18" />
+      <circle cx="4" cy="6" r="1" />
+      <circle cx="4" cy="12" r="1" />
+      <circle cx="4" cy="18" r="1" />
+    </svg>
+  );
+}

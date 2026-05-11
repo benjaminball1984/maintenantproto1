@@ -9,6 +9,8 @@ import MobilizationsPage from './pages/MobilizationsPage';
 import MobilizationDetailPage from './pages/MobilizationDetailPage';
 import MobilizationCreatePage from './pages/MobilizationCreatePage';
 import CampaignsPage from './pages/CampaignsPage';
+import CampaignDetailPage from './pages/CampaignDetailPage';
+import CampaignCreatePage from './pages/CampaignCreatePage';
 import ServicesHubPage from './pages/services/ServicesHubPage';
 import HousingPage from './pages/services/HousingPage';
 import CarpoolingPage from './pages/services/CarpoolingPage';
@@ -59,6 +61,15 @@ export const router = createBrowserRouter([
       },
       { path: 'mobilizations/:slug', element: <MobilizationDetailPage /> },
       { path: 'campaigns', element: <CampaignsPage /> },
+      {
+        path: 'campaigns/new',
+        element: (
+          <RequireAuth>
+            <CampaignCreatePage />
+          </RequireAuth>
+        ),
+      },
+      { path: 'campaigns/:slug', element: <CampaignDetailPage /> },
       {
         path: 'services',
         children: [

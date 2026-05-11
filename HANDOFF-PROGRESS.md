@@ -20,7 +20,8 @@
 | 9. Sprint 2 — Pétitions CRUD côté front                 |   ✅   |
 | 10. Sprint 2 — Mobilisations CRUD côté front            |   ✅   |
 | 11. Sprint 2 — Sondages CRUD côté front                 |   ✅   |
-| 12. Sprint 2 — Campagnes CRUD côté front                |   ⬜   |
+| 12. Sprint 2 — Campagnes CRUD côté front                |   ✅   |
+| 13. Fin Sprint 2 — Audit RGPD ou bascule Sprint 3       |   ⬜   |
 
 ---
 
@@ -2835,3 +2836,284 @@ psql maintenant_test -c "insert into public.polls(author_id, slug, question) val
 > Cette boucle s'arrête uniquement quand le Sprint 2 (contenu militant —
 > pétitions, mobilisations, campagnes, sondages) est complet, point auquel
 > le prompt généré peut basculer sur le Sprint 3 (services communautaires).
+
+---
+
+## Étape 12 — Sprint 2 / Campagnes CRUD côté front ✅
+
+**Branche** : `claude/add-polls-module-lv84O` (merge `claude/review-project-setup-AjlyB`
+@ `8b81644` → étape 11 puis travail étape 12)
+**Commit cible** : `feat(campaigns): step 12 — CRUD campagnes + listing + fiche + création`
+
+### Module `web/src/lib/campaigns.ts`
+
+- Types `CampaignRow`, `CampaignInsert`, `CampaignStatus`, `CampaignActionRow`,
+  `CampaignActionInsert` dérivés de `Database['public']`.
+- `CampaignWithActions = { campaign, actions }` pour la fiche.
+- `CampaignActionRef` (FK optionnelles : `petitionId` / `mobilizationId` /
+  `pollId` / `crowdfundingId` + `label` libre) — au moins une FK obligatoire.
+- Constantes de validation : `CAMPAIGN_TITLE_MIN = 8`, `MAX = 80`,
+  `CAMPAIGN_SUMMARY_MIN = 40`, `MAX = 240`, `CAMPAIGN_BODY_MIN = 100` (si
+  renseigné), `CAMPAIGN_ACTIONS_MIN_COUNT = 1`, `MAX_COUNT = 12`.
+- `validateCampaignInput(input)` — retourne `[]` ou un tableau d'issues
+  `{ field, message }`. Vérifie chaque action a au moins une FK (sinon
+  `actions` invalide).
+- `listCampaigns({ status, search, limit })` — public, `status='published'`
+  par défaut, tri `created_at DESC`, `.or('title.ilike.%X%,summary.ilike.%X%')`
+  avec échappement des méta-caractères `%`, `_`, `,`.
+- `getCampaign(slug)` — 2 requêtes successives (campaign + actions triées
+  par `position ASC`). Décision : pas de jointure Postgrest imbriquée (cf.
+  « Décisions » plus bas) — la fiche enrichit la cible côté UI seulement
+  via le lien `/petitions/<id>` etc.
+- `createCampaign(input)` — validation → insert campaign avec slug
+  `slugify(title)` (retry incrémental sur `23505`, 5 essais) → insert
+  `campaign_actions[]` → rollback manuel `DELETE FROM campaigns` si
+  l'insertion des actions échoue. Renvoie `CampaignWithActions`.
+- `addCampaignAction(campaignId, ref, position)` — insert single (RLS
+  vérifie author). Refuse une ref sans FK avec code `CAMPAIGN_VALIDATION`.
+- `removeCampaignAction(id)` — delete (RLS owner-only via la policy
+  `campaign_actions_write_author`).
+
+### Hooks `useCampaigns.ts` + `useCampaign.ts`
+
+- Pattern identique à `usePolls / usePoll` : reset des états locaux
+  pendant le render quand `filterKey` (search/status/limit) ou le slug
+  change, `queueMicrotask(() => listCampaigns(...))` pour découpler le
+  fetch du render, `refresh()` exposé pour rejouer la requête.
+- `useCampaign` ne charge pas la cible des actions (jointures) — c'est la
+  fiche qui résout `petition_id → /petitions/<id>` etc. côté UI.
+
+### Pages
+
+- **`CampaignsPage`** — listing avec hero `var(--mn-gradient)`, recherche
+  + filtre statut, état vide + erreur Postgrest mappée FR. Card
+  `<Link to="/campaigns/:slug">` avec badge `IconMegaphone`.
+- **`CampaignDetailPage`** — header (badge, titre, résumé, body
+  `whiteSpace: pre-wrap`), bouton « Partager » (`navigator.share` →
+  `clipboard.writeText` fallback), liste des actions sous `<ul>` avec
+  routage par type (`resolveAction(action)` → `kind` + `href` +
+  `fallbackLabel` + icône). Si aucune FK n'est plus là (delete cascade
+  `set null`), l'action s'affiche en mode « lien rompu » non cliquable.
+- **`CampaignCreatePage`** — formulaire `RequireAuth` avec 3 onglets de
+  picker (Pétitions / Mobilisations / Sondages), recherche live
+  (`listPetitions({ search })`, `listMobilizations`, `listPolls` — limit
+  8), clic sur résultat → ajout à `selected[]`. Cagnottes pas exposées
+  pour l'instant (pas de listing public côté front, à brancher au
+  Sprint 3). Slug auto, redirect `/campaigns/<slug>` après succès.
+
+### Router
+
+- `/campaigns` (public), `/campaigns/new` (`RequireAuth`),
+  `/campaigns/:slug` (public).
+
+### Schéma DB
+
+- `campaigns_status_idx ON campaigns(status)` ajouté (cohérence avec
+  petitions/mobilizations/polls).
+- `campaign_actions_position_idx ON campaign_actions(campaign_id, position)`
+  ajouté pour le `ORDER BY position ASC` de la fiche.
+- Pas de compteur dénormalisé : le nombre d'actions est lu directement
+  depuis le tableau retourné par `getCampaign`. RLS déjà en place
+  (`campaigns_select_public`, `campaigns_insert_self`,
+  `campaigns_update_owner`, `campaigns_delete_owner`,
+  `campaign_actions_select_public`, `campaign_actions_write_author`).
+- `web/src/types/database.ts` déjà à jour (campaigns + campaign_actions
+  étaient présents — pas de re-génération nécessaire).
+
+### Icônes
+
+- `IconMegaphone` (haut-parleur, baseProps `currentColor`).
+- `IconList` (liste avec puces, baseProps `currentColor`).
+
+### Jointures `campaign_actions` — décisions
+
+- **Pas de `select('*, petition:petitions(slug,title), …')` imbriqué**
+  pour cette étape : on n'a pas encore les compteurs front, et chaque
+  type a déjà un listing dédié (`/petitions/<slug>`). La fiche se
+  contente du `*` pour afficher le label libre + l'icône + le lien
+  vers la ressource cible. L'enrichissement (vrai titre / nb signatures
+  côté pétition) viendra à l'étape 14 quand on aura besoin d'un
+  « card preview » riche.
+- Side effect : si l'utilisateur supprime une pétition, l'action
+  `campaign_actions` se met à `petition_id = null` (FK `on delete set
+  null`) → la fiche détecte l'orphelin et l'affiche sans lien.
+
+### Décisions
+
+- **Multi-items inline** : un combobox unique par type (`PickerKind`)
+  avec recherche live. Le formulaire évite le « créer en place » du
+  prototype (commits `d97d272` / `01f4d73`) — on garde la création
+  séparée par type, les utilisateurs peuvent ouvrir `/petitions/new`
+  avant de revenir à la création de campagne. Plus simple côté UX,
+  moins risqué côté RLS (pas de fanout de policies).
+- **RLS owner** : `campaign_actions_write_author` utilise
+  `author_id` de la campagne — donc seul l'auteur de la campagne peut
+  ajouter/retirer des actions. C'est cohérent avec le sens d'une
+  campagne (un porteur principal qui orchestre les actions). Pas
+  d'invitation co-auteur pour l'instant.
+- **Validation côté front + DB** : on valide en TS + on laisse les
+  contraintes DB protéger (NOT NULL, UNIQUE slug, FK).
+
+### Tests
+
+- `src/lib/campaigns.test.ts` — **24 cas** : validation (10), listCampaigns
+  (4), getCampaign (3), createCampaign (5 dont retry + rollback),
+  addCampaignAction (2), removeCampaignAction (1), constantes (1).
+- `src/hooks/useCampaigns.test.tsx` — 3 cas (mount, error, search rerun).
+- `src/hooks/useCampaign.test.tsx` — 3 cas (mount, notfound, refresh).
+- `src/pages/CampaignsPage.test.tsx` — 4 cas (listing, empty, search,
+  erreur FR).
+- `src/pages/CampaignDetailPage.test.tsx` — 4 cas (rendu, liens
+  cliquables vers /petitions/mobilizations/polls, partage, 404 →
+  redirect).
+- `src/pages/CampaignCreatePage.test.tsx` — 3 cas (rendu, validation,
+  succès → redirect).
+- **Total : 42 nouveaux tests** (224 + 42 = **266 tests verts**).
+
+### Checks finaux
+
+- `typecheck` : OK (TS 6 strict, pas de `any`).
+- `lint` : OK (ESLint flat, jsx-a11y + react-hooks).
+- `test` : 266 passed.
+- `build` : 295 kB minified, 85 kB gzip.
+- `format:check` : OK (prettier 3).
+
+### Prochaines étapes
+
+- **Étape 13** : audit RGPD de fin Sprint 2 (bannière cookies + page
+  politique de confidentialité + audit RLS final + vérif Sentry no-PII)
+  **OU** bascule Sprint 3 (Hébergement + Covoiturage).
+- Sprint 3 commence côté schéma : tables `housing`, `housing_bookings`,
+  `carpool_offers`, `carpool_seats` déjà posées (cf. `db/schema.sql`
+  §15-16) — RLS déjà en place. Reste : libs + hooks + pages.
+
+---
+
+## Prompt pour la session N+7 (étape 13)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD).
+> 2. `HANDOFF.md` §5 (sécurité/RGPD) + §10 Sprint 2 (fin) + §10 Sprint 3
+>    (services communautaires — Hébergement, Covoiturage).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 12 ✅ — étape 13 à faire).
+> 4. `db/schema.sql` — RLS finale : passer en revue chaque policy table
+>    par table et vérifier qu'il n'y a pas de `using (true)` non voulu,
+>    qu'aucune table privée n'est `select public`, que `is_admin` filtre
+>    bien les opérations sensibles.
+> 5. `Theme.jsx` + `Pages_Services.jsx` — composants `CookieBanner`,
+>    `PrivacyPage`, mentions légales du prototype.
+> 6. `web/src/lib/campaigns.ts`, `web/src/lib/polls.ts`,
+>    `web/src/lib/mobilizations.ts`, `web/src/lib/petitions.ts` — pour
+>    vérifier que tout le contenu militant respecte le retrait RGPD.
+>
+> **État actuel à la fin de l'étape 12** (tip `claude/add-polls-module-lv84O`,
+> commit `feat(campaigns): step 12 — CRUD campagnes + listing + fiche + création`) :
+>
+> - Prototype intact : `project/app/Maintenant.html` + JSX racine.
+> - `web/` : Vite + React 19 + TS 6 strict, **266 tests verts** (42 nouveaux
+>   à l'étape 12), ESLint flat, Vitest, Prettier, build 295 kB.
+> - Supabase : `db/schema.sql` ≈ 1 885 lignes (36 tables + 119 policies RLS
+>   + index `campaigns_status_idx` + `campaign_actions_position_idx`),
+>   `web/src/types/database.ts` ≈ 1 720 lignes.
+> - Auth complète : signup/login/logout/reset password + OAuth Google +
+>   Instagram + magic link + callback page `/auth/callback`.
+> - Profil + adhésion Stripe + RPC T99CP opérationnels.
+> - **Sprint 2 complet** : pétitions, mobilisations, sondages, campagnes —
+>   chaque module a `lib + hooks + listing + fiche + création RequireAuth +
+>   tests` et utilise `slugify()` partagé via `web/src/lib/slug.ts`.
+> - Campagnes : module `campaigns.ts` + hooks `useCampaigns` / `useCampaign`,
+>   pages `/campaigns`, `/campaigns/:slug`, `/campaigns/new`, picker multi-
+>   items inline (Pétitions / Mobilisations / Sondages).
+>
+> **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
+>
+> 1. `git fetch origin claude/add-polls-module-lv84O` (retry network
+>    2s/4s/8s/16s) pour récupérer le tip de l'étape 12.
+> 2. `git merge --no-ff <SHA-étape-12>` pour intégrer le commit
+>    `feat(campaigns): step 12 …`. En cas d'absence,
+>    `git checkout origin/claude/add-polls-module-lv84O -- .` puis commit.
+> 3. `cd web && npm install --legacy-peer-deps` (lockfile non versionné,
+>    option requise à cause d'`eslint-plugin-jsx-a11y` ↔ ESLint 10).
+>
+> **ÉTAPE 13 à exécuter — Audit RGPD fin Sprint 2 (recommandée) OU bascule
+> Sprint 3** :
+>
+> ### Option A — Audit RGPD fin Sprint 2 (préférée pour solder Sprint 2)
+>
+> 1. **Bannière cookies** :
+>    - `web/src/components/CookieBanner.tsx` — bannière minimale conforme
+>      CNIL (catégorisation strictement nécessaire / mesure d'audience
+>      anonymisée). Pas de tracking pub. Persistance dans `localStorage`
+>      (clé `mn:cookie-consent` avec un objet `{ version, choice, at }`).
+>    - Brancher dans `RootLayout` au-dessus de `<Outlet />`. Apparaît au
+>      premier render si pas de consentement enregistré.
+>    - Boutons : « Tout accepter », « Tout refuser », « Personnaliser »
+>      (modale détaillée). Accessible clavier + ARIA.
+>    - Tests : ≥ 5 cas (rendu sans consentement, click accept/refuse,
+>      persistance, masquage si déjà consenti).
+> 2. **Page politique de confidentialité** :
+>    - `web/src/pages/PrivacyPage.tsx` (route `/legal/privacy`) — port du
+>      contenu prototype, fait office de page légale RGPD. Sections :
+>      responsable, finalités, base légale (consentement + intérêt
+>      légitime + contrat), durées de conservation, droits RGPD, contact
+>      DPO, sous-traitants (Supabase EU, Stripe, etc.).
+>    - Tests : ≥ 2 cas (rendu titre + ancres).
+> 3. **Page mentions légales** :
+>    - `web/src/pages/LegalNoticePage.tsx` (route `/legal/notice`) —
+>      éditeur, hébergeur, directeur publication.
+> 4. **Footer global** : ajouter liens `/legal/privacy`, `/legal/notice`,
+>    `/legal/cookies` dans `RootLayout` (ou créer `Footer.tsx`).
+> 5. **Audit RLS final** : parcourir `db/schema.sql` table par table.
+>    Documenter dans `HANDOFF-PROGRESS.md` chaque table : niveau d'accès
+>    SELECT (public / authenticated / owner / admin), niveau INSERT, UPDATE,
+>    DELETE. Vérifier que `is_admin()` est bien la seule porte d'entrée
+>    admin. Vérifier qu'aucune table contenant des données perso (users,
+>    profiles, signatures, votes, participations) n'a `using (true)` en
+>    SELECT.
+> 6. **Audit Sentry no-PII** : si `web/src/lib/sentry.ts` n'existe pas
+>    encore, créer le scaffold avec `beforeSend(event)` qui scrub
+>    `event.user`, `event.request.cookies`, `event.extra.email`,
+>    `event.extra.phone`, et toute clé contenant `email` / `phone` /
+>    `address`. Si Sentry déjà branché, vérifier le scrub.
+> 7. **Tests** : objectif **≥ 280 tests verts** (266 existants + ≥ 14
+>    nouveaux).
+> 8. Mettre à jour `HANDOFF-PROGRESS.md` : étape 13 ✅ avec sections
+>    « Bannière cookies », « Pages légales », « Audit RLS », « Audit Sentry
+>    no-PII », « prochaines étapes (Sprint 3 — services communautaires) ».
+> 9. **Écrire le prompt de la session N+8 (étape 14)** dans
+>    `HANDOFF-PROGRESS.md` : démarrage Sprint 3 — Hébergement + Covoiturage
+>    CRUD côté front. Reproduire la structure habituelle (lib + hooks +
+>    pages + tests).
+> 10. **Coller le prompt de l'étape 14 dans la conversation finale**.
+> 11. **Commit** : `chore(rgpd): step 13 — bannière cookies + pages légales + audit RLS/Sentry`.
+>     Push sur la branche imposée par l'harness.
+>
+> ### Option B — Bascule Sprint 3 (si on préfère avancer)
+>
+> Démarrer Hébergement + Covoiturage directement (lib + hooks + pages
+> + tests). Reproduire le pattern des étapes 9-12. L'audit RGPD peut
+> alors être repoussé à l'étape 15.
+>
+> **Contraintes** :
+>
+> - Ne pas toucher au prototype (`project/app/Maintenant.html` et JSX
+>   racine).
+> - TS strict + no `any`.
+> - Conserver les checks verts : `typecheck`, `lint`, `test`, `build`,
+>   `format:check`.
+> - Pas d'emojis dans le code TS ni dans les commits.
+>
+> **NOTE sur la boucle récursive** :
+>
+> Le Sprint 2 (contenu militant — pétitions, mobilisations, campagnes,
+> sondages) est **complet** à la fin de l'étape 12. À partir de
+> l'étape 13, la double consigne (écrire le prompt N+1 + le coller dans
+> la réponse Claude) reste utile pour fluidifier la passation entre
+> sessions, mais elle est désormais **facultative** côté boucle
+> récursive — l'agent peut basculer sur la convention git-flow standard
+> du projet si l'utilisateur le souhaite.

@@ -752,6 +752,7 @@ create table if not exists public.campaigns (
   updated_at timestamptz not null default now()
 );
 create index if not exists campaigns_author_idx on public.campaigns (author_id);
+create index if not exists campaigns_status_idx on public.campaigns (status);
 create trigger campaigns_touch before update on public.campaigns
   for each row execute function public.touch_updated_at();
 
@@ -767,6 +768,11 @@ create table if not exists public.campaign_actions (
   created_at timestamptz not null default now()
 );
 create index if not exists campaign_actions_campaign_idx on public.campaign_actions (campaign_id);
+-- Index pour ORDER BY position ASC sur les actions d'une campagne (tri stable
+-- côté fiche détail). Couple campaign_id + position pour les requêtes
+-- `where campaign_id = ... order by position asc`.
+create index if not exists campaign_actions_position_idx
+  on public.campaign_actions (campaign_id, position);
 
 -- -------------------------------------------------------------------------------------
 -- 14. Communes libres + membres
