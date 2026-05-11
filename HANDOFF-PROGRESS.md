@@ -13,7 +13,7 @@
 | 2. `.env.example` + `package.template.json` à la racine |   ✅   |
 | 3. Squelette Vite + React + TS dans `web/`              |   ✅   |
 | 4. Schéma DB Supabase + RLS                             |   ✅   |
-| 5. Brancher Supabase Auth sur `AuthModal`               |   ⬜   |
+| 5. Brancher Supabase Auth sur `AuthModal`               |   ✅   |
 | 6. Migration page par page (cf. sprints HANDOFF §10)    |   ⬜   |
 
 ---
@@ -361,3 +361,220 @@ Cela rend toutes les requêtes `supabase.from('petitions')` strictement typées
    `signIn`, `signOut`.
 4. Ajouter un trigger SQL `on auth.user created → insert into public.users
    (id, email, display_name)` pour synchroniser le profil.
+
+---
+
+## Étape 5 — Supabase Auth + AuthModal + handle_new_user ✅
+
+**Branche** : `claude/review-project-setup-r2FSV` (étape 4 mergée depuis
+`claude/setup-vite-react-ts-2T9bF` @ `7491228` au début de cette session).
+
+### Pré-requis exécutés
+
+- `git fetch origin claude/setup-vite-react-ts-2T9bF` puis `git merge --no-ff 7491228`
+  pour récupérer le tip de l'étape 4 (squelette Vite, schéma DB, types).
+- `npm install --legacy-peer-deps` dans `web/`.
+- `npm install --legacy-peer-deps zustand` (ajoute `zustand@^5.0` aux `dependencies`).
+
+### Trigger SQL `handle_new_user`
+
+Ajouté à la fin de `db/schema.sql` (section 18) :
+
+```sql
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  insert into public.users (id, email, display_name)
+  values (
+    new.id,
+    new.email,
+    coalesce(
+      nullif(trim(new.raw_user_meta_data->>'display_name'), ''),
+      split_part(new.email, '@', 1)
+    )
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+```
+
+- `SECURITY DEFINER` pour pouvoir écrire dans `public.users` malgré la RLS
+  (le trigger tourne en contexte auth, sans `auth.uid()` défini).
+- `search_path = public, pg_temp` pour neutraliser les attaques de
+  shadowing.
+- `revoke all on function public.handle_new_user() from public` (le trigger
+  s'exécute via le rôle definer — pas de droit d'appel direct).
+- Idempotent : `create or replace function` + `drop trigger if exists`.
+- Fallback `display_name` : `coalesce(nullif(trim(...)), split_part(email, '@', 1))`
+  — si la metadata est absente ou vide/whitespace seule, on prend la partie
+  locale de l'email.
+
+**Test local** (sandbox sans Docker, comme étape 4) :
+
+1. `service postgresql start` + base `maintenant` (utilisateur `maintenant/dev`).
+2. Stub `auth` (`auth.users`, `auth.uid()`, rôles `anon`/`authenticated`/`service_role`).
+3. `psql -f db/schema.sql` → 36 tables, 119 policies, fonction + trigger créés.
+4. `insert into auth.users (email, raw_user_meta_data) values ('alice@x.org', '{"display_name":"Alice"}'::jsonb)`
+   → ligne miroir dans `public.users` avec `display_name='Alice'`.
+5. `insert into auth.users (email) values ('bob@x.org')` → `display_name='bob'`.
+6. `insert into auth.users (email, raw_user_meta_data) values ('carol@x.org', '{"display_name":"   "}'::jsonb)`
+   → `display_name='carol'` (whitespace stripped).
+7. Re-insertion d'un id existant → `on conflict do nothing` (idempotent).
+
+### Régénération des types
+
+`node db/gen-types.mjs > web/src/types/database.ts` → 1 674 lignes, identique
+à la version étape 4 (le trigger n'ajoute aucune table publique mais valide
+que le pipeline de génération reste idempotent).
+
+### Store Zustand (`web/src/lib/auth.ts`)
+
+```ts
+useAuthStore: {
+  session: Session | null;
+  user: User | null;
+  status: 'loading' | 'authenticated' | 'anonymous';
+  signInWithPassword({ email, password }): Promise<{ error }>;
+  signUpWithPassword({ email, password, displayName }): Promise<{ error }>;
+  signInWithMagicLink({ email }): Promise<{ error }>;
+  resetPasswordForEmail(email): Promise<{ error }>;
+  signOut(): Promise<{ error }>;
+  setSession(session): void;
+}
+```
+
+- Tous les types proviennent de `@supabase/supabase-js`
+  (`Session`, `User`, `AuthError`) — zéro `any`.
+- Hook `useAuth()` à monter dans `RootLayout` : appelle
+  `supabase.auth.getSession()` une fois, s'abonne à
+  `supabase.auth.onAuthStateChange` et synchronise le store. Garde-fou
+  `subscribed` module-level pour éviter les double-abonnements en
+  StrictMode (le cleanup remet le flag à `false`).
+- Helper `authErrorMessage(error)` mappe les codes Supabase Auth
+  (`invalid_credentials`, `email_already_exists`, `weak_password`,
+  `over_email_send_rate_limit`, etc.) vers des messages en français.
+  Fallback sur `error.message` pour les codes inconnus.
+
+### `web/src/components/AuthModal.tsx` — port TS strict
+
+- Trois écrans : `login`, `signup`, `forgot` (state local `Mode`).
+- Inputs ≥ 46 px de hauteur (≥ 44 px requis par HANDOFF §5), `<label>`
+  associés via `htmlFor`/`id`, `autocomplete` correctement renseigné
+  (`email`, `current-password`, `new-password`, `name`).
+- Pas d'emoji : icônes SVG via `IconClose`, `IconMail`, `IconLock`,
+  `IconUser` (cf. `web/src/components/icons.tsx` — portés depuis
+  `Theme.jsx::ICONS`).
+- Tokens : `var(--mn-brand)`, `var(--mn-text-1..4)`, `var(--mn-surface)`,
+  `var(--mn-border)`, `var(--mn-gradient)` (étendus depuis `index.css`).
+  Pas d'hex en dur dans le code component.
+- `role="dialog"` + `aria-modal="true"` + `aria-labelledby={titleId}`,
+  bouton de fermeture avec `aria-label="Fermer"`, messages en `role="alert"`
+  (erreur) ou `role="status"` (succès).
+- Focus trap minimal : focus sur le premier input ≈30 ms après l'ouverture
+  (laisse le temps au DOM de se stabiliser), Escape ferme la modale, clic
+  sur l'overlay ferme également.
+- Reset des messages erreur/succès via le pattern « set state during
+  render » (clé `${open}-${mode}`) — compatible avec la nouvelle règle
+  ESLint `react-hooks/set-state-in-effect` (React Hooks 7).
+- Erreurs Supabase affichées en français via `authErrorMessage`.
+
+### `web/src/components/icons.tsx`
+
+5 icônes SVG portées depuis `Theme.jsx::ICONS` : `IconClose`, `IconMail`,
+`IconLock`, `IconUser`, `IconLogout`. Toutes en `currentColor` (héritent de
+la couleur texte du parent) avec `aria-hidden="true"`. Les icônes `Mail`
+et `Lock` n'existaient pas dans le prototype : crées en suivant la même
+grille (24×24 stroke 2 round) pour rester cohérent.
+
+### `web/src/layouts/RootLayout.tsx`
+
+- Bouton « Se connecter » à droite de la nav qui ouvre `AuthModal`.
+- Quand `useAuth().status === 'authenticated'` : remplacement du bouton par
+  un menu compact `[IconUser display_name] [IconLogout Se déconnecter]`.
+- `display_name` extrait de `user.user_metadata.display_name`, fallback sur
+  la partie locale de l'email puis « Compte ».
+- Bouton désactivé pendant `status === 'loading'` (premier
+  `getSession`).
+
+### Tests
+
+| Fichier                                       | Couverture                                |
+| --------------------------------------------- | ----------------------------------------- |
+| `web/src/lib/auth.test.ts`                    | 13 cas — store init, setSession,          |
+|                                               | signIn/signUp/signOut/magic/reset,        |
+|                                               | propagation `status`, mapping erreurs FR  |
+| `web/src/components/AuthModal.test.tsx`       | 9 cas — rendu des 3 écrans, submit login, |
+|                                               | submit signup, erreurs Supabase, Escape   |
+| `web/src/App.test.tsx` (déjà présent)         | 2 cas — smoke routing                     |
+
+**Mocking** : `vi.hoisted` + `vi.mock('@/lib/supabase')` (le client est
+mocké AVANT l'import de `auth.ts` qui le charge en module-load).
+`vi.stubEnv` ajouté à `web/src/test/setup.ts` pour injecter
+`VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` requis par `supabase.ts` au
+chargement.
+
+### Tableau d'état global
+
+`AuthModal` est désormais branché sur Supabase Auth via `useAuthStore`.
+`RootLayout` reflète l'état (`anonymous` → bouton, `authenticated` → menu).
+
+### Vérifications passées
+
+- `npm run typecheck` : ✅ aucune erreur
+- `npm run lint` : ✅ 0 problème
+- `npm test` : ✅ **22/22** tests passent
+- `npm run build` : ✅ `dist/` 295 kB JS / 1,09 kB CSS (gzip 85 kB / 0,56 kB)
+- `npm run format:check` : ✅ tous les fichiers conformes
+
+### Décisions UX
+
+- **Pas d'auth sociale (Google/Instagram) pour cette étape** : le prototype
+  l'affichait, mais ça demande des OAuth client IDs côté Supabase
+  + écrans de consentement RGPD. À ajouter dans une étape dédiée quand
+  les comptes OAuth seront créés.
+- **Pas de magic link bouton dédié dans l'UI** : la méthode est exposée
+  dans le store (`signInWithMagicLink`) mais l'UI n'a que les 3 écrans
+  classiques (login / signup / forgot). L'écran « forgot » utilise
+  `resetPasswordForEmail`, qui envoie un lien de réinitialisation — c'est
+  la primitive Supabase la plus proche du magic link demandée par
+  l'UX d'origine.
+- **Message de succès en signup** : on demande explicitement à
+  l'utilisateur de confirmer son email (Supabase par défaut). Plus tard,
+  si on veut auto-login après signup sans confirmation, désactiver
+  « email confirmation » dans Supabase Auth settings.
+- **Reset password redirect** : pas encore configuré
+  (`resetPasswordForEmail(email, { redirectTo: ... })`) — à brancher quand
+  la page `/auth/reset-password` existera.
+
+### Prochaines étapes (Sprint 1 — page profil, adhésion Stripe)
+
+1. **Page profil** : remplacer le placeholder par un vrai composant qui
+   lit `public.users` + `members` + `adhesions` via Supabase. Édition du
+   nom, bio, avatar (Supabase Storage).
+2. **Adhésion Stripe (3 tiers : gratuit / soutien / engagé)** :
+   - Frontend : page `/join` avec le tunnel d'adhésion.
+   - Backend : Edge Function Supabase `create-checkout-session` (publie
+     l'intent Stripe avec `SUPABASE_SERVICE_ROLE_KEY` côté serveur), puis
+     webhook `stripe-webhook` qui met à jour `public.adhesions` et
+     `public.members`.
+   - Stocker `stripe_customer_id` / `stripe_subscription_id` sur
+     `public.adhesions`.
+3. **T99CP balance** : RPC `credit_t99cp(user_id, amount, reason)` /
+   `debit_t99cp(...)` (SECURITY DEFINER + check de solde) pour préserver
+   l'intégrité monétaire — déjà cadré par la policy
+   `t99cp_insert_admin`.
+4. **Page /auth/reset-password** : finalise le flow forgot (récupère le
+   token via `supabase.auth.exchangeCodeForSession`, formulaire de
+   nouveau mot de passe).
+5. **OAuth Google + Instagram** : créer les OAuth credentials, configurer
+   Supabase Auth providers, ajouter les boutons sociaux dans `AuthModal`.

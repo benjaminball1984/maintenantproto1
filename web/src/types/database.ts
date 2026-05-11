@@ -5,13 +5,7 @@
 // Régénérer après chaque migration : `node db/gen-types.mjs > web/src/types/database.ts`.
 // =====================================================================================
 
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[];
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export interface Database {
   public: {
@@ -20,8 +14,8 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
-          tier: "gratuit" | "soutien" | "engage";
-          status: "active" | "cancelled" | "expired" | "pending";
+          tier: 'gratuit' | 'soutien' | 'engage';
+          status: 'active' | 'cancelled' | 'expired' | 'pending';
           amount_eur: number;
           stripe_subscription_id: string | null;
           starts_on: string;
@@ -32,8 +26,8 @@ export interface Database {
         Insert: {
           id?: string;
           user_id: string;
-          tier: "gratuit" | "soutien" | "engage";
-          status?: "active" | "cancelled" | "expired" | "pending";
+          tier: 'gratuit' | 'soutien' | 'engage';
+          status?: 'active' | 'cancelled' | 'expired' | 'pending';
           amount_eur?: number;
           stripe_subscription_id?: string | null;
           starts_on?: string;
@@ -44,8 +38,8 @@ export interface Database {
         Update: {
           id?: string;
           user_id?: string;
-          tier?: "gratuit" | "soutien" | "engage";
-          status?: "active" | "cancelled" | "expired" | "pending";
+          tier?: 'gratuit' | 'soutien' | 'engage';
+          status?: 'active' | 'cancelled' | 'expired' | 'pending';
           amount_eur?: number;
           stripe_subscription_id?: string | null;
           starts_on?: string;
@@ -55,11 +49,11 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "adhesions_user_id_fkey";
-            columns: ["user_id"];
+            foreignKeyName: 'adhesions_user_id_fkey';
+            columns: ['user_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -93,11 +87,11 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "admin_logs_actor_id_fkey";
-            columns: ["actor_id"];
+            foreignKeyName: 'admin_logs_actor_id_fkey';
+            columns: ['actor_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -111,7 +105,7 @@ export interface Database {
           body: string;
           cover_url: string | null;
           format: string;
-          status: "draft" | "published" | "archived" | "flagged";
+          status: 'draft' | 'published' | 'archived' | 'flagged';
           published_at: string | null;
           created_at: string;
           updated_at: string;
@@ -125,7 +119,7 @@ export interface Database {
           body: string;
           cover_url?: string | null;
           format: string;
-          status?: "draft" | "published" | "archived" | "flagged";
+          status?: 'draft' | 'published' | 'archived' | 'flagged';
           published_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -139,18 +133,18 @@ export interface Database {
           body?: string;
           cover_url?: string | null;
           format?: string;
-          status?: "draft" | "published" | "archived" | "flagged";
+          status?: 'draft' | 'published' | 'archived' | 'flagged';
           published_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "articles_author_id_fkey";
-            columns: ["author_id"];
+            foreignKeyName: 'articles_author_id_fkey';
+            columns: ['author_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -190,39 +184,39 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "campaign_actions_campaign_id_fkey";
-            columns: ["campaign_id"];
+            foreignKeyName: 'campaign_actions_campaign_id_fkey';
+            columns: ['campaign_id'];
             isOneToOne: false;
-            referencedRelation: "campaigns";
-            referencedColumns: ["id"];
+            referencedRelation: 'campaigns';
+            referencedColumns: ['id'];
           },
           {
-            foreignKeyName: "campaign_actions_crowdfunding_id_fkey";
-            columns: ["crowdfunding_id"];
+            foreignKeyName: 'campaign_actions_crowdfunding_id_fkey';
+            columns: ['crowdfunding_id'];
             isOneToOne: false;
-            referencedRelation: "crowdfunding_campaigns";
-            referencedColumns: ["id"];
+            referencedRelation: 'crowdfunding_campaigns';
+            referencedColumns: ['id'];
           },
           {
-            foreignKeyName: "campaign_actions_mobilization_id_fkey";
-            columns: ["mobilization_id"];
+            foreignKeyName: 'campaign_actions_mobilization_id_fkey';
+            columns: ['mobilization_id'];
             isOneToOne: false;
-            referencedRelation: "mobilizations";
-            referencedColumns: ["id"];
+            referencedRelation: 'mobilizations';
+            referencedColumns: ['id'];
           },
           {
-            foreignKeyName: "campaign_actions_petition_id_fkey";
-            columns: ["petition_id"];
+            foreignKeyName: 'campaign_actions_petition_id_fkey';
+            columns: ['petition_id'];
             isOneToOne: false;
-            referencedRelation: "petitions";
-            referencedColumns: ["id"];
+            referencedRelation: 'petitions';
+            referencedColumns: ['id'];
           },
           {
-            foreignKeyName: "campaign_actions_poll_id_fkey";
-            columns: ["poll_id"];
+            foreignKeyName: 'campaign_actions_poll_id_fkey';
+            columns: ['poll_id'];
             isOneToOne: false;
-            referencedRelation: "polls";
-            referencedColumns: ["id"];
+            referencedRelation: 'polls';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -235,7 +229,7 @@ export interface Database {
           summary: string;
           body: string | null;
           cover_url: string | null;
-          status: "draft" | "published" | "archived" | "flagged";
+          status: 'draft' | 'published' | 'archived' | 'flagged';
           created_at: string;
           updated_at: string;
         };
@@ -247,7 +241,7 @@ export interface Database {
           summary: string;
           body?: string | null;
           cover_url?: string | null;
-          status?: "draft" | "published" | "archived" | "flagged";
+          status?: 'draft' | 'published' | 'archived' | 'flagged';
           created_at?: string;
           updated_at?: string;
         };
@@ -259,17 +253,17 @@ export interface Database {
           summary?: string;
           body?: string | null;
           cover_url?: string | null;
-          status?: "draft" | "published" | "archived" | "flagged";
+          status?: 'draft' | 'published' | 'archived' | 'flagged';
           created_at?: string;
           updated_at?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "campaigns_author_id_fkey";
-            columns: ["author_id"];
+            foreignKeyName: 'campaigns_author_id_fkey';
+            columns: ['author_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -315,11 +309,11 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "carpooling_driver_id_fkey";
-            columns: ["driver_id"];
+            foreignKeyName: 'carpooling_driver_id_fkey';
+            columns: ['driver_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -353,18 +347,18 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "comments_article_id_fkey";
-            columns: ["article_id"];
+            foreignKeyName: 'comments_article_id_fkey';
+            columns: ['article_id'];
             isOneToOne: false;
-            referencedRelation: "articles";
-            referencedColumns: ["id"];
+            referencedRelation: 'articles';
+            referencedColumns: ['id'];
           },
           {
-            foreignKeyName: "comments_author_id_fkey";
-            columns: ["author_id"];
+            foreignKeyName: 'comments_author_id_fkey';
+            columns: ['author_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -392,18 +386,18 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "commune_members_commune_id_fkey";
-            columns: ["commune_id"];
+            foreignKeyName: 'commune_members_commune_id_fkey';
+            columns: ['commune_id'];
             isOneToOne: false;
-            referencedRelation: "communes";
-            referencedColumns: ["id"];
+            referencedRelation: 'communes';
+            referencedColumns: ['id'];
           },
           {
-            foreignKeyName: "commune_members_user_id_fkey";
-            columns: ["user_id"];
+            foreignKeyName: 'commune_members_user_id_fkey';
+            columns: ['user_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -440,11 +434,11 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "communes_treasurer_id_fkey";
-            columns: ["treasurer_id"];
+            foreignKeyName: 'communes_treasurer_id_fkey';
+            columns: ['treasurer_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -478,18 +472,18 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "contributions_campaign_id_fkey";
-            columns: ["campaign_id"];
+            foreignKeyName: 'contributions_campaign_id_fkey';
+            columns: ['campaign_id'];
             isOneToOne: false;
-            referencedRelation: "crowdfunding_campaigns";
-            referencedColumns: ["id"];
+            referencedRelation: 'crowdfunding_campaigns';
+            referencedColumns: ['id'];
           },
           {
-            foreignKeyName: "contributions_contributor_id_fkey";
-            columns: ["contributor_id"];
+            foreignKeyName: 'contributions_contributor_id_fkey';
+            columns: ['contributor_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -517,18 +511,18 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "conversations_user_a_fkey";
-            columns: ["user_a"];
+            foreignKeyName: 'conversations_user_a_fkey';
+            columns: ['user_a'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
           {
-            foreignKeyName: "conversations_user_b_fkey";
-            columns: ["user_b"];
+            foreignKeyName: 'conversations_user_b_fkey';
+            columns: ['user_b'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -543,7 +537,7 @@ export interface Database {
           goal_eur: number;
           raised_eur: number;
           cover_url: string | null;
-          status: "draft" | "published" | "archived" | "flagged";
+          status: 'draft' | 'published' | 'archived' | 'flagged';
           starts_at: string;
           ends_at: string | null;
           created_at: string;
@@ -559,7 +553,7 @@ export interface Database {
           goal_eur: number;
           raised_eur?: number;
           cover_url?: string | null;
-          status?: "draft" | "published" | "archived" | "flagged";
+          status?: 'draft' | 'published' | 'archived' | 'flagged';
           starts_at?: string;
           ends_at?: string | null;
           created_at?: string;
@@ -575,7 +569,7 @@ export interface Database {
           goal_eur?: number;
           raised_eur?: number;
           cover_url?: string | null;
-          status?: "draft" | "published" | "archived" | "flagged";
+          status?: 'draft' | 'published' | 'archived' | 'flagged';
           starts_at?: string;
           ends_at?: string | null;
           created_at?: string;
@@ -583,11 +577,11 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "crowdfunding_campaigns_organizer_id_fkey";
-            columns: ["organizer_id"];
+            foreignKeyName: 'crowdfunding_campaigns_organizer_id_fkey';
+            columns: ['organizer_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -630,11 +624,11 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "email_campaigns_author_id_fkey";
-            columns: ["author_id"];
+            foreignKeyName: 'email_campaigns_author_id_fkey';
+            columns: ['author_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -674,11 +668,11 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "garden_plots_manager_id_fkey";
-            columns: ["manager_id"];
+            foreignKeyName: 'garden_plots_manager_id_fkey';
+            columns: ['manager_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -724,11 +718,11 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "housing_host_id_fkey";
-            columns: ["host_id"];
+            foreignKeyName: 'housing_host_id_fkey';
+            columns: ['host_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -768,18 +762,18 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "housing_requests_housing_id_fkey";
-            columns: ["housing_id"];
+            foreignKeyName: 'housing_requests_housing_id_fkey';
+            columns: ['housing_id'];
             isOneToOne: false;
-            referencedRelation: "housing";
-            referencedColumns: ["id"];
+            referencedRelation: 'housing';
+            referencedColumns: ['id'];
           },
           {
-            foreignKeyName: "housing_requests_requester_id_fkey";
-            columns: ["requester_id"];
+            foreignKeyName: 'housing_requests_requester_id_fkey';
+            columns: ['requester_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -822,11 +816,11 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "lending_owner_id_fkey";
-            columns: ["owner_id"];
+            foreignKeyName: 'lending_owner_id_fkey';
+            columns: ['owner_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -872,11 +866,11 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "marketplace_items_seller_id_fkey";
-            columns: ["seller_id"];
+            foreignKeyName: 'marketplace_items_seller_id_fkey';
+            columns: ['seller_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -907,11 +901,11 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "members_user_id_fkey";
-            columns: ["user_id"];
+            foreignKeyName: 'members_user_id_fkey';
+            columns: ['user_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -942,18 +936,18 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "messages_conversation_id_fkey";
-            columns: ["conversation_id"];
+            foreignKeyName: 'messages_conversation_id_fkey';
+            columns: ['conversation_id'];
             isOneToOne: false;
-            referencedRelation: "conversations";
-            referencedColumns: ["id"];
+            referencedRelation: 'conversations';
+            referencedColumns: ['id'];
           },
           {
-            foreignKeyName: "messages_sender_id_fkey";
-            columns: ["sender_id"];
+            foreignKeyName: 'messages_sender_id_fkey';
+            columns: ['sender_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -970,7 +964,7 @@ export interface Database {
           city: string;
           address: string | null;
           cover_url: string | null;
-          status: "draft" | "published" | "archived" | "flagged";
+          status: 'draft' | 'published' | 'archived' | 'flagged';
           created_at: string;
           updated_at: string;
         };
@@ -986,7 +980,7 @@ export interface Database {
           city: string;
           address?: string | null;
           cover_url?: string | null;
-          status?: "draft" | "published" | "archived" | "flagged";
+          status?: 'draft' | 'published' | 'archived' | 'flagged';
           created_at?: string;
           updated_at?: string;
         };
@@ -1002,17 +996,17 @@ export interface Database {
           city?: string;
           address?: string | null;
           cover_url?: string | null;
-          status?: "draft" | "published" | "archived" | "flagged";
+          status?: 'draft' | 'published' | 'archived' | 'flagged';
           created_at?: string;
           updated_at?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "mobilizations_organizer_id_fkey";
-            columns: ["organizer_id"];
+            foreignKeyName: 'mobilizations_organizer_id_fkey';
+            columns: ['organizer_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -1020,7 +1014,15 @@ export interface Database {
         Row: {
           id: string;
           recipient_id: string;
-          kind: "petition_signed" | "mobilization_rsvp" | "message" | "comment" | "reaction" | "campaign" | "system" | "admin";
+          kind:
+            | 'petition_signed'
+            | 'mobilization_rsvp'
+            | 'message'
+            | 'comment'
+            | 'reaction'
+            | 'campaign'
+            | 'system'
+            | 'admin';
           payload: Json;
           read_at: string | null;
           created_at: string;
@@ -1028,7 +1030,15 @@ export interface Database {
         Insert: {
           id?: string;
           recipient_id: string;
-          kind: "petition_signed" | "mobilization_rsvp" | "message" | "comment" | "reaction" | "campaign" | "system" | "admin";
+          kind:
+            | 'petition_signed'
+            | 'mobilization_rsvp'
+            | 'message'
+            | 'comment'
+            | 'reaction'
+            | 'campaign'
+            | 'system'
+            | 'admin';
           payload?: Json;
           read_at?: string | null;
           created_at?: string;
@@ -1036,18 +1046,26 @@ export interface Database {
         Update: {
           id?: string;
           recipient_id?: string;
-          kind?: "petition_signed" | "mobilization_rsvp" | "message" | "comment" | "reaction" | "campaign" | "system" | "admin";
+          kind?:
+            | 'petition_signed'
+            | 'mobilization_rsvp'
+            | 'message'
+            | 'comment'
+            | 'reaction'
+            | 'campaign'
+            | 'system'
+            | 'admin';
           payload?: Json;
           read_at?: string | null;
           created_at?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "notifications_recipient_id_fkey";
-            columns: ["recipient_id"];
+            foreignKeyName: 'notifications_recipient_id_fkey';
+            columns: ['recipient_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -1072,18 +1090,18 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "participations_mobilization_id_fkey";
-            columns: ["mobilization_id"];
+            foreignKeyName: 'participations_mobilization_id_fkey';
+            columns: ['mobilization_id'];
             isOneToOne: false;
-            referencedRelation: "mobilizations";
-            referencedColumns: ["id"];
+            referencedRelation: 'mobilizations';
+            referencedColumns: ['id'];
           },
           {
-            foreignKeyName: "participations_user_id_fkey";
-            columns: ["user_id"];
+            foreignKeyName: 'participations_user_id_fkey';
+            columns: ['user_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -1098,7 +1116,7 @@ export interface Database {
           target_count: number;
           cover_url: string | null;
           category: string;
-          status: "draft" | "published" | "archived" | "flagged";
+          status: 'draft' | 'published' | 'archived' | 'flagged';
           created_at: string;
           updated_at: string;
         };
@@ -1112,7 +1130,7 @@ export interface Database {
           target_count?: number;
           cover_url?: string | null;
           category: string;
-          status?: "draft" | "published" | "archived" | "flagged";
+          status?: 'draft' | 'published' | 'archived' | 'flagged';
           created_at?: string;
           updated_at?: string;
         };
@@ -1126,17 +1144,17 @@ export interface Database {
           target_count?: number;
           cover_url?: string | null;
           category?: string;
-          status?: "draft" | "published" | "archived" | "flagged";
+          status?: 'draft' | 'published' | 'archived' | 'flagged';
           created_at?: string;
           updated_at?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "petitions_author_id_fkey";
-            columns: ["author_id"];
+            foreignKeyName: 'petitions_author_id_fkey';
+            columns: ['author_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -1164,11 +1182,11 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "poll_options_poll_id_fkey";
-            columns: ["poll_id"];
+            foreignKeyName: 'poll_options_poll_id_fkey';
+            columns: ['poll_id'];
             isOneToOne: false;
-            referencedRelation: "polls";
-            referencedColumns: ["id"];
+            referencedRelation: 'polls';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -1180,7 +1198,7 @@ export interface Database {
           description: string | null;
           members_only: boolean;
           closes_at: string | null;
-          status: "draft" | "published" | "archived" | "flagged";
+          status: 'draft' | 'published' | 'archived' | 'flagged';
           created_at: string;
           updated_at: string;
         };
@@ -1191,7 +1209,7 @@ export interface Database {
           description?: string | null;
           members_only?: boolean;
           closes_at?: string | null;
-          status?: "draft" | "published" | "archived" | "flagged";
+          status?: 'draft' | 'published' | 'archived' | 'flagged';
           created_at?: string;
           updated_at?: string;
         };
@@ -1202,17 +1220,17 @@ export interface Database {
           description?: string | null;
           members_only?: boolean;
           closes_at?: string | null;
-          status?: "draft" | "published" | "archived" | "flagged";
+          status?: 'draft' | 'published' | 'archived' | 'flagged';
           created_at?: string;
           updated_at?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "polls_author_id_fkey";
-            columns: ["author_id"];
+            foreignKeyName: 'polls_author_id_fkey';
+            columns: ['author_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -1246,18 +1264,18 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "post_comments_author_id_fkey";
-            columns: ["author_id"];
+            foreignKeyName: 'post_comments_author_id_fkey';
+            columns: ['author_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
           {
-            foreignKeyName: "post_comments_post_id_fkey";
-            columns: ["post_id"];
+            foreignKeyName: 'post_comments_post_id_fkey';
+            columns: ['post_id'];
             isOneToOne: false;
-            referencedRelation: "posts";
-            referencedColumns: ["id"];
+            referencedRelation: 'posts';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -1282,18 +1300,18 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "post_likes_post_id_fkey";
-            columns: ["post_id"];
+            foreignKeyName: 'post_likes_post_id_fkey';
+            columns: ['post_id'];
             isOneToOne: false;
-            referencedRelation: "posts";
-            referencedColumns: ["id"];
+            referencedRelation: 'posts';
+            referencedColumns: ['id'];
           },
           {
-            foreignKeyName: "post_likes_user_id_fkey";
-            columns: ["user_id"];
+            foreignKeyName: 'post_likes_user_id_fkey';
+            columns: ['user_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -1303,7 +1321,7 @@ export interface Database {
           author_id: string;
           body: string;
           media_urls: Json;
-          visibility: "public" | "members" | "private";
+          visibility: 'public' | 'members' | 'private';
           is_flagged: boolean;
           created_at: string;
           updated_at: string;
@@ -1313,7 +1331,7 @@ export interface Database {
           author_id: string;
           body: string;
           media_urls?: Json;
-          visibility?: "public" | "members" | "private";
+          visibility?: 'public' | 'members' | 'private';
           is_flagged?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -1323,18 +1341,18 @@ export interface Database {
           author_id?: string;
           body?: string;
           media_urls?: Json;
-          visibility?: "public" | "members" | "private";
+          visibility?: 'public' | 'members' | 'private';
           is_flagged?: boolean;
           created_at?: string;
           updated_at?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "posts_author_id_fkey";
-            columns: ["author_id"];
+            foreignKeyName: 'posts_author_id_fkey';
+            columns: ['author_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -1362,18 +1380,18 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "reactions_article_id_fkey";
-            columns: ["article_id"];
+            foreignKeyName: 'reactions_article_id_fkey';
+            columns: ['article_id'];
             isOneToOne: false;
-            referencedRelation: "articles";
-            referencedColumns: ["id"];
+            referencedRelation: 'articles';
+            referencedColumns: ['id'];
           },
           {
-            foreignKeyName: "reactions_user_id_fkey";
-            columns: ["user_id"];
+            foreignKeyName: 'reactions_user_id_fkey';
+            columns: ['user_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -1413,11 +1431,11 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "sel_demands_user_id_fkey";
-            columns: ["user_id"];
+            foreignKeyName: 'sel_demands_user_id_fkey';
+            columns: ['user_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -1460,11 +1478,11 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "sel_offers_user_id_fkey";
-            columns: ["user_id"];
+            foreignKeyName: 'sel_offers_user_id_fkey';
+            columns: ['user_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -1489,18 +1507,18 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "signatures_petition_id_fkey";
-            columns: ["petition_id"];
+            foreignKeyName: 'signatures_petition_id_fkey';
+            columns: ['petition_id'];
             isOneToOne: false;
-            referencedRelation: "petitions";
-            referencedColumns: ["id"];
+            referencedRelation: 'petitions';
+            referencedColumns: ['id'];
           },
           {
-            foreignKeyName: "signatures_user_id_fkey";
-            columns: ["user_id"];
+            foreignKeyName: 'signatures_user_id_fkey';
+            columns: ['user_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -1508,7 +1526,7 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
-          kind: "credit" | "debit";
+          kind: 'credit' | 'debit';
           amount: number;
           reason: string;
           related_table: string | null;
@@ -1518,7 +1536,7 @@ export interface Database {
         Insert: {
           id?: string;
           user_id: string;
-          kind: "credit" | "debit";
+          kind: 'credit' | 'debit';
           amount: number;
           reason: string;
           related_table?: string | null;
@@ -1528,7 +1546,7 @@ export interface Database {
         Update: {
           id?: string;
           user_id?: string;
-          kind?: "credit" | "debit";
+          kind?: 'credit' | 'debit';
           amount?: number;
           reason?: string;
           related_table?: string | null;
@@ -1537,11 +1555,11 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "t99cp_transactions_user_id_fkey";
-            columns: ["user_id"];
+            foreignKeyName: 't99cp_transactions_user_id_fkey';
+            columns: ['user_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -1590,11 +1608,11 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "users_id_fkey";
-            columns: ["id"];
+            foreignKeyName: 'users_id_fkey';
+            columns: ['id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -1622,25 +1640,25 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "votes_option_id_fkey";
-            columns: ["option_id"];
+            foreignKeyName: 'votes_option_id_fkey';
+            columns: ['option_id'];
             isOneToOne: false;
-            referencedRelation: "poll_options";
-            referencedColumns: ["id"];
+            referencedRelation: 'poll_options';
+            referencedColumns: ['id'];
           },
           {
-            foreignKeyName: "votes_poll_id_fkey";
-            columns: ["poll_id"];
+            foreignKeyName: 'votes_poll_id_fkey';
+            columns: ['poll_id'];
             isOneToOne: false;
-            referencedRelation: "polls";
-            referencedColumns: ["id"];
+            referencedRelation: 'polls';
+            referencedColumns: ['id'];
           },
           {
-            foreignKeyName: "votes_user_id_fkey";
-            columns: ["user_id"];
+            foreignKeyName: 'votes_user_id_fkey';
+            columns: ['user_id'];
             isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -1653,12 +1671,20 @@ export interface Database {
       };
     };
     Enums: {
-      adhesion_status: "active" | "cancelled" | "expired" | "pending";
-      adhesion_tier: "gratuit" | "soutien" | "engage";
-      content_status: "draft" | "published" | "archived" | "flagged";
-      notification_kind: "petition_signed" | "mobilization_rsvp" | "message" | "comment" | "reaction" | "campaign" | "system" | "admin";
-      post_visibility: "public" | "members" | "private";
-      t99cp_kind: "credit" | "debit";
+      adhesion_status: 'active' | 'cancelled' | 'expired' | 'pending';
+      adhesion_tier: 'gratuit' | 'soutien' | 'engage';
+      content_status: 'draft' | 'published' | 'archived' | 'flagged';
+      notification_kind:
+        | 'petition_signed'
+        | 'mobilization_rsvp'
+        | 'message'
+        | 'comment'
+        | 'reaction'
+        | 'campaign'
+        | 'system'
+        | 'admin';
+      post_visibility: 'public' | 'members' | 'private';
+      t99cp_kind: 'credit' | 'debit';
     };
     CompositeTypes: Record<string, never>;
   };
@@ -1670,5 +1696,4 @@ export type TablesInsert<T extends keyof Database['public']['Tables']> =
   Database['public']['Tables'][T]['Insert'];
 export type TablesUpdate<T extends keyof Database['public']['Tables']> =
   Database['public']['Tables'][T]['Update'];
-export type Enums<T extends keyof Database['public']['Enums']> =
-  Database['public']['Enums'][T];
+export type Enums<T extends keyof Database['public']['Enums']> = Database['public']['Enums'][T];
