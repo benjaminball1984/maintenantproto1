@@ -965,6 +965,7 @@ export interface Database {
           address: string | null;
           cover_url: string | null;
           status: 'draft' | 'published' | 'archived' | 'flagged';
+          participation_count: number;
           created_at: string;
           updated_at: string;
         };
@@ -981,6 +982,7 @@ export interface Database {
           address?: string | null;
           cover_url?: string | null;
           status?: 'draft' | 'published' | 'archived' | 'flagged';
+          participation_count?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -997,6 +999,7 @@ export interface Database {
           address?: string | null;
           cover_url?: string | null;
           status?: 'draft' | 'published' | 'archived' | 'flagged';
+          participation_count?: number;
           created_at?: string;
           updated_at?: string;
         };

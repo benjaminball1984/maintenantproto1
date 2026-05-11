@@ -264,12 +264,25 @@ create table if not exists public.mobilizations (
   address text,
   cover_url text,
   status public.content_status not null default 'published',
+  participation_count integer not null default 0 check (participation_count >= 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (ends_at is null or ends_at >= starts_at)
 );
+-- Ajout idempotent de participation_count si la table existait déjà sans cette colonne
+-- (migration progressive du schéma — sprint 2 étape 10).
+alter table public.mobilizations
+  add column if not exists participation_count integer not null default 0;
+do $$ begin
+  -- Le CHECK n'est pas porté par `add column if not exists` ; on l'ajoute
+  -- séparément pour rester idempotent.
+  alter table public.mobilizations
+    add constraint mobilizations_participation_count_chk check (participation_count >= 0);
+exception when duplicate_object then null; end $$;
 create index if not exists mobilizations_organizer_idx on public.mobilizations (organizer_id);
 create index if not exists mobilizations_starts_idx on public.mobilizations (starts_at);
+create index if not exists mobilizations_status_idx on public.mobilizations (status);
+create index if not exists mobilizations_city_idx on public.mobilizations (city);
 create trigger mobilizations_touch before update on public.mobilizations
   for each row execute function public.touch_updated_at();
 
@@ -282,6 +295,51 @@ create table if not exists public.participations (
 );
 create index if not exists participations_mob_idx on public.participations (mobilization_id);
 create index if not exists participations_user_idx on public.participations (user_id);
+
+-- -------------------------------------------------------------------------------------
+-- 5.b Trigger d'incrément/décrément de mobilizations.participation_count
+--
+-- Même logique que petitions.signature_count (cf. 4.b) : compteur dénormalisé
+-- maintenu en SQL pur pour éviter un COUNT(*) sur chaque listing. Le trigger
+-- AFTER INSERT/DELETE sur participations met à jour la colonne dans la
+-- transaction de l'écriture. Aucun chemin applicatif ne doit toucher ce champ.
+--
+-- Cas de test (à dérouler en local après application du schéma) :
+--   * insert participations  → mobilizations.participation_count +1
+--   * delete participations  → mobilizations.participation_count -1 (et non
+--     négatif grâce au greatest()).
+--   * tentative d'insertion de doublon (mobilization_id, user_id) → erreur
+--     23505 sur la contrainte UNIQUE, compteur inchangé.
+-- -------------------------------------------------------------------------------------
+create or replace function public.touch_mobilization_participation_count()
+returns trigger
+language plpgsql
+as $$
+begin
+  if (tg_op = 'INSERT') then
+    update public.mobilizations
+       set participation_count = participation_count + 1
+     where id = new.mobilization_id;
+    return new;
+  elsif (tg_op = 'DELETE') then
+    update public.mobilizations
+       set participation_count = greatest(participation_count - 1, 0)
+     where id = old.mobilization_id;
+    return old;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists participations_count_inc on public.participations;
+create trigger participations_count_inc
+  after insert on public.participations
+  for each row execute function public.touch_mobilization_participation_count();
+
+drop trigger if exists participations_count_dec on public.participations;
+create trigger participations_count_dec
+  after delete on public.participations
+  for each row execute function public.touch_mobilization_participation_count();
 
 -- -------------------------------------------------------------------------------------
 -- 6. Hébergement (offres) + demandes

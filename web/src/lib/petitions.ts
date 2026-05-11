@@ -1,7 +1,10 @@
 import { PostgrestError } from '@supabase/supabase-js';
 
+import { slugify } from '@/lib/slug';
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
+
+export { slugify };
 
 export type PetitionRow = Database['public']['Tables']['petitions']['Row'];
 export type PetitionInsert = Database['public']['Tables']['petitions']['Insert'];
@@ -72,25 +75,6 @@ export interface CreatePetitionInput {
   category: string;
   targetCount?: number | undefined;
   coverUrl?: string | null | undefined;
-}
-
-/**
- * Génère un slug stable à partir d'un titre. Reproduit en TS la fonction SQL
- * `public.slugify(text)` pour pouvoir l'utiliser côté front sans round-trip
- * réseau (vérification d'unicité + insert en une seule requête).
- */
-export function slugify(input: string): string {
-  const accents = 'àâäáãåçèéêëìîïíòôöóõùûüúýÿñÀÂÄÁÃÅÇÈÉÊËÌÎÏÍÒÔÖÓÕÙÛÜÚÝŸÑ';
-  const plain = 'aaaaaaceeeeiiiioooooouuuuyynaaaaaaceeeeiiiioooooouuuuyyn';
-  let out = '';
-  for (const ch of input.toLowerCase()) {
-    const idx = accents.indexOf(ch);
-    out += idx >= 0 ? plain[idx] : ch;
-  }
-  return out
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^-+|-+$/g, '');
 }
 
 export interface ValidationIssue {

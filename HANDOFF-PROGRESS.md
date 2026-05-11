@@ -18,7 +18,8 @@
 | 7. Adhésion Stripe (3 tiers) + RPC T99CP (Sprint 1)     |   ✅   |
 | 8. OAuth Google/Instagram + magic link (fin Sprint 1)   |   ✅   |
 | 9. Sprint 2 — Pétitions CRUD côté front                 |   ✅   |
-| 10. Sprint 2 — Mobilisations CRUD côté front            |   ⬜   |
+| 10. Sprint 2 — Mobilisations CRUD côté front            |   ✅   |
+| 11. Sprint 2 — Sondages CRUD côté front                 |   ⬜   |
 
 ---
 
@@ -1447,6 +1448,210 @@ Mocks Supabase :
 
 ---
 
+## Étape 10 — Sprint 2 / Mobilisations CRUD côté front ✅
+
+**Branche** : `claude/read-project-rules-IyheS` (l'étape 9 a été mergée
+depuis `claude/review-project-rules-6SadH` @ `b0ec67b` au début de
+cette session).
+
+### Pré-requis exécutés
+
+- `git fetch origin claude/review-project-rules-6SadH` puis
+  `git merge --no-ff b0ec67b` pour récupérer le tip de l'étape 9
+  (pétitions CRUD côté front).
+- `cd web && npm install --legacy-peer-deps` (lockfile non versionné +
+  conflit `eslint-plugin-jsx-a11y` ↔ ESLint 10).
+
+### Module `web/src/lib/slug.ts` (factorisation)
+
+`slugify()` extraite de `petitions.ts` vers un module dédié partageable
+par tous les modules de contenu militant (pétitions, mobilisations,
+articles à venir). `petitions.ts` re-exporte `slugify` pour garder la
+compatibilité avec les imports existants (tests + pages).
+
+### Module `web/src/lib/mobilizations.ts`
+
+API typée intégralement via `Database['public']['Tables']['mobilizations']`
+et `Database['public']['Tables']['participations']`. Toutes les fonctions
+renvoient `{ data | rsvp, error: PostgrestError | null }` pour partager
+le mapper FR `postgrestErrorMessage`.
+
+| Fonction                          | Rôle                                                                 |
+| --------------------------------- | -------------------------------------------------------------------- |
+| `listMobilizations(params)`       | Listing public (status='published' par défaut) trié par `starts_at` ASC |
+| `getMobilization(slug)`           | Lecture par slug (maybeSingle → 404 silencieux)                       |
+| `createMobilization(input)`       | Validation FR + slugify + insert avec retry slug-collision (jusqu'à 5)|
+| `rsvpMobilization(mid, uid)`      | Insert dans `participations` (RLS authenticated_self)                 |
+| `cancelRsvp(mid, uid)`            | Delete RGPD (1 user / 1 mobilisation)                                 |
+| `hasUserRsvp(mid, uid)`           | Single-row check via maybeSingle                                      |
+| `validateMobilizationInput(in)`   | Validation pure (titre 8–80, résumé 40–240, body ≥ 100 si non vide,  |
+|                                   | ville 2–80, `startsAt` valide, `endsAt` ≥ `startsAt` si fourni)       |
+
+Constantes exportées : `MOBILIZATION_TITLE_MIN/MAX`,
+`MOBILIZATION_SUMMARY_MIN/MAX`, `MOBILIZATION_BODY_MIN`,
+`MOBILIZATION_CITY_MIN/MAX`. Filtres supportés sur `listMobilizations` :
+`status`, `search`, `city` (ilike), `startsAfter`/`startsBefore` (ISO),
+`limit`.
+
+### Helper `web/src/lib/mobilizationFormat.ts`
+
+Trois formatters Intl FR (`longDateFormatter`, `shortDateFormatter`,
+`timeFormatter`) + `formatMobilizationDate(iso, 'long' | 'short')` +
+`formatMobilizationTime(iso)`. Placé dans `lib/` (et non dans la page)
+pour respecter la règle ESLint `react-refresh/only-export-components`
+— un fichier de page ne doit exporter que des composants.
+
+### Hooks
+
+- `web/src/hooks/useMobilizations.ts` : listing avec filtres `search`,
+  `city`, `startsAfter`, `startsBefore`, `limit`. Refetch automatique
+  quand le `filterKey` (JSON.stringify) change. Même pattern « set state
+  during render » + `queueMicrotask` que `usePetitions`.
+- `web/src/hooks/useMobilization.ts` : fiche détail par slug + check
+  `hasUserRsvp` en parallèle quand `userId` est fourni. Status UI étendu
+  avec `notfound` (data=null sur slug) → la page redirige vers
+  `/mobilizations`.
+
+### Pages
+
+- `web/src/pages/MobilizationsPage.tsx` : hero + barre de recherche +
+  filtre ville (input texte) + filtre date « à partir du » (input
+  date) + bouton « Créer un événement ». Cards `MobilizationCard` avec
+  date courte FR, ville, compteur d'inscrits. État vide + erreurs
+  Postgrest mappées en FR.
+- `web/src/pages/MobilizationDetailPage.tsx` : fiche complète avec
+  bouton « Je participe » / « me désinscrire ». Anonymes → CTA « Se
+  connecter pour participer » avec `?auth=login&next=...`. Compteur
+  live via `refresh()` après chaque action. Bouton « Partager » qui
+  bascule sur `navigator.share` (mobile) puis fallback
+  `navigator.clipboard.writeText`. Date longue FR via `Intl.DateTimeFormat`.
+  `isPast` calculé dans un `useEffect + queueMicrotask` pour éviter
+  `Date.now()` en pleine render (règle ESLint `react-hooks/purity`).
+- `web/src/pages/MobilizationCreatePage.tsx` : formulaire avec
+  validation client (mêmes seuils que `validateMobilizationInput`).
+  Date+heure séparées côté UI, recombinées en ISO côté soumission.
+  Réussite → redirige vers la fiche `/mobilizations/<slug>`. Protégée
+  par `RequireAuth` dans le router.
+
+### Router
+
+3 nouvelles routes dans `web/src/router.tsx` :
+
+| URL                    | Composant                | Garde         |
+| ---------------------- | ------------------------ | ------------- |
+| `/mobilizations`       | `MobilizationsPage`      | aucune        |
+| `/mobilizations/new`   | `MobilizationCreatePage` | `RequireAuth` |
+| `/mobilizations/:slug` | `MobilizationDetailPage` | aucune        |
+
+### Schéma SQL — `db/schema.sql`
+
+Section 5 mise à jour (idempotente) :
+
+- Colonne `mobilizations.participation_count integer not null default 0
+  check (participation_count >= 0)` ajoutée à la définition ;
+  complétée via `alter table … add column if not exists` +
+  `add constraint …` pour les bases déjà initialisées avec l'ancien
+  schéma.
+- Index `mobilizations_status_idx` et `mobilizations_city_idx` ajoutés
+  (les listings filtrent par status + city).
+- Section 5.b : fonction
+  `public.touch_mobilization_participation_count()` + triggers
+  `participations_count_inc` (AFTER INSERT) et `participations_count_dec`
+  (AFTER DELETE). Le décrément utilise
+  `greatest(participation_count - 1, 0)` pour respecter le `CHECK >= 0`.
+  Cas de test documentés en commentaire SQL (insert/delete + tentative
+  de doublon).
+- `web/src/types/database.ts` patché à la main : ajout de
+  `participation_count: number` aux Row/Insert/Update de `mobilizations`.
+
+### Icônes ajoutées (`web/src/components/icons.tsx`)
+
+3 nouvelles icônes SVG (currentColor) : `IconCalendar`, `IconPin`,
+`IconShare`. Toutes en `viewBox="0 0 24 24"`, stroke 2,
+`stroke-linecap/linejoin: round`.
+
+### Tests (48 nouveaux, total 175)
+
+| Fichier                                         | Cas | Couverture                                                          |
+| ----------------------------------------------- | --: | ------------------------------------------------------------------- |
+| `src/lib/slug.test.ts`                          |   4 | normalisation accents, trim tirets, casse+chiffres, chaîne vide     |
+| `src/lib/mobilizations.test.ts`                 |  24 | validate (8), listMobilizations (5), getMobilization (2), createMobilization (4), rsvpMobilization (2), cancelRsvp (1), hasUserRsvp (2) |
+| `src/hooks/useMobilizations.test.tsx`           |   3 | mount + refetch sur changement filterKey + état erreur              |
+| `src/hooks/useMobilization.test.tsx`            |   4 | anonymous (rsvp=false), notfound, rsvp=true, refresh                |
+| `src/pages/MobilizationsPage.test.tsx`          |   5 | rendu listing, état vide, soumission recherche, filtre ville, erreur RLS |
+| `src/pages/MobilizationDetailPage.test.tsx`     |   5 | rendu fiche+dates, anonymous → lien login, rsvp → refresh, cancel, 404 → redirect |
+| `src/pages/MobilizationCreatePage.test.tsx`     |   3 | validation FR, submit valide → redirect, erreur 42501               |
+
+Mocks Supabase :
+
+- `mobilizations.test.ts` : même builder « thenable »
+  (`resolveChain(chain, result)`) que pour pétitions, étendu avec
+  `ilike`, `gte`, `lte` pour couvrir tous les filtres.
+- Hooks et pages : `vi.importActual` puis surcharge fonction par
+  fonction — préserve les constantes (`MOBILIZATION_*`, types) tout
+  en isolant les appels réseau.
+
+### Vérifications passées
+
+- `npm run typecheck` : ✅ aucune erreur
+- `npm run lint` : ✅ 0 problème
+- `npm test -- --run` : ✅ 175/175 tests passent (26 fichiers)
+- `npm run build` : ✅ build OK (`dist/` ~ 295 kB JS, 1.09 kB CSS)
+- `npm run format:check` : ✅ tous les fichiers conformes
+
+### Décisions / arbitrages
+
+- **Date d'événement obligatoire** : la mobilisation a un sens
+  temporel fort (« quand a lieu la marche ? »). Le champ `startsAt`
+  est requis côté validation, contrairement aux pétitions qui n'ont
+  pas de date d'expiration explicite. `endsAt` reste facultatif.
+- **Formatage Intl FR** : utilisation de
+  `new Intl.DateTimeFormat('fr-FR', …)` avec trois variantes (long /
+  short / time) plutôt qu'une lib externe (date-fns, dayjs) — bundle
+  size + zéro dépendance. Les formatters sont instanciés une seule
+  fois au top du module.
+- **Partage de la fiche** : `navigator.share` (mobile / desktop
+  moderne) en priorité, fallback `navigator.clipboard.writeText` qui
+  copie l'URL canonique (`origin + pathname`). Un feedback éphémère
+  « Lien copié. » s'affiche à droite du bouton après succès.
+- **`isPast` calculé en effect** : Le linter
+  `react-hooks/purity` interdit `Date.now()` en pleine render. La
+  comparaison est portée par un `useState` + `useEffect +
+  queueMicrotask` (même pattern que `useMobilizations` /
+  `useMobilization`). Conséquence : `isPast` reste `false` pendant
+  un microtask au mount — acceptable pour un état CTA (le bouton
+  passe en `disabled` juste après la frame initiale).
+- **Pas d'emojis** : aucun emoji dans le code TS — toutes les
+  icônes passent par `IconCalendar`, `IconPin`, `IconShare`,
+  `IconUsers`, etc. (currentColor).
+- **Recherche par ville** : `ilike` exact (sans wildcard) côté
+  Postgres. À surveiller : on bascule sur `tsvector` + index GIN
+  (Sprint 6 perf) si on veut une recherche libre sur ville+adresse.
+- **Compteur dénormalisé `participation_count`** : maintenu via
+  trigger Postgres (cf. section 5.b de `db/schema.sql`). La
+  contrainte `unique (mobilization_id, user_id)` (déjà présente à
+  l'étape 4) empêche les doublons.
+- **Body facultatif** : la mobilisation peut tenir uniquement avec
+  un résumé (cas d'une marche simple « Le 1er mai à République,
+  14h »). La validation ne refuse qu'un body trop court si l'utilisateur
+  l'a saisi (≥ 100 caractères). Sinon body=null.
+
+### Prochaines étapes (étape 11)
+
+1. Sondages CRUD (port du prototype `Pages_Services.jsx` /
+   `Pages_Home.jsx`, table `polls` + `poll_options` + `votes` —
+   mêmes patterns que pétitions / mobilisations).
+2. Campagnes CRUD (table `campaigns` + `campaign_actions`) — peut
+   être groupé avec sondages ou faire l'objet d'une étape 12.
+3. Audit RGPD fin Sprint 2 (étape 13) : bannière « contenus
+   créés visibles publiquement », CGU minimales, page « Mentions
+   légales ».
+4. Sprint 3 (services communautaires) — hébergement, covoiturage,
+   marketplace, prêt, jardins, SEL, cagnottes : à attaquer une fois
+   le Sprint 2 fini.
+
+---
+
 ## Prompt pour la session N+4 (étape 10)
 
 > Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
@@ -2076,3 +2281,192 @@ Mocks Supabase :
 > uniquement quand le sprint 1 (auth + profil + adhésion + T99CP) est
 > complet, point auquel le prompt généré peut basculer sur le sprint 2
 > (contenu militant — pétitions, mobilisations, campagnes).
+
+---
+
+## Prompt pour la session N+5 (étape 11)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD).
+> 2. `HANDOFF.md` §3 (architecture pages) + §7.2 (tables `polls`,
+>    `poll_options`, `votes`) + §10 Sprint 2.
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 10 ✅ — étape 11 à faire).
+> 4. `Pages_Services.jsx` / `Pages_Home.jsx` / racine prototype :
+>    composants liés aux sondages (chercher `Polls`, `poll`,
+>    `Sondages`, `PollDetail`, `vote`, `pondération`).
+> 5. `web/src/lib/petitions.ts`, `web/src/lib/mobilizations.ts`,
+>    `web/src/lib/slug.ts`, `web/src/hooks/usePetitions.ts`,
+>    `web/src/hooks/useMobilizations.ts`,
+>    `web/src/pages/PetitionsPage.tsx`, `web/src/pages/MobilizationsPage.tsx`,
+>    `web/src/pages/PetitionDetailPage.tsx`,
+>    `web/src/pages/MobilizationDetailPage.tsx`,
+>    `web/src/pages/PetitionCreatePage.tsx`,
+>    `web/src/pages/MobilizationCreatePage.tsx` — patterns à reproduire
+>    pour `polls`.
+> 6. `db/schema.sql` §12 (sondages) — tables `polls`, `poll_options`,
+>    `votes` + policies RLS. Vérifier que toutes les colonnes nécessaires
+>    sont présentes (compteur dénormalisé `vote_count` sur `poll_options`,
+>    trigger d'incrément, contraintes d'unicité par `(poll_id, user_id)`
+>    sur `votes`).
+>
+> **État actuel à la fin de l'étape 10** (tip
+> `claude/read-project-rules-IyheS`, commit
+> `feat(mobilizations): step 10 — CRUD mobilisations + listing + fiche + création`) :
+>
+> - Prototype intact : `project/app/Maintenant.html` + JSX racine.
+> - `web/` : Vite + React 19 + TS 6 strict, **175 tests verts** (48
+>   nouveaux à l'étape 10), ESLint flat, Vitest, Prettier,
+>   build 295 kB.
+> - Supabase : `db/schema.sql` à ~1 790 lignes (36 tables + 119
+>   policies RLS + trigger `handle_new_user` + bucket avatars + RPC
+>   T99CP + compteur `signature_count` + compteur `participation_count`
+>   + slugify(text)), `web/src/types/database.ts` à ~1 720 lignes.
+> - Auth complète : signup/login/logout/reset password + OAuth Google
+>   + Instagram + magic link + callback page `/auth/callback`.
+> - Profil + adhésion Stripe + RPC T99CP opérationnels.
+> - **Pétitions complètes** : listing, fiche, signer/retirer signature,
+>   création (`RequireAuth`) — Sprint 2 démarré.
+> - **Mobilisations complètes** : listing avec filtres ville+date,
+>   fiche avec « Je participe » / « me désinscrire » + partage
+>   (`navigator.share` / clipboard) + dates FR Intl, création
+>   (`RequireAuth`) — Sprint 2 poursuivi.
+> - `slugify()` factorisé dans `web/src/lib/slug.ts` (partagé par
+>   pétitions et mobilisations, prêt pour articles + sondages).
+>
+> **CONTEXTE D'OUVERTURE — à exécuter avant toute autre action** :
+>
+> 1. `git fetch origin claude/read-project-rules-IyheS` (retry network
+>    2s/4s/8s/16s) pour récupérer le tip de l'étape 10.
+> 2. `git merge --no-ff <tip-sha>` pour intégrer le commit
+>    `feat(mobilizations): step 10 …`. En cas d'absence,
+>    `git checkout origin/claude/read-project-rules-IyheS -- .` puis
+>    commit.
+> 3. `cd web && npm install --legacy-peer-deps` (lockfile non
+>    versionné, option requise à cause d'`eslint-plugin-jsx-a11y` ↔
+>    ESLint 10). À réutiliser pour tout nouvel `npm install` dans cette
+>    session.
+>
+> **ÉTAPE 11 à exécuter — Sondages CRUD côté front (Sprint 2)** :
+>
+> 1. Module `web/src/lib/polls.ts` : fonctions typées via `Database`
+>    (`Tables<'polls'>`, `Tables<'poll_options'>`, `Tables<'votes'>`) :
+>    - `listPolls({ status, search, limit })` — listing paginé (status
+>      public uniquement par défaut), trié par `created_at` DESC.
+>    - `getPoll(slug)` — fiche détail (jointure avec options +
+>      compteur de votes par option).
+>    - `createPoll(input)` — insert poll + insert options en
+>      transaction (ou enchaînement front avec rollback manuel si
+>      Supabase n'expose pas de tx). Validation FR. Slug auto via
+>      `slugify()` factorisé.
+>    - `votePoll(pollId, optionId, userId)` — insert dans `votes`
+>      (RLS authenticated_self). Sémantique « 1 user / 1 sondage »
+>      via contrainte UNIQUE `(poll_id, user_id)`.
+>    - `unvotePoll(pollId, userId)` — delete RGPD.
+>    - `hasUserVoted(pollId, userId)` — single-row check.
+>    - `getUserVote(pollId, userId)` — renvoie l'option votée (pour
+>      afficher le choix de l'utilisateur).
+> 2. Trigger SQL `update_poll_option_vote_count` : si pas déjà
+>    présent dans `db/schema.sql` §12, ajouter un trigger AFTER
+>    INSERT/DELETE sur `votes` qui met à jour
+>    `poll_options.vote_count`. Ajouter la colonne `vote_count integer
+>    not null default 0 check (>= 0)` à `poll_options` (idempotent via
+>    `alter table … add column if not exists`). Documenter les cas de
+>    test SQL dans `db/schema.sql` (commentaires).
+> 3. Hooks `web/src/hooks/usePolls.ts` + `usePoll.ts` : copier le
+>    pattern `usePetitions` / `usePetition` / `useMobilizations` /
+>    `useMobilization`.
+> 4. Pages :
+>    - `web/src/pages/PollsPage.tsx` — listing avec recherche +
+>      filtre statut (ouvert / clos). Port TS strict du prototype.
+>    - `web/src/pages/PollDetailPage.tsx` — fiche avec radio
+>      buttons (ou cards cliquables) pour chaque option,
+>      `RequireAuth` via redirect, compteur live + barres de
+>      progression par option (`var(--mn-gradient)`), partage du lien.
+>    - `web/src/pages/PollCreatePage.tsx` — formulaire création
+>      (`RequireAuth`), validation côté client (question 8–200,
+>      description 40–400, ≥ 2 options et ≤ 8 options, chaque option
+>      2–80 caractères). Réussite → redirige vers la fiche.
+> 5. Router : ajouter les routes `/polls/:slug`, `/polls/new`, et
+>    brancher `RequireAuth` sur la création.
+> 6. Régénérer `web/src/types/database.ts` si tu touches
+>    `db/schema.sql` (au minimum patcher à la main `poll_options.Row`
+>    pour ajouter `vote_count`).
+> 7. Icônes SVG à ajouter si besoin : `IconBarChart`, `IconCheck` —
+>    toujours currentColor, pas d'emoji.
+> 8. Tests (Vitest + Testing Library + mocks supabase) :
+>    - `src/lib/polls.test.ts` (≥ 10 cas) — `listPolls` (filtres),
+>      `getPoll` (succès + 404), `createPoll` (validation, succès,
+>      retry slug-collision, rollback en cas d'erreur sur insert
+>      d'options), `votePoll`, `unvotePoll`, `hasUserVoted`,
+>      `getUserVote`.
+>    - `src/hooks/usePolls.test.tsx` (≥ 3 cas).
+>    - `src/hooks/usePoll.test.tsx` (≥ 3 cas).
+>    - `src/pages/PollsPage.test.tsx` (≥ 3 cas).
+>    - `src/pages/PollDetailPage.test.tsx` (≥ 4 cas) — rendu fiche,
+>      vote anonyme → redirige login, vote authentifié →
+>      `votePoll` + refresh, barres de progression mises à jour.
+>    - `src/pages/PollCreatePage.test.tsx` (≥ 3 cas).
+>    - Objectif : ≥ 200 tests verts (175 existants + ≥ 25 nouveaux).
+> 9. Mettre à jour `HANDOFF-PROGRESS.md` : étape 11 ✅ avec sections
+>    « Module polls.ts », « hooks », « pages », « trigger
+>    vote_count », « décisions (insertion options en cascade,
+>    pondération éventuelle, partage) », « prochaines étapes (étape
+>    12 — campagnes ou audit RGPD fin Sprint 2) ». Cocher la ligne 11
+>    et créer une ligne 12 si manquante.
+> 10. Écrire le prompt de la session N+6 (étape 12) dans
+>     `HANDOFF-PROGRESS.md` (en bas du fichier ou en annexe), section
+>     `## Prompt pour la session N+6 (étape 12)` reprenant la même
+>     structure (contexte d'ouverture, état actuel, étape à exécuter,
+>     contraintes, fallback Docker, double consigne récursive).
+>     L'étape 12 cible : **campagnes CRUD** (port du prototype, mêmes
+>     patterns que pétitions / mobilisations / sondages) ; ou bien
+>     audit RGPD fin Sprint 2 si les campagnes sont fines à traiter
+>     d'un coup.
+> 11. **Coller le prompt de l'étape 12 dans la conversation finale**,
+>     en plus de l'avoir écrit dans `HANDOFF-PROGRESS.md` : à la fin
+>     de la session, le message Claude doit contenir littéralement le
+>     bloc du prompt (citation `>` ou code-fence), pour que
+>     l'utilisateur puisse le copier d'un coup. Cette consigne fait
+>     partie de la boucle récursive : tant que le Sprint 2 (contenu
+>     militant — pétitions, mobilisations, campagnes, sondages) n'est
+>     pas complet, le prompt généré doit aussi être collé dans la
+>     réponse finale de la session.
+> 12. **Commit** : `feat(polls): step 11 — CRUD sondages + listing +
+>     fiche + création`. Push sur la branche imposée par l'harness
+>     avec `git push -u origin <branch>`, retry sur erreurs réseau
+>     (2s/4s/8s/16s). Pas de PR sans demande explicite.
+>
+> **Contraintes** :
+>
+> - Ne pas toucher au prototype (`project/app/Maintenant.html` et JSX
+>   racine).
+> - TS strict + no `any` : tous les types Supabase via
+>   `web/src/types/database.ts` ou `@supabase/supabase-js`.
+> - **Aucune clé `service_role` dans `web/`** : tout passe par RLS et
+>   `VITE_SUPABASE_ANON_KEY`.
+> - Pas d'emojis dans le code TS ni dans les commits (utiliser SVG —
+>   `IconBarChart`, `IconCheck`, etc. à ajouter si besoin).
+> - Conserver les checks verts : `typecheck`, `lint`, `test`, `build`,
+>   `format:check`. Lancer les 5 en fin de session avant de committer.
+> - Si Docker n'est pas dispo dans la sandbox, ne pas tenter
+>   `supabase start` ; les sondages se testent via mocks Vitest. Pour
+>   les vérifs SQL (trigger `vote_count`), documenter en commentaire
+>   dans `db/schema.sql` et tester avec un PG local si possible
+>   (`service postgresql start` + `psql -f db/schema.sql`).
+>
+> **DOUBLE CONSIGNE RÉCURSIVE** :
+>
+> 1. Écrire le prompt de l'étape 12 dans `HANDOFF-PROGRESS.md`
+>    **avant** le commit final.
+> 2. Coller le prompt de l'étape 12 dans la conversation (réponse
+>    finale Claude), pas seulement dans le fichier journal.
+>
+> Cette boucle s'arrête uniquement quand le Sprint 2 (contenu militant
+> — pétitions, mobilisations, campagnes, sondages) est complet, point
+> auquel le prompt généré peut basculer sur le Sprint 3 (services
+> communautaires).

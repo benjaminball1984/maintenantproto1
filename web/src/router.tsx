@@ -6,6 +6,8 @@ import PetitionsPage from './pages/PetitionsPage';
 import PetitionDetailPage from './pages/PetitionDetailPage';
 import PetitionCreatePage from './pages/PetitionCreatePage';
 import MobilizationsPage from './pages/MobilizationsPage';
+import MobilizationDetailPage from './pages/MobilizationDetailPage';
+import MobilizationCreatePage from './pages/MobilizationCreatePage';
 import CampaignsPage from './pages/CampaignsPage';
 import ServicesHubPage from './pages/services/ServicesHubPage';
 import HousingPage from './pages/services/HousingPage';
@@ -45,6 +47,15 @@ export const router = createBrowserRouter([
       },
       { path: 'petitions/:slug', element: <PetitionDetailPage /> },
       { path: 'mobilizations', element: <MobilizationsPage /> },
+      {
+        path: 'mobilizations/new',
+        element: (
+          <RequireAuth>
+            <MobilizationCreatePage />
+          </RequireAuth>
+        ),
+      },
+      { path: 'mobilizations/:slug', element: <MobilizationDetailPage /> },
       { path: 'campaigns', element: <CampaignsPage /> },
       {
         path: 'services',
