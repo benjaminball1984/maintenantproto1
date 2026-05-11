@@ -614,6 +614,26 @@ create trigger post_comments_touch before update on public.post_comments
   for each row execute function public.touch_updated_at();
 
 -- -------------------------------------------------------------------------------------
+-- 11.b Graphe d'abonnement réseau social (follows)
+--
+-- Modèle simple « follower -> followee ». Un utilisateur ne peut pas se
+-- suivre lui-même (CHECK). La paire est unique (PK composite implicite par
+-- UNIQUE (follower_id, followee_id)). Pas de retour bidirectionnel : si A
+-- suit B, B doit suivre A explicitement pour que la relation soit mutuelle.
+-- Le front lit ce graphe pour filtrer le feed (« tout » vs « suivis »).
+-- -------------------------------------------------------------------------------------
+create table if not exists public.follows (
+  id uuid primary key default gen_random_uuid(),
+  follower_id uuid not null references public.users(id) on delete cascade,
+  followee_id uuid not null references public.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (follower_id, followee_id),
+  check (follower_id <> followee_id)
+);
+create index if not exists follows_follower_idx on public.follows (follower_id);
+create index if not exists follows_followee_idx on public.follows (followee_id);
+
+-- -------------------------------------------------------------------------------------
 -- 12. Sondages (polls / poll_options / votes)
 --
 -- Modèle simple « 1 user = 1 vote » :
@@ -945,6 +965,7 @@ alter table public.reactions              enable row level security;
 alter table public.posts                  enable row level security;
 alter table public.post_likes             enable row level security;
 alter table public.post_comments          enable row level security;
+alter table public.follows                 enable row level security;
 alter table public.polls                  enable row level security;
 alter table public.poll_options           enable row level security;
 alter table public.votes                  enable row level security;
@@ -1379,6 +1400,21 @@ create policy post_comments_update_owner on public.post_comments
 drop policy if exists post_comments_delete_owner on public.post_comments;
 create policy post_comments_delete_owner on public.post_comments
   for delete using (auth.uid() = author_id or public.is_admin(auth.uid()));
+
+-- follows : graphe d'abonnement public en lecture (utile pour afficher
+-- le nombre d'abonnés sur le profil). L'écriture est réservée au follower
+-- lui-même ; aucun utilisateur ne peut imposer une relation à un tiers.
+drop policy if exists follows_select_public on public.follows;
+create policy follows_select_public on public.follows
+  for select using (true);
+
+drop policy if exists follows_insert_self on public.follows;
+create policy follows_insert_self on public.follows
+  for insert with check (auth.uid() = follower_id);
+
+drop policy if exists follows_delete_self on public.follows;
+create policy follows_delete_self on public.follows
+  for delete using (auth.uid() = follower_id or public.is_admin(auth.uid()));
 
 -- -------------------------------------------------------------------------------------
 -- polls / poll_options / votes

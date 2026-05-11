@@ -24,7 +24,8 @@
 | 13. Fin Sprint 2 — Audit RGPD ou bascule Sprint 3       |   ✅   |
 | 14. Sprint 3 — Hébergement + Covoiturage CRUD côté front |   ✅   |
 | 15. Sprint 3 — Lending + Marketplace + Jardins + SEL + Crowdfunding |   ✅   |
-| 16. Sprint 4 — Réseau social + Messagerie + Notifications + Média |   ⬜   |
+| 16. Sprint 4 — Réseau social + Messagerie + Notifications + Média |   ✅   |
+| 17. Sprint 5 — Admin + Communes libres + Pages légales restantes |   ⬜   |
 
 ---
 
@@ -3629,6 +3630,283 @@ introduite ici, déjà observé aux étapes 13 et 14).
   premier, l'effet `useAuth` reset le store en `anonymous` au mount.
   Pattern à garder en tête pour les tests qui dépendent de
   `auth.user.id === row.owner_id`.
+
+---
+
+## Étape 16 — Sprint 4 / Réseau social + Messagerie + Notifications + Média ✅
+
+**Branche** : `claude/review-project-rules-0nw8s`
+
+Démarrage du Sprint 4. Quatre modules métier, sept pages, plus une migration
+DB additive (table `follows`). RLS messagerie auditée : `messages_select_party`
+et `messages_insert_party` filtrent strictement par appartenance à la
+`conversation` (cf. `db/schema.sql` §15) — pas de fuite RGPD côté DM.
+
+### Migration DB (additive)
+
+- Nouvelle table `public.follows(follower_id, followee_id)` (graphe
+  d'abonnement réseau social). UNIQUE `(follower_id, followee_id)` + CHECK
+  `follower_id <> followee_id` (pas d'auto-follow côté DB). Indexes sur
+  les deux colonnes pour les requêtes `where follower_id = ?` / `where
+  followee_id = ?`.
+- Policies : `follows_select_public` (lecture publique pour afficher les
+  compteurs), `follows_insert_self` (`auth.uid() = follower_id`),
+  `follows_delete_self` (le follower ou un admin). Table ajoutée à la liste
+  globale `enable row level security`.
+- `web/src/types/database.ts` mis à jour à la main avec la définition de
+  `follows` (mêmes patterns Row/Insert/Update/Relationships que les autres
+  tables).
+
+### Modules `web/src/lib/`
+
+- **`social.ts`** — `posts` (réseau social) + `follows` (graphe). Validation
+  body 1-1000 chars, max 4 médias, visibility `public|members|private`.
+  `listPosts({ authorIds })` filtre par `in('author_id', [...])` (mode
+  « suivis »). Si `authorIds` est explicitement `[]` (utilisateur sans
+  abonnement), on renvoie immédiatement `data: []` sans interroger
+  PostgREST (`.in('author_id', [])` produit un SQL invalide).
+  `followUser`/`unfollowUser`/`listFollowing`/`listFollowers` exposés.
+- **`messaging.ts`** — `conversations` 1-1 + `messages`. Validation body
+  1-4000 chars. `findOrCreateConversation` cherche d'abord la paire
+  `(least, greatest)` puis insère si introuvable. `sendMessage` insère
+  et bump `last_message_at` sur la conversation. `otherParty()` renvoie
+  l'identifiant de l'« autre » partie selon le `viewerId`. Note RGPD :
+  toutes les fonctions sont strictement scope auth.uid() via la RLS.
+- **`notifications.ts`** — listing privé (`auth.uid() = recipient_id`),
+  `countUnread` (head + count exact), `markNotificationRead` (timestamp
+  ISO), `markAllNotificationsRead` (`update where recipient + is null`),
+  `markNotificationUnread`, `deleteNotification`.
+- **`media.ts`** — `articles` (avec retry 23505 sur slug, comme
+  `campaigns` / `crowdfunding`) + `comments` (non flaggés) + `reactions`
+  (5 kinds : like/support/disagree/curious/outrage, UNIQUE par
+  `(article_id, user_id, kind)`). Validation titre 8-140, résumé 40-280,
+  body 200-40000.
+
+### Hooks `web/src/hooks/`
+
+- `usePosts(params)` / `useFollowing(followerId)` — feed + graphe.
+- `useConversations(userId)` / `useMessages(conversationId)` —
+  pattern « idle si pas d'id, loading sinon ».
+- `useNotifications(recipientId, params)` — pareil, avec filterKey
+  `JSON.stringify({recipientId, unreadOnly, limit})` pour reset propre
+  lors d'un changement de filtre.
+- `useArticles(params)` / `useArticle(slug)` — listing + fiche par slug.
+
+### Pages `web/src/pages/`
+
+- **`ReseauPage`** (`/reseau`) — feed des posts + composer
+  (textarea, sélecteur visibility, bouton publier) si user connecté +
+  onglets « tout / suivis ». L'onglet « suivis » filtre via
+  `usePosts({ authorIds: following.map(f => f.followee_id) })`.
+- **`MessagingPage`** (`/messaging`, RequireAuth) — liste des conversations
+  triée `last_message_at DESC NULLS LAST`. Lien vers chaque DM
+  (`/messaging/:conversationId`). Bandeau RGPD permanent en tête.
+- **`MessagingConversationPage`** (`/messaging/:conversationId`,
+  RequireAuth) — fil chronologique ASC + composer (textarea + bouton
+  envoyer). Bulles self/other différenciées. Redirection si conversation
+  introuvable ou anonymous. Pas de pré-fetch quand `authStatus` n'est pas
+  `'authenticated'` (évite un round-trip RLS inutile).
+- **`NotificationsPage`** (`/notifications`, RequireAuth) — flux marqué
+  lu/non-lu, onglets « toutes / non lues », bouton « tout marquer comme
+  lu », toggle par notification.
+- **`MediaPage`** (`/media`) — listing articles publiés, filtres `search`
+  + `format` (article/vidéo/podcast/photo/enquête). CTA « Proposer un
+  article » → `/media/new`.
+- **`ArticleDetailPage`** (`/media/:slug`) — fiche article + barre de
+  réactions (5 kinds avec compteurs) + commentaires + composer si
+  connecté.
+- **`ArticleCreatePage`** (`/media/new`, RequireAuth) — formulaire
+  (titre, format, résumé, contenu, cover URL optionnelle).
+
+### Router
+
+Ajouts dans `web/src/router.tsx` :
+
+- `media/new` (RequireAuth) + `media/:slug`
+- `messaging` (RequireAuth) + `messaging/:conversationId` (RequireAuth)
+- `notifications` (RequireAuth)
+
+Les placeholders `ReseauPage`, `MessagingPage`, `NotificationsPage`,
+`MediaPage` sont remplacés par les vraies pages.
+
+### Tests
+
+- **Lib** : social 27, messaging 19, notifications 13, media 30.
+- **Hooks** : 18 tests (usePosts 2 / useFollowing 3 / useConversations 3 /
+  useMessages 2 / useNotifications 3 / useArticles 2 / useArticle 3).
+- **Pages** : Reseau 4 / Messaging 4 / MessagingConversation 4 /
+  Notifications 4 / Media 3 / ArticleDetail 5 / ArticleCreate 2 = 26.
+
+Total nouveau : **128 tests**.
+
+Fin d'étape 15 : 526 tests verts. Fin d'étape 16 :
+**654 tests verts** (106 fichiers, durée ~63 s). Build : 295 kB (tronqué
+faute de `VITE_SUPABASE_*` en CI — pas une régression introduite ici).
+
+### Décisions
+
+- **Table `follows` ajoutée à `db/schema.sql`** (migration additive non
+  destructive). Listée explicitement dans le prompt de l'étape 16, donc
+  pas de blocage merge auto. RLS strict côté écriture
+  (`auth.uid() = follower_id`), lecture publique pour les compteurs.
+- **RLS messagerie auditée** — `conv_select_party` /
+  `conv_insert_party` / `messages_select_party` / `messages_insert_party`
+  toutes scope `auth.uid() in (user_a, user_b)`. `messages_update_sender`
+  réservé aux admins (modération). Aucun chemin front n'expose une lecture
+  par un tiers. **Pas de blocage RGPD identifié** — DM strictement privés.
+- **`authorIds` vide ≠ filtre absent** — quand le mode « suivis » donne
+  `authorIds = []` (utilisateur sans abonnement), `listPosts` short-circuite
+  à `{data: [], error: null}` sans appeler PostgREST. Sinon `.in(col, [])`
+  produit un SQL invalide.
+- **Pas de pré-fetch quand anonymous** — `MessagingConversationPage` ajoute
+  un `if (authStatus !== 'authenticated') return;` dans l'useEffect avant
+  l'appel `getConversation`. Évite un round-trip 401/200-empty pour un
+  user qui va être redirigé par `Navigate` au prochain commit React.
+- **Tests page redirect + MemoryRouter Routes** — un test qui rend une
+  page renvoyant `<Navigate to="/?auth=login" />` doit envelopper dans
+  `<Routes>` avec une `Route path="/"` de fallback. Sinon Navigate
+  re-déclenche en boucle et vitest hang (sans timeout interne sur les
+  effets routeur). Pattern appliqué pour les tests anonymous de
+  `MessagingPage`, `MessagingConversationPage`, `NotificationsPage`.
+- **Composeurs de posts/commentaires/messages côté inline** — pour cette
+  étape, l'écriture utilise directement les fonctions `createPost` /
+  `createComment` / `sendMessage` au sein des pages liste/fiche, sans
+  routes `*/new` dédiées (sauf `media/new` qui sert pour articles
+  complets). Plus simple côté UX et évite l'inflation de routes pour
+  les ressources courtes.
+- **Stockage des médias post (`media_urls`) en JSON** — la table accepte
+  un tableau JSONB. On insère un tableau vide par défaut. L'upload réel
+  (Supabase Storage) est repoussé au sprint média/CDN.
+- **`unreadCount` calculé côté front** — pour éviter un second roundtrip
+  `countUnread` à chaque render, le compteur est dérivé de la liste
+  fetchée. Pour les volumes >100 notifs il faudra basculer sur `countUnread`
+  + pagination.
+- **Build inchangé en taille (295 kB)** — bundle Vite tronqué à
+  `supabase.ts` faute d'env vars en CI ; pas une régression.
+
+---
+
+## Prompt pour la session N+11 (étape 17)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD). **Note
+>    la section « Politique de PR » qui t'autorise à enchaîner ouverture
+>    + merge des PR sans confirmation jusqu'à la session 50 incluse.**
+> 2. `HANDOFF.md` §10 Sprint 5 (Admin + Communes libres + Pages légales).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 16 ✅ — étape 17 à faire).
+> 4. `db/schema.sql` §14 (`communes`, `commune_members`) + §17
+>    (`admin_logs`, `email_campaigns`) + leurs policies RLS.
+> 5. `web/src/lib/media.ts` + `web/src/lib/social.ts` — patterns
+>    de référence (validation, listing, hooks, pages détaillées).
+> 6. `web/src/pages/ArticleCreatePage.tsx` + `web/src/pages/MediaPage.tsx`
+>    — patterns formulaire + filtrage par sélecteur.
+>
+> **État actuel à la fin de l'étape 16** :
+>
+> - Sprint 4 complet (réseau social + messagerie + notifications + média).
+> - 654 tests verts, build 295 kB (tronqué CI).
+> - Routes `/reseau`, `/messaging`, `/messaging/:conversationId`,
+>   `/notifications`, `/media`, `/media/new`, `/media/:slug` montées
+>   (RequireAuth sur les routes d'écriture et la messagerie + les
+>   notifications). Pas de redirect côté `/reseau` ni `/media` (lectures
+>   publiques).
+> - Migration DB additive : table `follows` ajoutée (`db/schema.sql`
+>   + `web/src/types/database.ts`).
+>
+> **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
+>
+> 1. Vérifier qu'on est bien dans un workspace contenant `web/`. Si non
+>    (rare — branche partie d'un main obsolète), `git fetch origin main &&
+>    git merge --ff-only origin/main`.
+> 2. `cd web && npm ci` (fallback : `npm install --legacy-peer-deps`).
+> 3. `npm run typecheck && npm run lint && npx vitest run && npm run build`
+>    pour vérifier le compteur de tests au point de départ (≥ 654 verts
+>    à la fin de l'étape 16).
+>
+> **ÉTAPE 17 à exécuter — Sprint 5 / Admin + Communes libres + Pages
+> légales restantes** :
+>
+> 1. **Module `web/src/lib/communes.ts`** : `communes(name, slug, city,
+>    description, treasurer_id)` + `commune_members(commune_id, user_id,
+>    role)`. Listing public, création par admin (cf. policy
+>    `communes_write_admin`), join/leave par l'utilisateur lui-même.
+> 2. **Module `web/src/lib/admin.ts`** : helpers pour le panel admin —
+>    listing des content_status='flagged' (modération), historisation
+>    `admin_logs`, pilotage `email_campaigns`. Toutes les écritures
+>    réservées aux admins (`public.is_admin(auth.uid())`).
+> 3. **Hooks** suivant le pattern d'étape 16.
+> 4. **Pages** :
+>    - `CommunesPage` (`/communes`) — listing.
+>    - `CommuneDetailPage` (`/communes/:slug`) — fiche + bouton rejoindre/
+>      quitter selon le statut de membre.
+>    - `CommuneCreatePage` (`/communes/new`, RequireAuth + RequireAdmin).
+>    - `AdminPage` (`/admin`, RequireAuth + RequireAdmin) — vue
+>      d'ensemble : modération, communes, email campaigns.
+>    - Page contact (`/legal/contact` ou similaire) connectée.
+> 5. **Router** : remplacer les placeholders `CommunesPage` et `AdminPage`,
+>    ajouter les nouvelles routes, créer un `RequireAdmin` wrapper.
+> 6. **Tests** : objectif ≥ 770 tests verts (654 + ≥ 120 nouveaux —
+>    2 modules × ~25 tests + 4 pages × ~5 tests).
+> 7. **HANDOFF-PROGRESS.md** : étape 17 ✅ + prompt étape 18
+>    (Sprint 6 — Optim + tests E2E + mise en prod).
+>
+> **CLÔTURE DE L'ÉTAPE — workflow auto-merge** :
+>
+> Conformément à `CLAUDE.md` § « Politique de PR », tu as autorisation
+> permanente d'enchaîner les étapes ci-dessous sans demander
+> confirmation. Procéder dans l'ordre, **sans s'arrêter entre les
+> étapes** :
+>
+> 1. **Vérifier les 4 checks locaux verts** : `npm run typecheck &&
+>    npm run lint && npx vitest run && npm run build`. Si un check
+>    échoue → corriger, ne pas commit. Si tu ne sais pas corriger en
+>    moins de 3 tentatives → t'arrêter et demander.
+> 2. **Commit** : `feat(admin): step 17 — sprint 5 (admin + communes
+>    libres + contact)`. Pas d'emojis dans le message.
+> 3. **Push** sur la branche imposée par l'harness
+>    (`git push -u origin <branch>`, retry exponentiel 2/4/8/16 s sur
+>    erreur réseau).
+> 4. **Ouvrir la PR** vers `main` via
+>    `mcp__github__create_pull_request` avec titre identique au commit,
+>    body suivant le template (Summary + Décisions + Test plan). Pas
+>    d'emojis.
+> 5. **Attendre les checks GitHub Actions si présents**. S'ils sont
+>    rouges → autofix puis re-push, ne pas merger.
+> 6. **Merger la PR** via `mcp__github__merge_pull_request` (merge
+>    method `merge` ou `squash` — pas `rebase`). Confirmer le merge
+>    dans la conversation avec l'URL de la PR.
+>
+> **Conditions d'arrêt malgré l'autorisation permanente**
+> (cf. `CLAUDE.md`) :
+>
+> - Migration DB risquée (suppression / rename de table / colonne /
+>   RPC non listée dans ce prompt). Attention au RequireAdmin :
+>   l'implémentation doit s'appuyer sur `public.is_admin(auth.uid())`
+>   existant, pas créer une nouvelle table de rôles.
+> - Changement RGPD (nouvelle collecte de données perso, nouveau
+>   cookie non listé — attention au panel admin qui peut accéder à des
+>   données perso : ne pas exposer d'emails utilisateur en clair côté
+>   front sans nécessité).
+> - Breaking change visible utilisateur.
+> - Review humaine ou commentaire GitHub arrivé avant le merge —
+>   traiter d'abord.
+>
+> Dans tous ces cas : demander confirmation explicite avant de merger.
+>
+> **Contraintes générales** :
+>
+> - Ne pas toucher au prototype.
+> - TS strict + no `any`.
+> - Conserver les checks verts à chaque étape.
+> - Pas d'emojis dans le code TS ni dans les commits / PR.
+> - Pour le panel admin : RLS critique. Vérifier que les policies
+>   `admin_logs`, `email_campaigns`, `communes_write_admin` interdisent
+>   tout accès non-admin (cf. `db/schema.sql`).
 
 ---
 
