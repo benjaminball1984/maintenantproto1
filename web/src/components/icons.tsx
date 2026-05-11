@@ -152,6 +152,57 @@ export function IconUpload({ width = 16, height = 16, ...props }: IconProps) {
   );
 }
 
+export function IconCheckCircle({ width = 18, height = 18, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="8 12.5 11 15.5 16.5 9.5" />
+    </svg>
+  );
+}
+
+export function IconCart({ width = 18, height = 18, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <circle cx="9" cy="20" r="1.5" />
+      <circle cx="18" cy="20" r="1.5" />
+      <path d="M2 3h3l2.6 12.3a2 2 0 0 0 2 1.7h8.6a2 2 0 0 0 2-1.6L22 7H6" />
+    </svg>
+  );
+}
+
+export function IconSpark({ width = 18, height = 18, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8" />
+    </svg>
+  );
+}
+
 export function IconBadge({ width = 16, height = 16, ...props }: IconProps) {
   return (
     <svg

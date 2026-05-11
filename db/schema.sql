@@ -1490,5 +1490,121 @@ create policy avatars_authenticated_delete on storage.objects
   );
 
 -- =====================================================================================
+-- 20 · RPC T99CP — credit_t99cp / debit_t99cp
+-- =====================================================================================
+-- Le solde T99CP (users.t99cp_balance) est strictement contraint positif via le
+-- check column `t99cp_balance >= 0` posé à l'étape 4. Toute écriture passe par
+-- ces deux RPC SECURITY DEFINER afin de :
+--   1. tenir l'invariant solde = somme(crédits) - somme(débits) en transaction
+--      unique (insert ledger + update users.balance dans la même PL/pgSQL block,
+--      donc atomique côté Postgres) ;
+--   2. interdire l'overflow négatif sans dépendre uniquement du CHECK (on
+--      remonte une exception métier `insufficient_balance` que le front mappe
+--      en FR) ;
+--   3. éviter qu'un client front avec la clé anon insère directement dans
+--      t99cp_transactions (les policies bloquent déjà l'insert hors admin,
+--      mais le SECURITY DEFINER + search_path verrouillé garantit qu'aucune
+--      RPC parallèle ne peut être détournée par schéma malveillant).
+--
+-- Cas de test (à dérouler en local après application du schéma) :
+--   * credit_t99cp(uid, 60, 'adhesion_renewal') → users.t99cp_balance += 60,
+--     ledger insère une ligne kind='credit', amount=60, reason fournie.
+--   * debit_t99cp(uid, 10, 'reward_redeem') quand balance=60 → balance=50,
+--     ledger insère kind='debit', amount=10.
+--   * debit_t99cp(uid, 999, 'reward_redeem') quand balance=50 → exception
+--     'insufficient_balance', rien n'est inséré, balance inchangée.
+--   * credit_t99cp(uid, 0, ...) ou debit_t99cp(uid, -1, ...) → exception
+--     'invalid_amount' (le CHECK amount > 0 sur t99cp_transactions le bloque
+--     déjà, mais on lève une erreur explicite plus tôt pour clarté).
+--   * Idempotence : c'est la couche appelante (webhook Stripe) qui doit
+--     dédupliquer via la PK adhesions.stripe_subscription_id (UNIQUE) et la
+--     contrainte unique stripe_session_id si elle est ajoutée plus tard ;
+--     ces RPC ne dédupliquent pas (un même crédit peut être appelé deux fois
+--     volontairement, ex: bonus de bienvenue + bonus parrainage).
+
+create or replace function public.credit_t99cp(
+  p_user uuid,
+  p_amount integer,
+  p_reason text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'invalid_amount';
+  end if;
+  if p_user is null then
+    raise exception 'invalid_user';
+  end if;
+  if p_reason is null or length(trim(p_reason)) = 0 then
+    raise exception 'invalid_reason';
+  end if;
+
+  insert into public.t99cp_transactions (user_id, kind, amount, reason)
+  values (p_user, 'credit', p_amount, p_reason);
+
+  update public.users
+     set t99cp_balance = t99cp_balance + p_amount,
+         updated_at = now()
+   where id = p_user;
+end;
+$$;
+
+create or replace function public.debit_t99cp(
+  p_user uuid,
+  p_amount integer,
+  p_reason text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_balance integer;
+begin
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'invalid_amount';
+  end if;
+  if p_user is null then
+    raise exception 'invalid_user';
+  end if;
+  if p_reason is null or length(trim(p_reason)) = 0 then
+    raise exception 'invalid_reason';
+  end if;
+
+  -- Verrou ligne par ligne pour éviter une race avec un second débit concurrent.
+  select t99cp_balance
+    into v_balance
+    from public.users
+   where id = p_user
+   for update;
+
+  if v_balance is null then
+    raise exception 'unknown_user';
+  end if;
+  if v_balance < p_amount then
+    raise exception 'insufficient_balance';
+  end if;
+
+  insert into public.t99cp_transactions (user_id, kind, amount, reason)
+  values (p_user, 'debit', p_amount, p_reason);
+
+  update public.users
+     set t99cp_balance = t99cp_balance - p_amount,
+         updated_at = now()
+   where id = p_user;
+end;
+$$;
+
+revoke all on function public.credit_t99cp(uuid, integer, text) from public;
+revoke all on function public.debit_t99cp(uuid, integer, text)  from public;
+grant execute on function public.credit_t99cp(uuid, integer, text) to authenticated;
+grant execute on function public.debit_t99cp(uuid, integer, text)  to authenticated;
+
+-- =====================================================================================
 -- FIN du schéma. Régénérer les types : `supabase gen types typescript --local`.
 -- =====================================================================================

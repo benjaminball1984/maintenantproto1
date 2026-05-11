@@ -15,7 +15,8 @@
 | 4. Schéma DB Supabase + RLS                             |   ✅   |
 | 5. Brancher Supabase Auth sur `AuthModal`               |   ✅   |
 | 6. Page profil + reset password + avatars bucket        |   ✅   |
-| 7. Adhésion Stripe (3 tiers) + RPC T99CP (Sprint 1)     |   ⬜   |
+| 7. Adhésion Stripe (3 tiers) + RPC T99CP (Sprint 1)     |   ✅   |
+| 8. OAuth Google/Instagram + magic link (fin Sprint 1)   |   ⬜   |
 
 ---
 
@@ -839,6 +840,375 @@ redirection vers `/profile`).
    réservée aux admins / via RPC).
 3. **OAuth Google + Instagram** : reporté tant que les OAuth credentials
    ne sont pas créés (hors scope Claude — décision produit).
+
+---
+
+## Étape 7 — Adhésion Stripe (3 tiers) + RPC T99CP + JoinPage ✅
+
+**Branche** : `claude/review-project-setup-QwLHV`
+(étape 6 mergée depuis `claude/review-project-setup-UbcCi` @ `8a7ea47` au
+début de cette session via `git fetch` + `git merge --no-ff`).
+
+### Pré-requis exécutés
+
+- `git fetch origin claude/review-project-setup-UbcCi` (premier appel HTTP 500
+  → retry avec back-off 2s/4s/8s/16s, succès au 2ᵉ essai), puis
+  `git merge --no-ff 8a7ea47 -m "Merge step 6 tip ..."` pour récupérer le
+  tip de l'étape 6 (page profil + reset password + bucket avatars).
+- `cd web && npm install --legacy-peer-deps` (lockfile non versionné,
+  l'option reste indispensable à cause d'`eslint-plugin-jsx-a11y` ↔ ESLint 10).
+
+### RPC T99CP (`db/schema.sql` §20)
+
+Deux fonctions `SECURITY DEFINER` avec `set search_path = public, pg_temp`,
+exposées en `grant execute … to authenticated` (révocation pour `public`).
+
+```sql
+public.credit_t99cp(p_user uuid, p_amount integer, p_reason text) returns void
+public.debit_t99cp (p_user uuid, p_amount integer, p_reason text) returns void
+```
+
+- **credit_t99cp** : insère `t99cp_transactions(kind='credit', amount, reason)`
+  puis `update users set t99cp_balance = t99cp_balance + p_amount`. Lève
+  `invalid_amount` si `p_amount <= 0`, `invalid_reason` si la raison est
+  vide/whitespace.
+- **debit_t99cp** : `select … for update` pour verrouiller la ligne contre
+  les races avec un débit concurrent, puis vérifie `balance >= p_amount`
+  (sinon `raise exception 'insufficient_balance'`). Insère la ligne ledger
+  et décrémente. Le check colonne `t99cp_balance >= 0` posé à l'étape 4
+  reste comme deuxième garde-fou (un débit qui passerait quand même les
+  vérifications applicatives serait bloqué au niveau Postgres).
+- Idempotence : déléguée à la couche appelante (la PK `adhesions.stripe_subscription_id`
+  UNIQUE empêche les doublons d'adhésion, et le webhook Stripe utilise
+  l'event id Stripe comme deduplication clé côté staging — à formaliser à
+  l'étape 8 avec une table `stripe_events`).
+
+**Cas de test exécutés en local** (Postgres 16 + stub auth+storage,
+`PGPASSWORD=dev psql -h localhost -U maintenant -d maintenant`) :
+
+| # | Cas                                            | Résultat attendu                                 |
+| - | ---------------------------------------------- | ------------------------------------------------ |
+| 1 | `credit_t99cp(uid, 60, 'adhesion_renewal')`    | balance 0 → 60, ledger += credit                 |
+| 2 | `debit_t99cp(uid, 10, 'reward_redeem')`        | balance 60 → 50, ledger += debit                 |
+| 3 | `debit_t99cp(uid, 9999, 'big')` (solde=50)     | exception `insufficient_balance`, balance inchangée |
+| 4 | `credit_t99cp(uid, 0, 'r')`                    | exception `invalid_amount`                       |
+| 5 | `credit_t99cp(uid, 5, '   ')`                  | exception `invalid_reason`                       |
+
+Les 5 cas passent. Solde final : 50 T99CP, 2 lignes dans `t99cp_transactions`.
+
+### Régénération des types Supabase
+
+- `db/gen-types.mjs` étendu : la section `Functions` inclut désormais
+  `is_admin`, `credit_t99cp` et `debit_t99cp` avec `Args: { p_user: string;
+  p_amount: number; p_reason: string }` et `Returns: void`.
+- Régénération : `node db/gen-types.mjs --url postgres://maintenant:dev@localhost:5432/maintenant > web/src/types/database.ts`
+  puis `npx prettier --write src/types/database.ts`.
+- Le fichier passe à **1 699 lignes** (1 674 → +25 lignes pour les deux RPCs).
+- `web/src/types/database.ts` reste l'unique source de typage Supabase
+  (zéro `any` côté front, conforme à `CLAUDE.md`).
+
+### Edge Functions Stripe
+
+Deux fonctions Deno isolées sous `supabase/functions/` :
+
+```
+supabase/
+  functions/
+    _shared/
+      cors.ts                  ← allow-list origines + helper jsonResponse
+    create-checkout-session/
+      index.ts                 ← création de session Stripe Checkout
+    stripe-webhook/
+      index.ts                 ← réception + dispatch des events Stripe
+```
+
+Architecture clé : chaque fonction expose un `handle(req, deps)` testable
+en isolation (Dependency Injection) ; le bootstrap Deno (`Deno.serve(...)`)
+n'est exécuté que sous `import.meta.main`, ce qui rend ces fichiers
+analysables par TypeScript Node-only sans le runtime Deno.
+
+#### `create-checkout-session/index.ts`
+
+- Valide la méthode (POST + OPTIONS pour le pre-flight CORS).
+- Lit le JWT du caller dans `Authorization: Bearer ...`, le passe à
+  `supabase.auth.getUser(jwt)` (client Supabase reconstruit avec la clé
+  `SUPABASE_ANON_KEY` + l'`Authorization` header). Refuse l'appel si
+  l'utilisateur n'est pas authentifié.
+- Valide le `tier` reçu dans le body (allow-list : `soutien` | `engage`,
+  toute autre valeur → `invalid_tier`).
+- Crée la `Stripe.checkout.sessions.create` :
+  - `mode: 'subscription'`
+  - `line_items: [{ price: STRIPE_PRICE_SOUTIEN | STRIPE_PRICE_ENGAGE, quantity: 1 }]`
+  - `client_reference_id: user.id`
+  - `metadata: { user_id, tier }` (recopié sur `subscription_data.metadata`
+    pour que le webhook `invoice.payment_succeeded` retrouve l'`user_id`)
+  - `success_url: <site>/profile?adhesion=ok`
+  - `cancel_url: <site>/join?canceled=1`
+- Renvoie `{ url }`. Le front fait `window.location.assign(url)`.
+
+#### `stripe-webhook/index.ts`
+
+- Vérifie la signature via `stripe.webhooks.constructEventAsync(body, sig,
+  STRIPE_WEBHOOK_SECRET)`. Toute erreur de signature → 400.
+- Tourne avec `SUPABASE_SERVICE_ROLE_KEY` (Edge Function server-side
+  uniquement, jamais bundlée côté front).
+- Évènements gérés :
+  - `checkout.session.completed` → `upsert adhesions` `(user_id, tier,
+    status='active', stripe_subscription_id, ends_on)` sur le conflict de
+    `stripe_subscription_id`.
+  - `customer.subscription.deleted` → `update adhesions … status='cancelled'`.
+  - `customer.subscription.updated` → `status='cancelled'` si le status
+    Stripe ∈ `{canceled, unpaid, incomplete_expired}`, sinon synchronise
+    `ends_on = current_period_end`.
+  - `invoice.payment_succeeded` → `rpc('credit_t99cp', { p_user, p_amount: 60,
+    p_reason: 'adhesion_renewal' })` (bonus mensuel de 60 T99CP).
+- Évènements non gérés → renvoie `200 { received: true, ignored: <type> }`
+  pour ne pas saturer la retry-queue Stripe.
+
+#### Décisions Stripe
+
+| Sujet               | Décision                                                                                  |
+| ------------------- | ----------------------------------------------------------------------------------------- |
+| **Mode test/live**  | `STRIPE_SECRET_KEY` lit `sk_test_...` en staging et `sk_live_...` en prod. Mêmes price IDs séparés. |
+| **Rate-limiting**   | Délégué à Supabase (PostgREST ratelimit `aud=anon`) + Stripe (rate limits internes). À ajouter en Edge Function (memoize per-user) si abus. |
+| **Idempotence**     | `adhesions.stripe_subscription_id UNIQUE` empêche les doublons (`upsert onConflict`). Pas de table `stripe_events` pour l'instant — à ajouter si retries massifs constatés. |
+| **3D Secure**       | Activé par défaut (zone UE → Stripe applique SCA automatiquement, paramètres `automatic_payment_methods`). |
+| **EU region**       | Le projet Supabase est en `eu-west-3` (Paris). Stripe data residency n'est pas configurable côté UE pour l'instant ; webhooks signés. |
+| **Crédit T99CP**    | 60 T99CP / mois sur `invoice.payment_succeeded` (paid month = paid bonus). Pas de bonus de bienvenue (peut être ajouté plus tard via un event Stripe Checkout `success`). |
+| **Tier downgrade**  | Non géré pour l'instant : `isTierLockedFor` grise les tiers ≤ tier actuel. Une rétrogradation passe par le portail client Stripe (hors scope étape 7). |
+
+### `web/src/lib/membership.ts`
+
+API typée via `Database['public']['Tables']['adhesions']` et
+`Database['public']['Enums']['adhesion_tier']` :
+
+- `getCurrentAdhesion(userId)` — filtre `status='active'`, prend la ligne
+  la plus récente (`order by created_at desc, limit 1, maybeSingle`).
+- `createFreeAdhesion(userId)` — `insert { tier: 'gratuit', status: 'active',
+  amount_eur: 0 }`. Passe par la policy `adhesions_insert_self` (check
+  `auth.uid() = user_id`).
+- `createCheckoutSession(tier)` — appelle l'Edge Function via
+  `supabase.functions.invoke('create-checkout-session', { body: { tier } })`,
+  retourne `{ url, error }`. Toute erreur (network, Edge 4xx/5xx, absence
+  d'URL) est normalisée en `PostgrestError` (codes custom
+  `STRIPE_INVOKE_ERROR` / `STRIPE_NO_URL`) pour partager le mapper FR avec
+  `postgrestError.ts`.
+- Constantes pures : `TIER_RANK`, `TIER_ORDER`, `isTierLockedFor(current,
+  target)` — utilisées pour griser les cartes inférieures ou égales au
+  tier en cours.
+
+### Hook `web/src/hooks/useAdhesion.ts`
+
+Pattern identique à `useProfile` (cf. étape 6) :
+
+- Reset via « set state during render » (clé `trackedUserId`) — évite la
+  règle ESLint `react-hooks/set-state-in-effect`.
+- Fetch dans `queueMicrotask` (sortie de la frame synchrone de l'effect).
+- Expose `{ adhesion, status, error, refresh }`. Status :
+  `'idle' | 'loading' | 'ready' | 'error'`.
+- Si `userId` est `null` (utilisateur anonyme), reste en `'idle'` sans
+  déclencher de requête.
+
+### `web/src/pages/JoinPage.tsx`
+
+Port TS strict du tunnel d'adhésion `project/app/JoinMovement.jsx`,
+simplifié pour 3 tiers en parallèle (au lieu du wizard 4 étapes du
+prototype) :
+
+- Hero gradient `var(--mn-gradient)` + lead.
+- 3 cartes `<article>` listées dans `<ul aria-label="Formules d'adhésion">`,
+  chacune avec : titre, prix, période, blurb, 3 perks (chacun préfixé d'un
+  `IconCheckCircle`), bouton CTA.
+- Cards : `gratuit` (gris), `soutien` (mise en avant, border brand + ribbon
+  « Recommandé »), `engage` (border standard).
+- Si `useAdhesion` renvoie une adhésion active, le tier courant affiche un
+  badge `Tier actuel` (vert) et `isTierLockedFor` désactive les boutons
+  ≤ tier courant (avec libellé « Déjà adhérent·e » + `IconLock`).
+- Banner `?canceled=1` affichée si l'utilisateur revient de Stripe sans
+  finaliser. Banner spécifique pour l'utilisateur anonyme.
+- Erreurs Postgrest mappées en FR via `postgrestErrorMessage` (`42501` →
+  « Vous n'avez pas les droits… », etc.).
+- CTA gratuit → `createFreeAdhesion` + `refresh()` + message « Bienvenue
+  dans le mouvement ».
+- CTA soutien/engage → `createCheckoutSession(tier)` + `window.location.assign(url)`.
+- Aucun emoji : `IconCart`, `IconCheckCircle`, `IconSpark`, `IconLock`
+  ajoutés à `web/src/components/icons.tsx`.
+
+### Tests (Vitest + Testing Library)
+
+3 suites ajoutées, **+23 tests** (50 → 73 verts au total) :
+
+| Fichier                              | Tests | Couvre                                                      |
+| ------------------------------------ | :---: | ----------------------------------------------------------- |
+| `src/lib/membership.test.ts`         |  12   | `TIER_ORDER`/`TIER_RANK`, `isTierLockedFor` (3 scénarios), `getCurrentAdhesion` (3), `createFreeAdhesion` (2), `createCheckoutSession` (3 incl. erreurs FR). |
+| `src/hooks/useAdhesion.test.tsx`     |   4   | `userId=null` → idle, mount → ready, refresh, erreur RLS.   |
+| `src/pages/JoinPage.test.tsx`        |   7   | 3 cartes rendues, banner `?canceled=1`, click gratuit → insert, click soutien → invoke + redirect, tier déjà actif grisé + badge, erreur Postgrest mappée FR, utilisateur anonyme refuse l'action. |
+
+Pattern de mock pour `window.location.assign` :
+`Object.defineProperty(window, 'location', { value: { ...originalLocation,
+assign: spy } })` (jsdom 29 protège `assign` contre la `defineProperty`
+directe sur `window.location`). Restauré dans `afterEach`.
+
+### Vérifications passées (sur cette branche)
+
+- `npm run typecheck` : ✅
+- `npm run lint`      : ✅ (corrections : `readonly T[]` plutôt que
+  `ReadonlyArray<T>`, hook `useAdhesion` aligné sur `useProfile` pour la
+  règle `react-hooks/set-state-in-effect`)
+- `npm test`          : ✅ **73 / 73**
+- `npm run build`     : ✅ `dist/` ~295 kB JS / 1,09 kB CSS
+- `npm run format:check` : ✅
+
+### Décisions / hors scope
+
+- **Pas de migration `supabase/migrations/<ts>_init.sql`** : `db/schema.sql`
+  reste la source canonique. À convertir en migration le jour du `supabase
+  db push` réel (cf. étape 4 §Décisions).
+- **Pas d'invocation Stripe live** : les Edge Functions sont écrites et
+  testées par DI mais pas déployées (sandbox sans Docker, pas de tunnel
+  webhook). Le déploiement se fera depuis un poste de dev avec
+  `supabase functions deploy create-checkout-session stripe-webhook`.
+- **Pas de table `stripe_events`** : la dédup repose sur `adhesions.stripe_subscription_id`
+  UNIQUE. Si Stripe rejoue massivement, on ajoutera la table à l'étape 8+.
+- **Pas de portail client Stripe** : la résiliation se fera depuis le
+  profil utilisateur (placeholder à brancher à l'étape 8) ou par la suite
+  via un endpoint dédié.
+
+### Prochaines étapes (fin Sprint 1 — étape 8)
+
+1. **OAuth Google + Instagram** : boutons sociaux dans `AuthModal`,
+   gestion des erreurs de consentement, page de callback `/auth/callback`.
+2. **Magic link** (alternative passwordless à `signInWithOtp`) déjà
+   exposée par `useAuthStore`, à brancher sur l'`AuthModal`.
+3. À l'issue : Sprint 1 complet (auth + profil + adhésion + T99CP). On
+   pourra basculer sur **Sprint 2 (contenu militant)** — pétitions CRUD,
+   mobilisations, campagnes.
+
+---
+
+## Prompt pour la session N+2 (étape 8)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness — typiquement
+> `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD).
+> 2. `HANDOFF.md` §5 (auth) et §10 Sprint 1 (OAuth final).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 7 ✅ — étape 8 à faire).
+> 4. `web/src/components/AuthModal.tsx`, `web/src/lib/auth.ts`,
+>    `web/src/router.tsx` — modules posés à l'étape 5–7.
+>
+> **État actuel à la fin de l'étape 7** (tip de `claude/review-project-setup-QwLHV`,
+> commit `feat(adhesion): step 7 — Stripe checkout + webhook + RPC T99CP + JoinPage`) :
+>
+> - Prototype intact : `project/app/Maintenant.html` + JSX racine.
+> - `web/` : Vite + React 19 + TS 6 strict, 73 tests verts, ESLint flat,
+>   Vitest, Prettier, build 295 kB.
+> - Supabase : `db/schema.sql` à 1 605 lignes (36 tables + 119 policies RLS
+>   + trigger `handle_new_user` + bucket `avatars` + 4 policies storage
+>   + RPC `credit_t99cp` / `debit_t99cp`), `web/src/types/database.ts`
+>   à 1 699 lignes (fonctions custom incluses).
+> - Auth applicative : `web/src/lib/auth.ts` (Zustand), `AuthModal` 3 écrans
+>   (login + signup + forgot), `RequireAuth`, `RootLayout` avec bouton
+>   login + menu utilisateur + profil.
+> - Profil : `web/src/lib/profile.ts`, `web/src/hooks/useProfile.ts`,
+>   `web/src/pages/ProfilePage.tsx` (lecture + édition + avatar), bucket
+>   Storage `avatars`.
+> - Adhésion : `web/src/lib/membership.ts`, `web/src/hooks/useAdhesion.ts`,
+>   `web/src/pages/JoinPage.tsx` (3 tiers + Stripe Checkout via Edge
+>   Function), `supabase/functions/create-checkout-session/` et
+>   `supabase/functions/stripe-webhook/`.
+>
+> **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
+>
+> 1. `git fetch origin claude/review-project-setup-QwLHV` (retry network
+>    2s/4s/8s/16s).
+> 2. `git merge --no-ff <tip-de-l-étape-7>` (récupérer le tip
+>    `feat(adhesion): step 7 …`). En cas d'absence,
+>    `git checkout origin/claude/review-project-setup-QwLHV -- .` puis
+>    commit.
+> 3. `cd web && npm install --legacy-peer-deps` (lockfile non versionné,
+>    option requise à cause d'`eslint-plugin-jsx-a11y` ↔ ESLint 10). À
+>    réutiliser pour tout nouvel `npm install` dans cette session.
+>
+> **ÉTAPE 8 à exécuter — OAuth Google + Instagram + magic link** :
+>
+> 1. **Page callback `/auth/callback`** : nouvelle route
+>    `web/src/pages/AuthCallbackPage.tsx` qui lit le code OAuth dans l'URL
+>    via `supabase.auth.exchangeCodeForSession(window.location.href)` et
+>    redirige vers `/profile` (ou `/?error=...` si erreur). Affiche un
+>    state intermédiaire « Connexion en cours… ». Brancher dans
+>    `web/src/router.tsx`.
+> 2. **Boutons OAuth dans `AuthModal.tsx`** : ajouter `IconGoogle`,
+>    `IconInstagram` à `web/src/components/icons.tsx` (SVG officiels
+>    multi-color OK, exception à la règle currentColor justifiée en
+>    commentaire). Trois boutons : « Continuer avec Google », « Continuer
+>    avec Instagram », « Lien magique par email ». Click Google →
+>    `supabase.auth.signInWithOAuth({ provider: 'google', options: {
+>    redirectTo: <origin>/auth/callback } })`. Idem Instagram (provider:
+>    `'instagram'`). Click magic link → mode dédié dans `AuthModal` qui
+>    appelle `signInWithMagicLink` (déjà exposé par le store).
+> 3. **Gestion des erreurs de consentement** : si OAuth retourne
+>    `provider_email_needs_verification` ou si l'utilisateur annule
+>    (`access_denied`), mapper l'erreur en FR dans `authErrorMessage`.
+> 4. **Module `web/src/lib/oauth.ts`** : `signInWithProvider(provider)`
+>    typé sur `'google' | 'instagram'`, retourne `{ error }` aligné sur
+>    les autres méthodes du store. Optionnel : passer par le store Zustand
+>    plutôt que par un module dédié si plus simple.
+> 5. **Tests Vitest** (≥ 8 nouveaux) :
+>    - `src/lib/oauth.test.ts` (≥ 3) — signInWithProvider Google +
+>      Instagram + erreur réseau.
+>    - `src/pages/AuthCallbackPage.test.tsx` (≥ 3) — code valide →
+>      redirige vers profile, code absent → message d'erreur, exchange en
+>      erreur → message FR mappé.
+>    - `src/components/AuthModal.test.tsx` (≥ 2 nouveaux cas) —
+>      bouton Google appelle signInWithOAuth, bouton magic link bascule
+>      en mode dédié + appelle `signInWithMagicLink`.
+> 6. **Mettre à jour `HANDOFF-PROGRESS.md`** : étape 8 ✅ avec sections
+>    « OAuth Google + Instagram », « Callback page », « magic link UI »,
+>    « décisions (provider id Instagram = `azure`/`facebook`?) »,
+>    « prochaines étapes (Sprint 2 — contenu militant : pétitions CRUD) ».
+>    Cocher la ligne 8 et créer une ligne 9 si manquante.
+> 7. **Écrire le prompt de la session N+3** dans `HANDOFF-PROGRESS.md`
+>    (en bas du fichier ou en annexe), section `## Prompt pour la
+>    session N+3 (étape 9)` reprenant la même structure (contexte
+>    d'ouverture, état actuel, étape à exécuter, contraintes, fallback
+>    Docker, consigne récursive). **L'étape 9 cible : Sprint 2 — pétitions
+>    CRUD côté front** (le Sprint 1 est complet à l'issue de l'étape 8).
+>    Cette consigne récursive doit être présente à chaque étape : tant
+>    que le Sprint 2 n'est pas complet, le journal auto-prépare la
+>    session suivante.
+> 8. **Commit** : `feat(auth): step 8 — OAuth Google + Instagram + magic
+>    link + callback`. **Push** sur la branche imposée par l'harness avec
+>    `git push -u origin <branch>`, retry sur erreurs réseau
+>    (2s/4s/8s/16s). Pas de PR sans demande explicite.
+>
+> **Contraintes** :
+>
+> - Ne pas toucher au prototype (`project/app/Maintenant.html` et JSX racine).
+> - TS strict + no `any` : tous les types Supabase via `web/src/types/database.ts`
+>   ou `@supabase/supabase-js`.
+> - **Aucune clé `service_role` dans `web/`** : OAuth est géré côté
+>   Supabase Auth, le front n'a accès qu'à `VITE_SUPABASE_ANON_KEY`.
+> - **Aucune clé Google/Instagram secret dans `web/`** : les
+>   client-secret OAuth sont stockés dans la dashboard Supabase Auth
+>   uniquement.
+> - Pas d'emojis dans le code TS ni dans les commits (utiliser SVG —
+>   `IconGoogle`, `IconInstagram`, `IconLink` à ajouter).
+> - Conserver les checks verts : `typecheck`, `lint`, `test`, `build`,
+>   `format:check`. Lancer les 5 en fin de session avant de committer.
+> - Si Docker n'est pas dispo dans la sandbox, ne pas tenter
+>   `supabase start` ; OAuth se teste uniquement avec des mocks côté
+>   front (`supabase.auth.signInWithOAuth` mocké).
+>
+> Le prompt de l'étape 9 doit impérativement contenir la même consigne
+> récursive : « écrire le prompt de l'étape 10 dans `HANDOFF-PROGRESS.md`
+> avant le commit final ». Cette boucle s'arrête uniquement quand le
+> Sprint 2 (contenu militant — pétitions, mobilisations, campagnes) est
+> complet, point auquel le prompt généré peut basculer sur le Sprint 3
+> (services communautaires).
 
 ---
 

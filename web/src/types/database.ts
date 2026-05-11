@@ -1669,6 +1669,14 @@ export interface Database {
         Args: { uid: string };
         Returns: boolean;
       };
+      credit_t99cp: {
+        Args: { p_user: string; p_amount: number; p_reason: string };
+        Returns: void;
+      };
+      debit_t99cp: {
+        Args: { p_user: string; p_amount: number; p_reason: string };
+        Returns: void;
+      };
     };
     Enums: {
       adhesion_status: 'active' | 'cancelled' | 'expired' | 'pending';

@@ -249,6 +249,14 @@ lines.push('      is_admin: {');
 lines.push('        Args: { uid: string };');
 lines.push('        Returns: boolean;');
 lines.push('      };');
+lines.push('      credit_t99cp: {');
+lines.push('        Args: { p_user: string; p_amount: number; p_reason: string };');
+lines.push('        Returns: void;');
+lines.push('      };');
+lines.push('      debit_t99cp: {');
+lines.push('        Args: { p_user: string; p_amount: number; p_reason: string };');
+lines.push('        Returns: void;');
+lines.push('      };');
 lines.push('    };');
 lines.push('    Enums: {');
 for (const [name, values] of enumOrdered) {
