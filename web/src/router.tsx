@@ -36,11 +36,14 @@ import CrowdfundingDetailPage from './pages/services/CrowdfundingDetailPage';
 import CrowdfundingCreatePage from './pages/services/CrowdfundingCreatePage';
 import CrowdfundingContributePage from './pages/services/CrowdfundingContributePage';
 import MediaPage from './pages/MediaPage';
+import ArticleDetailPage from './pages/ArticleDetailPage';
+import ArticleCreatePage from './pages/ArticleCreatePage';
 import ReseauPage from './pages/ReseauPage';
 import PollsPage from './pages/PollsPage';
 import PollDetailPage from './pages/PollDetailPage';
 import PollCreatePage from './pages/PollCreatePage';
 import MessagingPage from './pages/MessagingPage';
+import MessagingConversationPage from './pages/MessagingConversationPage';
 import NotificationsPage from './pages/NotificationsPage';
 import AdminPage from './pages/AdminPage';
 import JoinPage from './pages/JoinPage';
@@ -182,6 +185,15 @@ export const router = createBrowserRouter([
         ],
       },
       { path: 'media', element: <MediaPage /> },
+      {
+        path: 'media/new',
+        element: (
+          <RequireAuth>
+            <ArticleCreatePage />
+          </RequireAuth>
+        ),
+      },
+      { path: 'media/:slug', element: <ArticleDetailPage /> },
       { path: 'reseau', element: <ReseauPage /> },
       { path: 'polls', element: <PollsPage /> },
       {
@@ -193,8 +205,30 @@ export const router = createBrowserRouter([
         ),
       },
       { path: 'polls/:slug', element: <PollDetailPage /> },
-      { path: 'messaging', element: <MessagingPage /> },
-      { path: 'notifications', element: <NotificationsPage /> },
+      {
+        path: 'messaging',
+        element: (
+          <RequireAuth>
+            <MessagingPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'messaging/:conversationId',
+        element: (
+          <RequireAuth>
+            <MessagingConversationPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'notifications',
+        element: (
+          <RequireAuth>
+            <NotificationsPage />
+          </RequireAuth>
+        ),
+      },
       { path: 'admin', element: <AdminPage /> },
       { path: 'join', element: <JoinPage /> },
       { path: 'communes', element: <CommunesPage /> },
