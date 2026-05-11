@@ -20,10 +20,21 @@ import CarpoolingPage from './pages/services/CarpoolingPage';
 import CarpoolingDetailPage from './pages/services/CarpoolingDetailPage';
 import CarpoolingCreatePage from './pages/services/CarpoolingCreatePage';
 import MarketplacePage from './pages/services/MarketplacePage';
+import MarketplaceDetailPage from './pages/services/MarketplaceDetailPage';
+import MarketplaceCreatePage from './pages/services/MarketplaceCreatePage';
 import LendingPage from './pages/services/LendingPage';
+import LendingDetailPage from './pages/services/LendingDetailPage';
+import LendingCreatePage from './pages/services/LendingCreatePage';
 import GardenPage from './pages/services/GardenPage';
+import GardenDetailPage from './pages/services/GardenDetailPage';
+import GardenCreatePage from './pages/services/GardenCreatePage';
 import SelPage from './pages/services/SelPage';
+import SelDetailPage from './pages/services/SelDetailPage';
+import SelCreatePage from './pages/services/SelCreatePage';
 import CrowdfundingPage from './pages/services/CrowdfundingPage';
+import CrowdfundingDetailPage from './pages/services/CrowdfundingDetailPage';
+import CrowdfundingCreatePage from './pages/services/CrowdfundingCreatePage';
+import CrowdfundingContributePage from './pages/services/CrowdfundingContributePage';
 import MediaPage from './pages/MediaPage';
 import ReseauPage from './pages/ReseauPage';
 import PollsPage from './pages/PollsPage';
@@ -111,10 +122,63 @@ export const router = createBrowserRouter([
           },
           { path: 'carpooling/:id', element: <CarpoolingDetailPage /> },
           { path: 'marketplace', element: <MarketplacePage /> },
+          {
+            path: 'marketplace/new',
+            element: (
+              <RequireAuth>
+                <MarketplaceCreatePage />
+              </RequireAuth>
+            ),
+          },
+          { path: 'marketplace/:id', element: <MarketplaceDetailPage /> },
           { path: 'lending', element: <LendingPage /> },
+          {
+            path: 'lending/new',
+            element: (
+              <RequireAuth>
+                <LendingCreatePage />
+              </RequireAuth>
+            ),
+          },
+          { path: 'lending/:id', element: <LendingDetailPage /> },
           { path: 'garden', element: <GardenPage /> },
+          {
+            path: 'garden/new',
+            element: (
+              <RequireAuth>
+                <GardenCreatePage />
+              </RequireAuth>
+            ),
+          },
+          { path: 'garden/:id', element: <GardenDetailPage /> },
           { path: 'sel', element: <SelPage /> },
+          {
+            path: 'sel/new',
+            element: (
+              <RequireAuth>
+                <SelCreatePage />
+              </RequireAuth>
+            ),
+          },
+          { path: 'sel/:id', element: <SelDetailPage /> },
           { path: 'crowdfunding', element: <CrowdfundingPage /> },
+          {
+            path: 'crowdfunding/new',
+            element: (
+              <RequireAuth>
+                <CrowdfundingCreatePage />
+              </RequireAuth>
+            ),
+          },
+          { path: 'crowdfunding/:id', element: <CrowdfundingDetailPage /> },
+          {
+            path: 'crowdfunding/:id/contribute',
+            element: (
+              <RequireAuth>
+                <CrowdfundingContributePage />
+              </RequireAuth>
+            ),
+          },
         ],
       },
       { path: 'media', element: <MediaPage /> },
