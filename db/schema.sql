@@ -934,6 +934,25 @@ create index if not exists email_campaigns_status_idx on public.email_campaigns 
 create trigger email_campaigns_touch before update on public.email_campaigns
   for each row execute function public.touch_updated_at();
 
+-- -------------------------------------------------------------------------------------
+-- 17.b stripe_events — table d'idempotence du webhook Stripe
+-- -------------------------------------------------------------------------------------
+-- Stripe garantit l'« at-least-once delivery » et peut renvoyer plusieurs fois
+-- le même event.id en cas de timeout réseau. Le webhook insère chaque event
+-- dans cette table (PK = event.id) avant de l'exécuter ; si la PK est en
+-- conflit, l'event est ignoré silencieusement (200 OK + idempotent:true).
+-- `processed_at` est positionné après exécution réussie du handler ; en cas
+-- d'erreur (5xx) la ligne reste avec processed_at null et un retry Stripe
+-- ré-exécutera le handler.
+create table if not exists public.stripe_events (
+  id text primary key,
+  type text not null,
+  payload jsonb not null default '{}'::jsonb,
+  received_at timestamptz not null default now(),
+  processed_at timestamptz
+);
+create index if not exists stripe_events_type_idx on public.stripe_events (type, received_at desc);
+
 -- =====================================================================================
 -- RLS — activation + policies par table
 --
@@ -981,6 +1000,7 @@ alter table public.adhesions              enable row level security;
 alter table public.t99cp_transactions     enable row level security;
 alter table public.admin_logs             enable row level security;
 alter table public.email_campaigns        enable row level security;
+alter table public.stripe_events          enable row level security;
 
 -- -------------------------------------------------------------------------------------
 -- users : profil public ; chaque user gère sa ligne ; admins ont tous les droits.
@@ -1674,6 +1694,13 @@ drop policy if exists email_campaigns_admin on public.email_campaigns;
 create policy email_campaigns_admin on public.email_campaigns
   for all using (public.is_admin(auth.uid()))
   with check (public.is_admin(auth.uid()));
+
+drop policy if exists stripe_events_admin_read on public.stripe_events;
+-- stripe_events est strictement écrit par la service-role (webhook). Lecture
+-- admin pour debug ; aucun client front (anon/authenticated) ne doit lire ces
+-- évènements (payload Stripe brut).
+create policy stripe_events_admin_read on public.stripe_events
+  for select using (public.is_admin(auth.uid()));
 
 -- =====================================================================================
 -- 18 · Synchronisation auth.users → public.users

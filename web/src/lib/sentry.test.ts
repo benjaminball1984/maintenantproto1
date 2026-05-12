@@ -4,6 +4,7 @@ import {
   REDACTED,
   scrubEvent,
   initSentry,
+  loadAndInitSentry,
   resetSentryForTests,
 } from './sentry';
 
@@ -147,5 +148,50 @@ describe('sentry.initSentry', () => {
     const okOnReady = vi.fn();
     expect(initSentry({ dsn: 'https://abc@sentry.io/1', onReady: okOnReady })).toBe(true);
     expect(okOnReady).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('sentry.loadAndInitSentry', () => {
+  beforeEach(() => {
+    resetSentryForTests();
+    vi.resetModules();
+  });
+
+  it('renvoie false quand aucun DSN n’est fourni (SDK non chargé)', async () => {
+    expect(await loadAndInitSentry({})).toBe(false);
+  });
+
+  it('renvoie false quand le DSN est vide ou whitespace', async () => {
+    expect(await loadAndInitSentry({ dsn: '' })).toBe(false);
+    expect(await loadAndInitSentry({ dsn: '   ' })).toBe(false);
+  });
+
+  it('charge @sentry/browser et init avec beforeSend wired à scrubEvent', async () => {
+    const initSpy = vi.fn();
+    vi.doMock('@sentry/browser', () => ({ init: initSpy }));
+
+    const fresh = await import('./sentry');
+    fresh.resetSentryForTests();
+    const ok = await fresh.loadAndInitSentry({
+      dsn: 'https://abc@sentry.io/1',
+      environment: 'production',
+      release: 'app@1.2.3',
+    });
+    expect(ok).toBe(true);
+    expect(initSpy).toHaveBeenCalledTimes(1);
+    const firstCall = initSpy.mock.calls[0] as [Record<string, unknown>];
+    const initArg = firstCall[0];
+    expect(initArg.dsn).toBe('https://abc@sentry.io/1');
+    expect(initArg.environment).toBe('production');
+    expect(initArg.release).toBe('app@1.2.3');
+    expect(typeof initArg.beforeSend).toBe('function');
+
+    const beforeSend = initArg.beforeSend as (event: Record<string, unknown>) => Record<string, unknown>;
+    const scrubbed = beforeSend({ user: { id: 'x' }, extra: { email: 'a@b.fr' } });
+    expect(scrubbed.user).toBe(REDACTED);
+    const extra = scrubbed.extra as Record<string, unknown>;
+    expect(extra.email).toBe(REDACTED);
+
+    vi.doUnmock('@sentry/browser');
   });
 });

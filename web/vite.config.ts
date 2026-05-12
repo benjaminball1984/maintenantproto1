@@ -26,9 +26,11 @@ export default defineConfig({
           const reactCore = /[\\/]node_modules[\\/](?:react|react-dom|scheduler)[\\/]/;
           const router = /[\\/]node_modules[\\/]react-router(?:-dom)?[\\/]/;
           const supabase = /[\\/]node_modules[\\/]@supabase[\\/]/;
+          const sentry = /[\\/]node_modules[\\/]@sentry(?:-internal)?[\\/]/;
           if (!/[\\/]node_modules[\\/]/.test(id)) return undefined;
           if (router.test(id)) return 'router';
           if (supabase.test(id)) return 'supabase';
+          if (sentry.test(id)) return 'sentry';
           if (reactCore.test(id)) return 'react';
           return 'vendor';
         },

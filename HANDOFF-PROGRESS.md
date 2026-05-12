@@ -4138,6 +4138,437 @@ vitest, build). Build : entry 44.7 kB + chunks lazy.
 
 ---
 
+## Étape 19 — Sprint 6 / Mise en prod réelle ✅
+
+**Branche** : `claude/review-project-rules-pZtyS`
+
+Préparation du go-live : webhook Stripe idempotent côté Edge Function,
+Sentry SDK câblé en chunk lazy, scripts k6 de charge, documentation
+utilisateur + modération + runbook prod complet. Le **provisionnement
+externe** (Supabase EU, Vercel, Stripe live, Sentry SaaS) reste à
+exécuter manuellement par l'équipe technique (cf.
+`docs/PROD-RUNBOOK.md`) — Claude n'a pas les accès aux comptes
+externes.
+
+### Stripe webhook — idempotence + audit
+
+- **Nouvelle table `public.stripe_events`** (cf. `db/schema.sql` §17.b) :
+  PK `id text` (= Stripe event.id), `type`, `payload jsonb`,
+  `received_at`, `processed_at`. RLS activée, policy
+  `stripe_events_admin_read` (lecture admin uniquement, écriture
+  service-role via webhook). Index `(type, received_at desc)` pour
+  les requêtes d'audit.
+- **`supabase/functions/stripe-webhook/index.ts`** — deux nouvelles
+  deps DI :
+  - `recordEventStart(event)` : insert ON CONFLICT DO NOTHING + SELECT
+    pour distinguer « première réception » de « rejouée » (Stripe
+    garantit at-least-once delivery, peut renvoyer le même event.id).
+    Renvoie `false` → réponse 200 `{ idempotent: true }` ; renvoie
+    `true` → exécution du handler.
+  - `recordEventProcessed(eventId)` : update `processed_at = now()`
+    après exécution réussie. En cas d'erreur, `processed_at` reste
+    null (audit + Stripe retentera).
+- Bootstrap Deno mis à jour : les deux opérations utilisent
+  `admin.from('stripe_events').upsert(..., { onConflict: 'id',
+  ignoreDuplicates: true }).select('id')` et un `update().eq('id',
+  eventId)` standard.
+- **Type `stripe_events`** ajouté à `web/src/types/database.ts` (entre
+  `signatures` et `t99cp_transactions`, alphabétique). Aucune
+  utilisation côté front pour l'instant (table service-role only).
+
+### Sentry — SDK installé, chargement lazy
+
+- `npm install --save @sentry/browser@^10.52` (legacy-peer-deps,
+  cohérent avec le reste de l'arbre).
+- **`web/src/lib/sentry.ts`** — ajout d'un helper async
+  `loadAndInitSentry({ dsn, environment, release })` qui :
+  - retourne `false` immédiatement si pas de DSN (SDK pas téléchargé) ;
+  - sinon `await import('@sentry/browser')` (chunk séparé), puis
+    appelle `initSentry({ ..., onReady: () => Sentry.init({ dsn,
+    environment, release, beforeSend: scrubEvent }) })` ;
+  - échoue silencieusement en dev si la lib plante (le boot de l'app
+    n'est jamais bloqué par Sentry).
+- **`web/src/main.tsx`** — passage de `initSentry(...)` à
+  `void loadAndInitSentry(...)` (fire-and-forget, pas d'await dans le
+  boot).
+- **`web/vite.config.ts`** — `manualChunks` étendu pour isoler
+  `@sentry/browser` + `@sentry-internal/*` dans un chunk `sentry`
+  dédié (cache CDN indépendant des bumps Sentry).
+- **`beforeSend`** wired à `scrubEvent` (PII strippée — user / cookies
+  / headers / breadcrumbs / extra / contexts / tags). Aucune fuite
+  email / IP vers Sentry, conforme RGPD.
+
+### Bundle après ajout
+
+| Avant étape 19 | Après étape 19 |
+| --- | --- |
+| `index.js` 44.7 kB / gzip 12.4 kB | `index.js` 47.09 kB / gzip 13.27 kB |
+| (Sentry no-op) | `sentry.js` 436.2 kB / gzip 143.08 kB **(lazy, DSN-gated)** |
+| `react` 189.7 kB / gzip 59.66 kB | inchangé |
+| `router` 65.36 kB / gzip 21.6 kB | inchangé |
+| `supabase` 196.4 kB / gzip 50.06 kB | inchangé |
+
+Le chunk Sentry n'est téléchargé qu'au boot **uniquement si
+`VITE_SENTRY_DSN` est défini** (production / preview). En
+développement local sans DSN, le chunk reste sur disque mais n'est
+jamais requêté. Coût observé en prod : ~143 kB gzip ajoutés au LCP,
+mais chargement parallèle au reste de l'app (fire-and-forget).
+
+### Scripts k6 — charge de test
+
+`web/load/` (nouveau dossier) :
+
+- `README.md` : pré-requis (k6 brew install), variables d'env
+  obligatoires, SLO cibles (p95 lecture < 500 ms, error rate < 0.5 %).
+- `smoke.js` : 1 VU × 10 iterations sur les 3 endpoints publics
+  (`petitions`, `petitions?slug=eq.X`, `mobilizations`). Threshold
+  `http_req_failed < 1%`, `p95 < 800ms`.
+- `petitions-read.js` : pic 0 → 50 VUs → 0 sur 2 min, ramping-vus
+  executor. Trends séparées `petitions_list_duration` et
+  `petitions_detail_duration`. Aucune écriture.
+
+À exécuter par l'équipe humaine sur le **projet Supabase de test**
+(pas en prod). Les scénarios d'écriture restent désactivés par défaut
+(`WRITE=1` flag opt-in + cleanup obligatoire).
+
+### Documentation utilisateur + modération + runbook prod
+
+- **`docs/USER-GUIDE.md`** (nouveau) : FAQ adhérent·es — compte,
+  adhésion T99CP, pétitions, mobilisations, services communautaires,
+  réseau social, communes libres, problèmes techniques, RGPD. Renvoie
+  vers les pages légales et le support email.
+- **`docs/MODERATION.md`** (nouveau) : procédure admin — workflow
+  signalement → triage → action (5 niveaux : warn / unpublish / delete
+  / suspend / ban), validation à deux/trois admins pour les sanctions
+  graves, cas spéciaux (mineur·es, doxxing, menaces, RGPD), escalation
+  L1 → L4, recours utilisateur, audit `admin_logs`.
+- **`docs/PROD-RUNBOOK.md`** (nouveau) : procédure complète de
+  provisionnement Supabase EU + Stripe live + Vercel + Sentry, dans
+  l'ordre obligatoire (Supabase d'abord car tout dépend de l'URL).
+  Inclut commandes psql, vérifications RLS, configuration PITR,
+  liaison Vercel, env vars, vérification CSP via `curl -I`, alertes
+  Slack, checklist finale en 13 points + procédure de panne.
+
+Pas de route `/docs/*` ajoutée côté front pour l'instant (les fichiers
+sont servis directement via GitHub). Si une vraie page docs est
+souhaitée, ajouter une route dans `router.tsx` qui rend du Markdown
+via une lib comme `markdown-it` (à valider design).
+
+### Audit Lighthouse — dette différée
+
+L'audit Lighthouse complet **nécessite un déploiement staging
+réel** (Vercel preview accessible HTTPS) qui n'existe pas encore. La
+mesure est listée en checklist `docs/PROD-RUNBOOK.md` §5 et sera
+exécutée par l'équipe humaine **après le provisionnement Vercel**.
+
+### Décisions
+
+- **Dette a11y `--mn-text-3` non corrigée** (cf.
+  `web/e2e/utils/axe.ts`) : le token est utilisé à ~195 endroits dans
+  `web/src/`. CLAUDE.md § Conventions est explicite (« Conserve le
+  design — tokens T.* »). Un changement sans validation designer
+  présenterait un risque de régression visuelle élevé. La règle
+  `color-contrast` reste désactivée dans `DISABLED_RULES` ; le
+  durcissement (par ex. `#6c6a62` → ratio 5.0) ou un mapping
+  conditionnel `--mn-text-3-on-light` est reporté à une étape design
+  dédiée. Commentaire mis à jour dans `e2e/utils/axe.ts`.
+- **Sentry SaaS choisi plutôt que GlitchTip self-hosted** : SaaS
+  permet de démarrer immédiatement (5k events/mo gratuits), plan
+  Developer ~26 $/mois si on dépasse. GlitchTip exige une instance VPS
+  + maintenance + backups — pas de bande passante équipe technique
+  pour l'instant. Décision réversible : la lib `@sentry/browser` parle
+  le protocole Sentry, GlitchTip est drop-in compatible si on change
+  d'avis.
+- **Chunk Sentry lazy plutôt que vendor** : isoler dans `manualChunks`
+  permet à un déploiement où le DSN est absent (dev local) de ne
+  jamais charger le chunk. Si on l'avait laissé dans `vendor`, il
+  serait servi avec react/router au boot.
+- **Webhook idempotent via PK stripe_events.id** plutôt que via le
+  champ déjà-unique `adhesions.stripe_subscription_id` : permet de
+  dédupliquer **tous** les types d'événement (pas seulement
+  `checkout.session.completed`), ce qui est nécessaire pour
+  `invoice.payment_succeeded` (qui crédite T99CP et est très sensible
+  aux doubles).
+- **Pas de route `/docs/*` côté front** : les Markdown sont servis
+  via GitHub. Évite d'embarquer un parseur Markdown dans le bundle
+  pour 3 pages quasi-statiques. À reconsidérer si on en publie 10+.
+- **Pas de test E2E Playwright « signature anonyme réelle »** :
+  nécessite un projet Supabase de test pré-seedé, qui n'existe pas
+  encore. Listé pour l'étape 20 (post-provisionnement).
+- **`stripe_events.payload` typé `jsonb`** (pas un schéma plus strict)
+  car Stripe peut envoyer des évènements futurs avec des champs
+  inconnus de notre Edge Function. On stocke le payload brut pour
+  audit, on n'en interprète qu'un sous-ensemble.
+
+### Tests
+
+- **+3 tests vitest** dans `src/lib/sentry.test.ts` pour
+  `loadAndInitSentry` :
+  - renvoie `false` sans DSN (SDK pas chargé) ;
+  - renvoie `false` sur DSN vide / whitespace ;
+  - charge `@sentry/browser` et appelle `Sentry.init` avec
+    `beforeSend` correctement câblé à `scrubEvent` (vérifie la chaîne
+    PII).
+- Fin d'étape 18 + janitor : 807 tests verts.
+  Fin d'étape 19 : **810 tests verts** (123 fichiers, durée ~57 s).
+  4 checks locaux verts (typecheck, lint, vitest, build).
+
+### Migration DB
+
+- **Additive uniquement** : ajout de `public.stripe_events` + index
+  + RLS + policy de lecture admin. Aucune table / colonne / RPC
+  modifiée ou supprimée. À appliquer en prod via `psql < db/schema.sql`
+  ou en delta `create table if not exists ...` (le schéma est
+  idempotent — chaque `create` est conditionnel).
+- Régénérer `web/src/types/database.ts` après application en prod :
+  `supabase gen types typescript --project-id <id>`. Diff attendu :
+  aucun (le type a été ajouté manuellement aligné sur le schéma).
+
+### Hygiène
+
+- Pas de modification du prototype (`app/Maintenant.html`,
+  `Theme.jsx`, etc.).
+- Pas d'emojis dans les fichiers TS / commits / PR (vérifié).
+- Pas de clé service_role dans le bundle front (vérifié — la table
+  `stripe_events` n'est écrite que par l'Edge Function en service
+  role).
+- Toutes les `console.warn` ajoutées (`stripe-webhook` + `sentry`)
+  sont guardées soit par contexte serveur (Edge Function) soit par
+  `import.meta.env.DEV` côté front.
+
+### Checks finaux
+
+```
+> npm run typecheck && npm run lint && npx vitest run && npm run build
+
+✓ typecheck   (tsc -b + e2e/tsconfig.json)
+✓ lint        (eslint .)
+✓ vitest      (123 files, 810 tests passed, ~57s)
+✓ build       (entry 47.09 kB / gzip 13.27 kB ; sentry 436.2 kB / gzip 143 kB lazy)
+```
+
+### Prochaines étapes
+
+L'étape 20 sera **la première étape post-go-live**, dont une partie
+dépend explicitement du résultat du provisionnement réel : audit
+Lighthouse mesuré, premier test E2E branché sur un Supabase de test
+seedé, monitoring runtime côté Sentry + Supabase, retour utilisateur
+sur les premiers comptes créés.
+
+---
+
+## Prompt pour la session N+14 (étape 20)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase
+>    TS / snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD,
+>    Lighthouse ≥ 95, axe-core ≥ 95, prefers-reduced-motion). **Note
+>    la section « Politique de PR » qui t'autorise à enchaîner
+>    ouverture + merge des PR sans confirmation jusqu'à la session 50
+>    incluse. Note aussi la section « Recopie systématique du prompt
+>    de la session suivante » : à la clôture de cette étape, recopier
+>    le prompt étape 21 à la fois dans `HANDOFF-PROGRESS.md` ET dans
+>    la réponse de chat finale. Et enfin la section « Audit récurrent
+>    vibe janitor de fin d'étape » : après le merge de la PR
+>    principale de l'étape 20, tu dois enchaîner une PR janitor
+>    séparée `chore(janitor): post-step 20 — …` et inclure cette même
+>    instruction janitor dans le prompt étape 21.**
+> 2. `HANDOFF.md` §11 (Points d'attention) + §12 (Suivi) + §13
+>    (Sécurité).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 19 ✅ — étape 20 à faire).
+> 4. `docs/PROD-RUNBOOK.md` — runbook de provisionnement créé à
+>    l'étape 19.
+> 5. `docs/MODERATION.md` — procédure modération.
+> 6. `docs/USER-GUIDE.md` — FAQ utilisateur·rice.
+>
+> **État actuel à la fin de l'étape 19** :
+>
+> - Webhook Stripe idempotent via `public.stripe_events` (PK = event.id).
+> - Sentry SDK installé en chunk lazy (~143 kB gzip), DSN-gated.
+> - Scripts k6 dans `web/load/` (smoke + ramp 0→50 VUs).
+> - 3 docs Markdown : USER-GUIDE, MODERATION, PROD-RUNBOOK.
+> - **810 tests verts** (123 fichiers).
+> - Build entry 47.09 kB / gzip 13.27 kB + chunks lazy.
+> - Pas de migration DB structurelle depuis l'étape 16 ; ajout additif
+>   de `stripe_events` à l'étape 19.
+> - Dette : `color-contrast` toujours désactivé (token
+>   `--mn-text-3` 195 usages, besoin validation designer avant
+>   modification).
+> - **Provisionnement externe non exécuté** par Claude (pas d'accès
+>   aux comptes Supabase / Vercel / Stripe / Sentry). Listé dans
+>   `docs/PROD-RUNBOOK.md` pour exécution équipe humaine.
+>
+> **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
+>
+> 1. Vérifier qu'on est bien dans un workspace contenant `web/`. Si
+>    non (rare — branche partie d'un main obsolète),
+>    `git fetch origin main && git merge --ff-only origin/main`.
+> 2. `cd web && npm ci` (fallback : `npm install --legacy-peer-deps`).
+> 3. `npm run typecheck && npm run lint && npx vitest run && npm run build`
+>    pour vérifier le compteur de tests au point de départ (≥ 810
+>    verts à la fin de l'étape 19, à incrémenter à chaque étape).
+> 4. **Demander à l'équipe humaine** :
+>    - Le provisionnement Supabase / Vercel / Stripe / Sentry décrit
+>      dans `docs/PROD-RUNBOOK.md` est-il fait ? Si non, l'étape 20
+>      doit s'adapter (focus tests + monitoring stub plutôt que
+>      audit réel).
+>    - Y a-t-il un projet Supabase de test seedé pour le test E2E
+>      « signature anonyme » ?
+>
+> **ÉTAPE 20 à exécuter — Post-go-live (audit réel + monitoring +
+> retours)** :
+>
+> 1. **Audit Lighthouse réel** :
+>    - Si `staging.maintenant.org` (ou équivalent) est en ligne :
+>      `npx unlighthouse --site https://staging.maintenant.org` ou
+>      DevTools manuel sur 6 pages clés (cf. `PROD-RUNBOOK.md` §5).
+>    - Documenter les scores dans `HANDOFF-PROGRESS.md` § Audit
+>      Lighthouse étape 20 (perf / a11y / seo / best-practices).
+>    - Corriger les blocages < 95 (LCP, CLS, TBT). Pas de changement
+>      design system sans validation designer.
+> 2. **Premier test E2E « happy path » réel** :
+>    - Si projet Supabase de test prêt : ajouter
+>      `web/e2e/happy-path.spec.ts` qui signe anonymement une
+>      pétition publique pré-seedée et vérifie le compteur. Sinon
+>      laisser pour l'étape 21.
+> 3. **Monitoring Sentry runtime** :
+>    - Si DSN configuré en preview : vérifier que les events
+>      arrivent bien (test canary `throw new Error('sentry-canary-step20')`
+>      depuis une page admin protégée + immédiatement retirer).
+>    - Documenter le taux d'erreur sur les 7 derniers jours, top 5
+>      des issues.
+> 4. **Monitoring Supabase** :
+>    - Quotas API / DB CPU / DB memory sur 7 jours.
+>    - Alertes Slack #alerts-prod actives ?
+>    - Top requêtes lentes (cf. dashboard Supabase → Performance).
+> 5. **Retours utilisateur·rices** :
+>    - Premiers comptes créés (combien ? bounce rate sur
+>      `/auth/confirm` ?).
+>    - Premiers signalements modération (cf. `/admin/reports`).
+>    - Bugs remontés en email `tech@maintenant.org`.
+>    - Compiler une liste de fixes prioritaires pour l'étape 21.
+> 6. **Documentation `/transparence`** :
+>    - Créer ou compléter `web/src/pages/TransparencePage.tsx` (route
+>      `/transparence`, publique) avec : date de mise en prod,
+>      nombre cumulé de comptes, pétitions, mobilisations,
+>      signalements traités. Données générées dynamiquement via
+>      requêtes RLS-safe (compteurs publics).
+> 7. **Tests** : suite vitest ≥ 810 + e2e Playwright verts en CI.
+>    Ajouter ≥ 5 tests autour de la page transparence + nouveau test
+>    E2E si applicable.
+> 8. **HANDOFF-PROGRESS.md** : étape 20 ✅ détaillée (sections
+>    « Audit Lighthouse », « E2E réel » si applicable, « Monitoring
+>    Sentry », « Monitoring Supabase », « Retours utilisateur »,
+>    « Page transparence », « Décisions »).
+>    **Recopier ce prompt étape 21 à la fois dans
+>    `HANDOFF-PROGRESS.md` ET dans la réponse de chat finale** (règle
+>    récursive, cf. `CLAUDE.md § Recopie systématique du prompt de
+>    la session suivante`). Inclure dans le prompt étape 21 la même
+>    instruction de recopie pour la session N+15, pour que la chaîne
+>    se propage. **Inclure aussi l'instruction d'audit vibe janitor
+>    pour N+15** (cf. `CLAUDE.md § Audit récurrent vibe janitor`).
+>
+> **PHASE 1 — Clôture de l'étape principale (workflow auto-merge)** :
+>
+> Conformément à `CLAUDE.md` § « Politique de PR », tu as
+> autorisation permanente d'enchaîner les étapes ci-dessous sans
+> confirmation. Procéder dans l'ordre, **sans s'arrêter entre les
+> étapes** :
+>
+> 1. **Vérifier les 4 checks locaux verts** : `npm run typecheck &&
+>    npm run lint && npx vitest run && npm run build`. Si un check
+>    échoue → corriger, ne pas commit.
+> 2. **Commit** : `chore(prod): step 20 — post-go-live (lighthouse +
+>    monitoring + transparence)`. Pas d'emojis dans le message.
+> 3. **Push** sur la branche imposée par l'harness
+>    (`git push -u origin <branch>`, retry exponentiel 2/4/8/16 s).
+> 4. **Ouvrir la PR** vers `main` via
+>    `mcp__github__create_pull_request` (titre identique au commit,
+>    body Summary + Décisions + Test plan).
+> 5. **Attendre les checks GitHub Actions si présents**. S'ils sont
+>    rouges → autofix puis re-push.
+> 6. **Merger la PR** via `mcp__github__merge_pull_request` (`merge`
+>    ou `squash`).
+>
+> **PHASE 2 — Audit vibe janitor (après le merge de la PR principale)** :
+>
+> Conformément à `CLAUDE.md` § « Audit récurrent vibe janitor de fin
+> d'étape », après le merge de la PR principale et avant de clôturer
+> la session :
+>
+> 1. **Sync** : `git checkout main && git pull --ff-only origin main`,
+>    puis `git checkout -b claude/janitor-post-step20` (ou nom
+>    similaire imposé par l'harness).
+> 2. **Audit en parallèle** via 2 à 3 subagents `general-purpose` :
+>    architecture / élégance, robustesse / edge cases, sécurité /
+>    cohérence handoff. Chaque agent produit un rapport ; ne fait
+>    aucune modification.
+> 3. **Synthétiser** les findings par sévérité + risque de
+>    régression.
+> 4. **Appliquer UNIQUEMENT les fixes safe-first** (cf. CLAUDE.md
+>    pour la liste des conditions impératives). Pour rappel — règle
+>    d'or « primum non nocere » :
+>    - **Aucun fix qui casse un test existant** (rollback immédiat
+>      si test casse).
+>    - **Aucun nouveau problème introduit** par le fix (régression
+>      perf, a11y, type, comportement utilisateur).
+>    - **Design system `T.*` intouchable**.
+>    - **Pas de migration DB** en mode janitor.
+>    - **Pas de breaking change utilisateur**.
+>    - Les fixes à risque medium/high sont **reportés** et documentés
+>      en dette technique.
+> 5. **Vérifier les 4 checks locaux verts** avant push.
+> 6. **PR janitor séparée** : titre `chore(janitor): post-step 20 —
+>    <résumé court>`. Body : Summary + Findings (sévérité + risque) +
+>    Fixes appliqués + Fixes déférés + Test plan.
+> 7. **Merger la PR janitor** (même workflow auto-merge).
+> 8. **Documenter** dans `HANDOFF-PROGRESS.md` : section
+>    `### Audit vibe janitor étape 20` avec findings totaux, fixes
+>    appliqués (chacun avec son risque évalué), dette ajoutée,
+>    compteur de tests final.
+>
+> **Phase 3 — Recopie du prompt étape 21** (toujours obligatoire) :
+>
+> 1. **Recopier le prompt étape 21 dans la réponse de chat finale**,
+>    en plus de l'avoir écrit dans `HANDOFF-PROGRESS.md`. Le prompt
+>    étape 21 doit lui-même inclure les Phases 1, 2, 3 récursives
+>    pour la session N+15.
+>
+> **Conditions d'arrêt malgré l'autorisation permanente**
+> (mise en prod = risque accru) :
+>
+> - Migration DB risquée (suppression / rename de table / colonne /
+>   RPC non listée). En particulier, toute modification du schéma
+>   live nécessite l'approbation humaine explicite.
+> - Changement RGPD non listé (nouvelle collecte, nouveau cookie,
+>   transfert hors UE).
+> - Breaking change visible utilisateur (changement de prix Stripe,
+>   suppression de route publique, etc.).
+> - Erreur Vercel / Supabase impossible à debugger en < 3 tentatives.
+> - Review humaine ou commentaire GitHub arrivé avant le merge.
+> - En phase janitor uniquement : un fix nécessite de toucher au
+>   design system `T.*`, ou casse un test existant sans rollback
+>   possible, ou nécessite un bump majeur de dépendance.
+>
+> Dans tous ces cas : demander confirmation explicite avant de
+> merger.
+>
+> **Contraintes générales** :
+>
+> - Ne pas toucher au prototype.
+> - TS strict + no `any`.
+> - Conserver les checks verts à chaque étape.
+> - Pas d'emojis dans le code TS ni dans les commits / PR.
+> - Vérifier qu'aucun changement de design ne casse les tokens `T.*`.
+> - Sauvegarder la DB AVANT toute migration prod (export `pg_dump`
+>   dans un bucket privé Supabase Storage).
+
+---
+
 ## Prompt pour la session N+13 (étape 19)
 
 > Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
