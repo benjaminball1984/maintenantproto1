@@ -1,12 +1,28 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { Suspense, useEffect, useState, type CSSProperties } from 'react';
 import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom';
 
 import AuthModal from '@/components/AuthModal';
 import CookieBanner from '@/components/CookieBanner';
 import Footer from '@/components/Footer';
+import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import { IconLogout, IconUser } from '@/components/icons';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useAuth } from '@/lib/auth';
+
+const routeFallbackStyle: CSSProperties = {
+  minHeight: '40vh',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  color: 'var(--mn-text-3)',
+  fontSize: 14,
+};
+
+const routeFallback = (
+  <div role="status" aria-live="polite" style={routeFallbackStyle}>
+    Chargement…
+  </div>
+);
 
 const baseNavItems: { to: string; label: string }[] = [
   { to: '/', label: 'Accueil' },
@@ -196,7 +212,11 @@ export default function RootLayout() {
         )}
       </header>
 
-      <Outlet />
+      <RouteErrorBoundary>
+        <Suspense fallback={routeFallback}>
+          <Outlet />
+        </Suspense>
+      </RouteErrorBoundary>
 
       <Footer />
 

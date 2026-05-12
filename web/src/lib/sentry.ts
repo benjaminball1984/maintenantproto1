@@ -114,8 +114,18 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
   if (!dsn) {
     return false;
   }
+  // Init transactionnel : on ne marque `initialized` qu'après que `onReady`
+  // ait passé sans jeter, sinon un appelant qui throw nous bloque dans un
+  // état « marqué initialisé » sans avoir branché le SDK.
+  try {
+    options.onReady?.({ scrubEvent });
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error('[initSentry] onReady threw, rolling back', error);
+    }
+    return false;
+  }
   sentryInitialized = true;
-  options.onReady?.({ scrubEvent });
   return true;
 }
 

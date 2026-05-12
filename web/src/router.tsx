@@ -1,10 +1,14 @@
-import { lazy, Suspense, type ReactNode } from 'react';
+import { lazy } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 
 import RequireAdmin from './components/RequireAdmin';
 import RequireAuth from './components/RequireAuth';
 import RootLayout from './layouts/RootLayout';
 
+// Toutes les pages sont chargées en `lazy()` pour le code-splitting par route.
+// Le `<Suspense>` global et le `<RouteErrorBoundary>` sont co-localisés dans
+// `RootLayout` autour de `<Outlet />` : un seul fallback de chargement et un
+// seul filet pour les `ChunkLoadError` (déploiement intermédiaire).
 const HomePage = lazy(() => import('./pages/HomePage'));
 const PetitionsPage = lazy(() => import('./pages/PetitionsPage'));
 const PetitionDetailPage = lazy(() => import('./pages/PetitionDetailPage'));
@@ -65,243 +69,222 @@ const LegalNoticePage = lazy(() => import('./pages/LegalNoticePage'));
 const CookiesPage = lazy(() => import('./pages/CookiesPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
-const routeFallback = (
-  <div
-    role="status"
-    aria-live="polite"
-    style={{
-      minHeight: '40vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: 'var(--mn-text-3)',
-      fontSize: 14,
-    }}
-  >
-    Chargement…
-  </div>
-);
-
-function withSuspense(node: ReactNode): ReactNode {
-  return <Suspense fallback={routeFallback}>{node}</Suspense>;
-}
-
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <RootLayout />,
     children: [
-      { index: true, element: withSuspense(<HomePage />) },
-      { path: 'petitions', element: withSuspense(<PetitionsPage />) },
+      { index: true, element: <HomePage /> },
+      { path: 'petitions', element: <PetitionsPage /> },
       {
         path: 'petitions/new',
-        element: withSuspense(
+        element: (
           <RequireAuth>
             <PetitionCreatePage />
-          </RequireAuth>,
+          </RequireAuth>
         ),
       },
-      { path: 'petitions/:slug', element: withSuspense(<PetitionDetailPage />) },
-      { path: 'mobilizations', element: withSuspense(<MobilizationsPage />) },
+      { path: 'petitions/:slug', element: <PetitionDetailPage /> },
+      { path: 'mobilizations', element: <MobilizationsPage /> },
       {
         path: 'mobilizations/new',
-        element: withSuspense(
+        element: (
           <RequireAuth>
             <MobilizationCreatePage />
-          </RequireAuth>,
+          </RequireAuth>
         ),
       },
-      { path: 'mobilizations/:slug', element: withSuspense(<MobilizationDetailPage />) },
-      { path: 'campaigns', element: withSuspense(<CampaignsPage />) },
+      { path: 'mobilizations/:slug', element: <MobilizationDetailPage /> },
+      { path: 'campaigns', element: <CampaignsPage /> },
       {
         path: 'campaigns/new',
-        element: withSuspense(
+        element: (
           <RequireAuth>
             <CampaignCreatePage />
-          </RequireAuth>,
+          </RequireAuth>
         ),
       },
-      { path: 'campaigns/:slug', element: withSuspense(<CampaignDetailPage />) },
+      { path: 'campaigns/:slug', element: <CampaignDetailPage /> },
       {
         path: 'services',
         children: [
-          { index: true, element: withSuspense(<ServicesHubPage />) },
-          { path: 'housing', element: withSuspense(<HousingPage />) },
+          { index: true, element: <ServicesHubPage /> },
+          { path: 'housing', element: <HousingPage /> },
           {
             path: 'housing/new',
-            element: withSuspense(
+            element: (
               <RequireAuth>
                 <HousingCreatePage />
-              </RequireAuth>,
+              </RequireAuth>
             ),
           },
-          { path: 'housing/:id', element: withSuspense(<HousingDetailPage />) },
+          { path: 'housing/:id', element: <HousingDetailPage /> },
           {
             path: 'housing/:id/request',
-            element: withSuspense(
+            element: (
               <RequireAuth>
                 <HousingRequestPage />
-              </RequireAuth>,
+              </RequireAuth>
             ),
           },
-          { path: 'carpooling', element: withSuspense(<CarpoolingPage />) },
+          { path: 'carpooling', element: <CarpoolingPage /> },
           {
             path: 'carpooling/new',
-            element: withSuspense(
+            element: (
               <RequireAuth>
                 <CarpoolingCreatePage />
-              </RequireAuth>,
+              </RequireAuth>
             ),
           },
-          { path: 'carpooling/:id', element: withSuspense(<CarpoolingDetailPage />) },
-          { path: 'marketplace', element: withSuspense(<MarketplacePage />) },
+          { path: 'carpooling/:id', element: <CarpoolingDetailPage /> },
+          { path: 'marketplace', element: <MarketplacePage /> },
           {
             path: 'marketplace/new',
-            element: withSuspense(
+            element: (
               <RequireAuth>
                 <MarketplaceCreatePage />
-              </RequireAuth>,
+              </RequireAuth>
             ),
           },
-          { path: 'marketplace/:id', element: withSuspense(<MarketplaceDetailPage />) },
-          { path: 'lending', element: withSuspense(<LendingPage />) },
+          { path: 'marketplace/:id', element: <MarketplaceDetailPage /> },
+          { path: 'lending', element: <LendingPage /> },
           {
             path: 'lending/new',
-            element: withSuspense(
+            element: (
               <RequireAuth>
                 <LendingCreatePage />
-              </RequireAuth>,
+              </RequireAuth>
             ),
           },
-          { path: 'lending/:id', element: withSuspense(<LendingDetailPage />) },
-          { path: 'garden', element: withSuspense(<GardenPage />) },
+          { path: 'lending/:id', element: <LendingDetailPage /> },
+          { path: 'garden', element: <GardenPage /> },
           {
             path: 'garden/new',
-            element: withSuspense(
+            element: (
               <RequireAuth>
                 <GardenCreatePage />
-              </RequireAuth>,
+              </RequireAuth>
             ),
           },
-          { path: 'garden/:id', element: withSuspense(<GardenDetailPage />) },
-          { path: 'sel', element: withSuspense(<SelPage />) },
+          { path: 'garden/:id', element: <GardenDetailPage /> },
+          { path: 'sel', element: <SelPage /> },
           {
             path: 'sel/new',
-            element: withSuspense(
+            element: (
               <RequireAuth>
                 <SelCreatePage />
-              </RequireAuth>,
+              </RequireAuth>
             ),
           },
-          { path: 'sel/:id', element: withSuspense(<SelDetailPage />) },
-          { path: 'crowdfunding', element: withSuspense(<CrowdfundingPage />) },
+          { path: 'sel/:id', element: <SelDetailPage /> },
+          { path: 'crowdfunding', element: <CrowdfundingPage /> },
           {
             path: 'crowdfunding/new',
-            element: withSuspense(
+            element: (
               <RequireAuth>
                 <CrowdfundingCreatePage />
-              </RequireAuth>,
+              </RequireAuth>
             ),
           },
-          { path: 'crowdfunding/:id', element: withSuspense(<CrowdfundingDetailPage />) },
+          { path: 'crowdfunding/:id', element: <CrowdfundingDetailPage /> },
           {
             path: 'crowdfunding/:id/contribute',
-            element: withSuspense(
+            element: (
               <RequireAuth>
                 <CrowdfundingContributePage />
-              </RequireAuth>,
+              </RequireAuth>
             ),
           },
         ],
       },
-      { path: 'media', element: withSuspense(<MediaPage />) },
+      { path: 'media', element: <MediaPage /> },
       {
         path: 'media/new',
-        element: withSuspense(
+        element: (
           <RequireAuth>
             <ArticleCreatePage />
-          </RequireAuth>,
+          </RequireAuth>
         ),
       },
-      { path: 'media/:slug', element: withSuspense(<ArticleDetailPage />) },
-      { path: 'reseau', element: withSuspense(<ReseauPage />) },
-      { path: 'polls', element: withSuspense(<PollsPage />) },
+      { path: 'media/:slug', element: <ArticleDetailPage /> },
+      { path: 'reseau', element: <ReseauPage /> },
+      { path: 'polls', element: <PollsPage /> },
       {
         path: 'polls/new',
-        element: withSuspense(
+        element: (
           <RequireAuth>
             <PollCreatePage />
-          </RequireAuth>,
+          </RequireAuth>
         ),
       },
-      { path: 'polls/:slug', element: withSuspense(<PollDetailPage />) },
+      { path: 'polls/:slug', element: <PollDetailPage /> },
       {
         path: 'messaging',
-        element: withSuspense(
+        element: (
           <RequireAuth>
             <MessagingPage />
-          </RequireAuth>,
+          </RequireAuth>
         ),
       },
       {
         path: 'messaging/:conversationId',
-        element: withSuspense(
+        element: (
           <RequireAuth>
             <MessagingConversationPage />
-          </RequireAuth>,
+          </RequireAuth>
         ),
       },
       {
         path: 'notifications',
-        element: withSuspense(
+        element: (
           <RequireAuth>
             <NotificationsPage />
-          </RequireAuth>,
+          </RequireAuth>
         ),
       },
       {
         path: 'admin',
-        element: withSuspense(
+        element: (
           <RequireAuth>
             <RequireAdmin>
               <AdminPage />
             </RequireAdmin>
-          </RequireAuth>,
+          </RequireAuth>
         ),
       },
-      { path: 'join', element: withSuspense(<JoinPage />) },
-      { path: 'communes', element: withSuspense(<CommunesPage />) },
+      { path: 'join', element: <JoinPage /> },
+      { path: 'communes', element: <CommunesPage /> },
       {
         path: 'communes/new',
-        element: withSuspense(
+        element: (
           <RequireAuth>
             <RequireAdmin>
               <CommuneCreatePage />
             </RequireAdmin>
-          </RequireAuth>,
+          </RequireAuth>
         ),
       },
-      { path: 'communes/:slug', element: withSuspense(<CommuneDetailPage />) },
+      { path: 'communes/:slug', element: <CommuneDetailPage /> },
       {
         path: 'profile',
-        element: withSuspense(
+        element: (
           <RequireAuth>
             <ProfilePage />
-          </RequireAuth>,
+          </RequireAuth>
         ),
       },
-      { path: 'auth/reset-password', element: withSuspense(<ResetPasswordPage />) },
-      { path: 'auth/callback', element: withSuspense(<AuthCallbackPage />) },
+      { path: 'auth/reset-password', element: <ResetPasswordPage /> },
+      { path: 'auth/callback', element: <AuthCallbackPage /> },
       {
         path: 'legal',
         children: [
-          { path: 'privacy', element: withSuspense(<PrivacyPage />) },
-          { path: 'notice', element: withSuspense(<LegalNoticePage />) },
-          { path: 'cookies', element: withSuspense(<CookiesPage />) },
-          { path: 'contact', element: withSuspense(<ContactPage />) },
+          { path: 'privacy', element: <PrivacyPage /> },
+          { path: 'notice', element: <LegalNoticePage /> },
+          { path: 'cookies', element: <CookiesPage /> },
+          { path: 'contact', element: <ContactPage /> },
         ],
       },
-      { path: '*', element: withSuspense(<NotFoundPage />) },
+      { path: '*', element: <NotFoundPage /> },
     ],
   },
 ]);
