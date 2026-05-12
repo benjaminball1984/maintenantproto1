@@ -4429,6 +4429,40 @@ uniquement, conformément à `CLAUDE.md § Audit récurrent vibe janitor`.
   Une note explicite à ce sujet doit être ajoutée à la doc admin
   avant le passage en prod live.
 
+### État du provisionnement externe (à jour 2026-05-12)
+
+Une **session manuelle** avec l'équipe humaine a démarré le
+provisionnement réel des comptes externes décrits dans
+`docs/PROD-RUNBOOK.md`. État au 2026-05-12 :
+
+| Service | Statut | Détails |
+| --- | --- | --- |
+| **Supabase** | ✅ **staging provisionné** | Projet `maintenant-staging` créé en `eu-west-3` (Paris), plan **Free** (à upgrader Pro avant le vrai go-live pour PITR). URL : `https://fdphrsqrsumkpzbxnjdj.supabase.co`. Schéma `db/schema.sql` appliqué (38 tables, 123 policies RLS, 5 RPCs dont `credit_t99cp` / `debit_t99cp` en SECURITY DEFINER). Bucket Storage `avatars` actif + 4 policies. Auth configurée : Site URL `http://localhost:5173`, Redirect URLs whitelist incluant `localhost:5173/**`, `127.0.0.1:5173/**`, `localhost:5173/auth/callback`. |
+| **Supabase — clé API** | ⚠️ **legacy JWT en local** | Les nouvelles clés `sb_publishable_*` (introduites en 2025) ont un système de **« Domain Allowlist »** qui rejette les origines non listées. Pour staging on utilise la clé `anon` legacy (format `eyJ...`, role `anon`, exp 2036) qui n'a pas cette restriction. Stockée dans `web/.env.local` côté machine équipe humaine (gitignored, jamais commitée). À l'étape Vercel : reporter cette clé dans les env vars Vercel, ou migrer vers `sb_publishable_*` + ajouter `localhost`, `*.vercel.app`, `maintenant.org` à l'allowlist. |
+| **Supabase — smoke test local** | ⏸️ **différé** | Le sandbox Claude ne peut pas appeler `*.supabase.co` (filtre edge anti-bot Cloudflare bloque les IPs datacenter). La validation réelle se fera depuis le déploiement Vercel preview (vrai navigateur, vrai User-Agent). |
+| **Vercel** | 🔲 à faire | Liaison repo, env vars (URL + anon key + Stripe publishable + Sentry DSN + support user/email), vérification CSP via `curl -I`, domaine custom. |
+| **Stripe** | 🔲 à faire | Compte live, 3 produits (gratuit / soutien 2€ / engagé 5€), webhook vers `https://fdphrsqrsumkpzbxnjdj.supabase.co/functions/v1/stripe-webhook` avec `STRIPE_WEBHOOK_SECRET`. |
+| **Edge Functions Supabase** | 🔲 à faire | Déployer `create-checkout-session` et `stripe-webhook` via `npx supabase functions deploy --no-verify-jwt`. Renseigner les env vars `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET`. |
+| **Sentry** | 🔲 à faire | Créer projet `maintenant-web` (Browser JavaScript / React), récupérer DSN, ajouter à env Vercel. |
+| **Point-in-Time Recovery** | 🔲 à faire | Indispensable avant upgrade Pro. Sur Free actuel : seulement 7 daily backups Supabase. |
+
+**Notes pour l'équipe humaine** :
+
+- Le mot de passe DB du projet `maintenant-staging` a été généré
+  côté Supabase à la création et doit être stocké en gestionnaire de
+  mots de passe (1Password / Bitwarden). Il sert à `psql` / `pg_dump`
+  / les Edge Functions (variable `SUPABASE_SERVICE_ROLE_KEY` est
+  distincte et récupérable depuis le dashboard).
+- La clé `service_role` (secret backend) n'a **pas** été partagée
+  dans cette session. À récupérer pour configurer les Edge
+  Functions au moment du déploiement Stripe.
+- Le projet Free se **met en pause après 7 jours d'inactivité** —
+  pas un problème tant qu'on développe régulièrement. Réveil
+  automatique au premier appel (~30 s de latence).
+- Plan d'upgrade Pro recommandé : **à l'annonce publique du go-live**.
+  Toggle en un clic, sans interruption ni migration de données.
+  Coût ~25 USD/mois.
+
 ---
 
 ## Prompt pour la session N+14 (étape 20)
@@ -4459,22 +4493,34 @@ uniquement, conformément à `CLAUDE.md § Audit récurrent vibe janitor`.
 > 5. `docs/MODERATION.md` — procédure modération.
 > 6. `docs/USER-GUIDE.md` — FAQ utilisateur·rice.
 >
-> **État actuel à la fin de l'étape 19** :
+> **État actuel à la fin de l'étape 19 + janitor + provisionnement
+> Supabase staging** :
 >
 > - Webhook Stripe idempotent via `public.stripe_events` (PK = event.id).
 > - Sentry SDK installé en chunk lazy (~143 kB gzip), DSN-gated.
 > - Scripts k6 dans `web/load/` (smoke + ramp 0→50 VUs).
 > - 3 docs Markdown : USER-GUIDE, MODERATION, PROD-RUNBOOK.
-> - **810 tests verts** (123 fichiers).
-> - Build entry 47.09 kB / gzip 13.27 kB + chunks lazy.
+> - **812 tests verts** (123 fichiers, +2 dans le janitor post-step19).
+> - Build entry 47.09 kB / gzip 13.28 kB + chunks lazy.
 > - Pas de migration DB structurelle depuis l'étape 16 ; ajout additif
 >   de `stripe_events` à l'étape 19.
 > - Dette : `color-contrast` toujours désactivé (token
 >   `--mn-text-3` 195 usages, besoin validation designer avant
 >   modification).
-> - **Provisionnement externe non exécuté** par Claude (pas d'accès
->   aux comptes Supabase / Vercel / Stripe / Sentry). Listé dans
->   `docs/PROD-RUNBOOK.md` pour exécution équipe humaine.
+> - **Provisionnement externe — état mixte** (cf. section « État du
+>   provisionnement externe (à jour 2026-05-12) » dans
+>   `HANDOFF-PROGRESS.md` juste avant ce prompt) :
+>   - ✅ **Supabase staging provisionné** (projet
+>     `maintenant-staging` en eu-west-3, plan Free, schéma
+>     `db/schema.sql` appliqué, RLS active sur 38 tables, 123
+>     policies, 5 RPCs, bucket avatars OK, Auth configurée
+>     localhost). URL :
+>     `https://fdphrsqrsumkpzbxnjdj.supabase.co`. Clé `anon`
+>     legacy JWT stockée dans `web/.env.local` côté équipe humaine
+>     (gitignored).
+>   - 🔲 **Vercel / Stripe live / Edge Functions / Sentry SaaS /
+>     PITR** restent à provisionner par l'équipe humaine (cf.
+>     `docs/PROD-RUNBOOK.md` §2 à §4).
 >
 > **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
 >
@@ -4483,20 +4529,45 @@ uniquement, conformément à `CLAUDE.md § Audit récurrent vibe janitor`.
 >    `git fetch origin main && git merge --ff-only origin/main`.
 > 2. `cd web && npm ci` (fallback : `npm install --legacy-peer-deps`).
 > 3. `npm run typecheck && npm run lint && npx vitest run && npm run build`
->    pour vérifier le compteur de tests au point de départ (≥ 810
->    verts à la fin de l'étape 19, à incrémenter à chaque étape).
+>    pour vérifier le compteur de tests au point de départ (≥ 812
+>    verts après le janitor post-step19, à incrémenter à chaque
+>    étape).
 > 4. **Demander à l'équipe humaine** :
->    - Le provisionnement Supabase / Vercel / Stripe / Sentry décrit
->      dans `docs/PROD-RUNBOOK.md` est-il fait ? Si non, l'étape 20
->      doit s'adapter (focus tests + monitoring stub plutôt que
->      audit réel).
+>    - Supabase staging est-il accessible (cf. URL ci-dessus
+>      `https://fdphrsqrsumkpzbxnjdj.supabase.co`) ?
+>    - Le provisionnement Vercel / Stripe / Sentry décrit dans
+>      `docs/PROD-RUNBOOK.md` est-il fait ? Si non, l'étape 20 doit
+>      s'adapter (focus idempotence DB + tests, plutôt que audits
+>      mesurés sur staging réel).
 >    - Y a-t-il un projet Supabase de test seedé pour le test E2E
 >      « signature anonyme » ?
+>    - La dette critique C1/C2 (idempotence `stripe_events` orpheline
+>      + `credit_t99cp` non idempotent côté DB) doit-elle être
+>      adressée à cette étape (migration DB explicite priorité 1) ?
 >
-> **ÉTAPE 20 à exécuter — Post-go-live (audit réel + monitoring +
-> retours)** :
+> **ÉTAPE 20 à exécuter — Post-go-live (idempotence DB priorité 1 +
+> audit réel + monitoring + retours)** :
 >
-> 1. **Audit Lighthouse réel** :
+> 1. **PRIORITÉ 1 — Idempotence DB du webhook Stripe** (dette
+>    critique étape 19, cf. § Audit vibe janitor étape 19) :
+>    - Ajouter `t99cp_transactions.source_event_id text unique nulls not distinct`
+>      (additif). Update RPC `credit_t99cp` pour accepter un nouveau
+>      paramètre `p_source_event_id` et insérer avec cette colonne.
+>    - Update `supabase/functions/stripe-webhook/index.ts` pour passer
+>      `source_event_id = event.id` aux appels `creditT99cp` (case
+>      `invoice.payment_succeeded`).
+>    - **OU**, en alternative : job de réconciliation Edge Function
+>      qui scanne `stripe_events WHERE processed_at IS NULL AND
+>      received_at < now() - interval '15 min'` et alerte / rejoue.
+>      Documenter la décision.
+>    - Tests vitest pour la nouvelle signature de `credit_t99cp`
+>      (idempotence par event_id : 2 appels avec même source_event_id
+>      → un seul crédit).
+>    - **Migration listée explicitement dans le commit + PR.**
+>    - Sauvegarder `pg_dump` du projet staging Supabase AVANT la
+>      migration (CLAUDE.md « Sauvegarder la DB AVANT toute
+>      migration prod »).
+> 2. **Audit Lighthouse réel** :
 >    - Si `staging.maintenant.org` (ou équivalent) est en ligne :
 >      `npx unlighthouse --site https://staging.maintenant.org` ou
 >      DevTools manuel sur 6 pages clés (cf. `PROD-RUNBOOK.md` §5).
@@ -4504,40 +4575,42 @@ uniquement, conformément à `CLAUDE.md § Audit récurrent vibe janitor`.
 >      Lighthouse étape 20 (perf / a11y / seo / best-practices).
 >    - Corriger les blocages < 95 (LCP, CLS, TBT). Pas de changement
 >      design system sans validation designer.
-> 2. **Premier test E2E « happy path » réel** :
+> 3. **Premier test E2E « happy path » réel** :
 >    - Si projet Supabase de test prêt : ajouter
 >      `web/e2e/happy-path.spec.ts` qui signe anonymement une
 >      pétition publique pré-seedée et vérifie le compteur. Sinon
 >      laisser pour l'étape 21.
-> 3. **Monitoring Sentry runtime** :
+> 4. **Monitoring Sentry runtime** :
 >    - Si DSN configuré en preview : vérifier que les events
 >      arrivent bien (test canary `throw new Error('sentry-canary-step20')`
 >      depuis une page admin protégée + immédiatement retirer).
 >    - Documenter le taux d'erreur sur les 7 derniers jours, top 5
 >      des issues.
-> 4. **Monitoring Supabase** :
+> 5. **Monitoring Supabase** :
 >    - Quotas API / DB CPU / DB memory sur 7 jours.
 >    - Alertes Slack #alerts-prod actives ?
 >    - Top requêtes lentes (cf. dashboard Supabase → Performance).
-> 5. **Retours utilisateur·rices** :
+> 6. **Retours utilisateur·rices** :
 >    - Premiers comptes créés (combien ? bounce rate sur
 >      `/auth/confirm` ?).
 >    - Premiers signalements modération (cf. `/admin/reports`).
 >    - Bugs remontés en email `tech@maintenant.org`.
 >    - Compiler une liste de fixes prioritaires pour l'étape 21.
-> 6. **Documentation `/transparence`** :
+> 7. **Documentation `/transparence`** :
 >    - Créer ou compléter `web/src/pages/TransparencePage.tsx` (route
 >      `/transparence`, publique) avec : date de mise en prod,
 >      nombre cumulé de comptes, pétitions, mobilisations,
 >      signalements traités. Données générées dynamiquement via
 >      requêtes RLS-safe (compteurs publics).
-> 7. **Tests** : suite vitest ≥ 810 + e2e Playwright verts en CI.
->    Ajouter ≥ 5 tests autour de la page transparence + nouveau test
->    E2E si applicable.
-> 8. **HANDOFF-PROGRESS.md** : étape 20 ✅ détaillée (sections
->    « Audit Lighthouse », « E2E réel » si applicable, « Monitoring
->    Sentry », « Monitoring Supabase », « Retours utilisateur »,
->    « Page transparence », « Décisions »).
+> 8. **Tests** : suite vitest ≥ 812 + e2e Playwright verts en CI.
+>    Ajouter ≥ 5 tests autour de la page transparence + tests
+>    idempotence `credit_t99cp` (priorité 1) + nouveau test E2E si
+>    applicable.
+> 9. **HANDOFF-PROGRESS.md** : étape 20 ✅ détaillée (sections
+>    « Idempotence DB » (priorité 1), « Audit Lighthouse », « E2E
+>    réel » si applicable, « Monitoring Sentry », « Monitoring
+>    Supabase », « Retours utilisateur », « Page transparence »,
+>    « Décisions »).
 >    **Recopier ce prompt étape 21 à la fois dans
 >    `HANDOFF-PROGRESS.md` ET dans la réponse de chat finale** (règle
 >    récursive, cf. `CLAUDE.md § Recopie systématique du prompt de
@@ -4556,8 +4629,9 @@ uniquement, conformément à `CLAUDE.md § Audit récurrent vibe janitor`.
 > 1. **Vérifier les 4 checks locaux verts** : `npm run typecheck &&
 >    npm run lint && npx vitest run && npm run build`. Si un check
 >    échoue → corriger, ne pas commit.
-> 2. **Commit** : `chore(prod): step 20 — post-go-live (lighthouse +
->    monitoring + transparence)`. Pas d'emojis dans le message.
+> 2. **Commit** : `chore(prod): step 20 — post-go-live (idempotence
+>    DB + lighthouse + monitoring + transparence)`. Pas d'emojis dans
+>    le message.
 > 3. **Push** sur la branche imposée par l'harness
 >    (`git push -u origin <branch>`, retry exponentiel 2/4/8/16 s).
 > 4. **Ouvrir la PR** vers `main` via
@@ -4616,8 +4690,12 @@ uniquement, conformément à `CLAUDE.md § Audit récurrent vibe janitor`.
 > (mise en prod = risque accru) :
 >
 > - Migration DB risquée (suppression / rename de table / colonne /
->   RPC non listée). En particulier, toute modification du schéma
->   live nécessite l'approbation humaine explicite.
+>   RPC non listée). La migration additive de la priorité 1
+>   (`t99cp_transactions.source_event_id` UNIQUE + nouveau paramètre
+>   `p_source_event_id` sur la RPC `credit_t99cp`) est **explicitement
+>   listée** dans ce prompt — OK à appliquer sans confirmation
+>   additionnelle. Toute autre migration nécessite l'approbation
+>   humaine explicite.
 > - Changement RGPD non listé (nouvelle collecte, nouveau cookie,
 >   transfert hors UE).
 > - Breaking change visible utilisateur (changement de prix Stripe,
