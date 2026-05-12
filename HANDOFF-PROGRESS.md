@@ -27,6 +27,8 @@
 | 16. Sprint 4 — Réseau social + Messagerie + Notifications + Média |   ✅   |
 | 17. Sprint 5 — Admin + Communes libres + Pages légales restantes |   ✅   |
 | 18. Sprint 6 — Optim Lighthouse + E2E Playwright + audit a11y axe-core + prod |   ✅   |
+| 19. Sprint 6 — Mise en prod réelle (webhook Stripe idempotent + Sentry + k6 + docs) |   ✅   |
+| 20. Post-go-live — Idempotence DB (source_event_id) + Page transparence |   ✅   |
 
 ---
 
@@ -4138,6 +4140,277 @@ vitest, build). Build : entry 44.7 kB + chunks lazy.
 
 ---
 
+## Étape 20 — Post-go-live / Idempotence DB + Transparence ✅
+
+**Branche** : `claude/review-project-rules-KT8lf`
+
+Première étape post-go-live. Faute de provisionnement Vercel/Stripe live/
+Sentry SaaS encore actif côté équipe humaine, l'étape se concentre sur la
+**priorité 1** identifiée dans le janitor étape 19 (idempotence DB côté
+ledger T99CP, critical C1/C2) + l'introduction de la **page Transparence
+publique** (`/transparence`). Audit Lighthouse réel + premier test E2E
+« signature anonyme » + monitoring Sentry runtime sont **différés** à
+l'étape 21 (post-déploiement Vercel).
+
+### Idempotence DB du webhook Stripe (priorité 1, dette critique étape 19)
+
+**Migration additive** (db/schema.sql) :
+
+- Nouvelle colonne `t99cp_transactions.source_event_id text` (nullable, défaut
+  null). Les crédits manuels (bonus de bienvenue, parrainage, correction
+  admin) n'ont pas de `source_event_id` et restent multiples par design.
+- **Index unique partiel** `t99cp_source_event_idx on
+  t99cp_transactions (source_event_id) where source_event_id is not null` :
+  un même event.id Stripe ne peut créditer le wallet T99CP qu'une seule fois.
+- **RPC `credit_t99cp` mise à jour** : nouvelle signature `(p_user uuid,
+  p_amount integer, p_reason text, p_source_event_id text default null)`.
+  Comportement :
+  - Court-circuit en début de RPC : si `p_source_event_id` est non-null et
+    déjà présent dans le ledger, **return silencieux** (no-op). Évite tout
+    side-effect côté `users.t99cp_balance`.
+  - Sinon insertion normale avec la colonne `source_event_id`.
+  - Bloc `exception when unique_violation` qui gère la **race condition**
+    (deux webhooks concurrents avec même event.id) : un seul des deux
+    inserts passe ; l'autre attrape l'exception, retourne silencieusement.
+  - L'ancienne signature `credit_t99cp(uuid, integer, text)` est **droppée**
+    (`drop function if exists`) pour éviter l'ambiguïté d'overload côté
+    supabase-js (qui ne résout que par nom). C'est cohérent avec le seul
+    appelant actuel (Edge Function), donc pas de breaking change utilisateur.
+- Le bloc commentaire en tête du § 20 du schéma a été réécrit pour décrire
+  cette nouvelle sémantique d'idempotence à deux niveaux (stripe_events PK
+  + source_event_id UNIQUE).
+
+**Edge Function `supabase/functions/stripe-webhook/index.ts` mise à jour** :
+
+- **Refactor architectural** : la logique pure du handler (types + `handle()`
+  + helpers `readTier/readUserId/epochToIso`) a été extraite dans
+  `supabase/functions/stripe-webhook/handler.ts`, importée par `index.ts`.
+  `index.ts` ne contient plus que le bootstrap Deno (Stripe SDK +
+  supabase-js + Deno.serve). Cette séparation lève la dette M1
+  architecture du janitor étape 19 (« tests unit handle() webhook »).
+- **Nouveau champ `CreditInput.sourceEventId?: string`** : passé au cas
+  `invoice.payment_succeeded` (la seule branche qui crédite T99CP).
+- **Impl `creditT99cp` dans `denoBootstrap`** : transmet `sourceEventId` à
+  la RPC `credit_t99cp` via `p_source_event_id` (ou `null` si absent).
+- Les autres cas (`checkout.session.completed`,
+  `customer.subscription.{deleted,updated}`) **ne passent pas**
+  `sourceEventId` — ils n'écrivent pas dans le ledger T99CP et conservent
+  leur idempotence applicative via `stripe_events.id` (étape 19) +
+  `adhesions.stripe_subscription_id` UNIQUE.
+
+**Types `web/src/types/database.ts`** :
+
+- Ajout `source_event_id: string | null` dans Row/Insert/Update de
+  `t99cp_transactions`.
+- Signature `credit_t99cp` étendue avec `p_source_event_id?: string | null`.
+
+**Décision — pas de job de réconciliation Edge** : on a opté pour la
+défense en profondeur côté DB (colonne UNIQUE + RPC idempotente) plutôt
+qu'un cron de réconciliation Edge Function qui scannerait
+`stripe_events WHERE processed_at IS NULL`. Raison : le job de
+réconciliation aurait nécessité (a) un déploiement Edge Function
+supplémentaire à monitorer, (b) un système d'alerting Slack à câbler, (c)
+une logique de rejeu qui reproduit l'idempotence DB. L'index unique
+partiel atteint le même objectif (zéro doublon de crédit) avec **0
+infrastructure additionnelle**. Le job de réconciliation reste **listé
+en dette** pour le cas spécifique « la ligne `stripe_events` est posée
+mais le handler crashe à mi-chemin et Stripe ne retente plus » (peu
+probable : Stripe retente jusqu'à 3 jours).
+
+**Sauvegarde pg_dump avant migration** : la migration n'a pas été
+appliquée à staging dans cette session (Supabase staging est en place
+mais le déploiement Edge Function n'est pas fait, donc pas de webhook
+live qui pourrait être bloqué par le drop function). L'équipe humaine
+appliquera `db/schema.sql` à staging via le runbook PROD-RUNBOOK.md §1.5
+APRÈS un `pg_dump` complet vers le bucket Supabase Storage privé
+(cf. PROD-RUNBOOK.md §1.4). Pas de risque de perte : le schéma est
+idempotent (`alter table ... add column if not exists`, `create unique
+index if not exists`, `drop function if exists`).
+
+### Tests
+
+- **+13 tests vitest** dans `web/src/lib/stripeWebhook.test.ts` couvrant
+  `handle()` du webhook (extrait de l'Edge Function en `handler.ts`) :
+  - `invoice.payment_succeeded` passe `sourceEventId = event.id` à
+    `creditT99cp` (test priorité 1 « idempotence par event_id »).
+  - Idempotence applicative : deux livraisons du même event.id →
+    `recordEventStart` retourne false la 2e fois → réponse 200 idempotent,
+    `creditT99cp` n'est appelé qu'une fois.
+  - Lecture du `user_id` depuis `parent.subscription_details.metadata`
+    (cas spécifique aux invoices Stripe).
+  - Réponse 400 sur `user_id` manquant, 405 sur GET, 400 sur signature
+    absente / invalide, 500 sur `recordEventStart` ou `creditT99cp` throw.
+  - 200 si `recordEventProcessed` throw après succès (log warn, pas
+    d'erreur 5xx renvoyée — déjà testé indirectement étape 19).
+  - Évènement non-géré (ex `charge.refunded`) : 200 + `processed_at`
+    marqué.
+  - `checkout.session.completed` upsert adhesion (status=active).
+  - `customer.subscription.updated` avec status=canceled → status
+    `cancelled`.
+- **+8 tests vitest** dans `web/src/lib/transparency.test.ts` :
+  - `formatGoLiveDateFr` (3 tests : défaut, ISO arbitraire, format
+    invalide → fallback).
+  - `GO_LIVE_DATE_ISO` au format ISO 8601.
+  - `fetchTransparencyCounts` : agrégation, count null → 0, propagation
+    d'erreur PostgREST, filtre `status=published` appliqué aux 4 tables
+    de contenu.
+- **+6 tests vitest** dans `web/src/pages/TransparencePage.test.tsx` :
+  - Titre principal + date de mise en service rendus.
+  - Compteurs formatés en français (regex `\s` pour le narrow no-break
+    space U+202F qui sert de séparateur de milliers).
+  - État d'erreur (role=alert) si fetch échoue.
+  - Liens internes (politique de confidentialité, contact).
+  - Cleanup `useEffect` (unmount avant résolution du fetch — pas de
+    warning React).
+- **Compteur final : 839 tests verts** (126 fichiers, durée ~61 s).
+  +27 vs fin janitor étape 19 (812).
+- 4 checks locaux verts (typecheck, lint, vitest, build).
+
+### Page `/transparence` (publique, route nouvelle)
+
+- **`web/src/pages/TransparencePage.tsx`** (route publique, lazy-loaded
+  chunk `TransparencePage` 4.79 kB / gzip 2.08 kB).
+- **`web/src/lib/transparency.ts`** : helpers `fetchTransparencyCounts(client)`
+  + `formatGoLiveDateFr(iso)` + constante `GO_LIVE_DATE_ISO = '2026-05-12'`
+  (date du go-live affichée). Client Supabase **injectable** pour
+  permettre des tests unitaires sans mock global.
+- **Compteurs publics affichés** (calculés via `count: 'exact', head: true`
+  pour ne transférer aucune ligne) :
+  - Comptes créés (`users` — policy publique).
+  - Pétitions publiées (`petitions where status='published'`).
+  - Signatures cumulées (`signatures` — policy publique).
+  - Mobilisations publiées.
+  - Campagnes publiées.
+  - Communes libres publiées.
+- **Signalements traités non comptabilisés** : la donnée
+  `is_flagged = true` est filtrée hors lecture publique pour
+  posts/commentaires (`select using (not is_flagged or auth.uid() =
+  author_id)`). Un anonyme ne peut donc pas la compter sans casser
+  RLS. Section « Modération » de la page explique ce choix éditorial
+  (rapport annuel agrégé à venir).
+- **Format français** : `Intl.NumberFormat('fr-FR')` pour les compteurs,
+  `Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year:
+  'numeric', timeZone: 'UTC' })` pour la date du go-live (UTC pour éviter
+  les décalages selon la timezone du visiteur).
+- **Pattern `FetchState` discriminé** : `{ kind: 'loading' | 'success' |
+  'error' }` plutôt que trois `useState` corrélés. Lève l'erreur lint
+  `react-hooks/set-state-in-effect` (pas d'appel `setLoading(true)`
+  synchrone au début de l'effet — l'état initial est déjà `loading`).
+- **Liens** : politique de confidentialité (`/legal/privacy`) + contact
+  (`/legal/contact`). Pas de modification de la `RootLayout` (pas de
+  footer global existant à compléter ; la page se découvre par URL
+  directe ou liens internes).
+- **Router** : route `path: 'transparence'` ajoutée dans `router.tsx`
+  entre `auth/callback` et le bloc `legal`. Lazy-loaded comme les
+  autres pages.
+
+### Différés à l'étape 21 (post-provisionnement externe)
+
+- **Audit Lighthouse mesuré** : nécessite un déploiement Vercel preview
+  HTTPS accessible. Listé dans `docs/PROD-RUNBOOK.md` §5.
+- **Test E2E Playwright « signature anonyme réelle »** : nécessite un
+  projet Supabase de test seedé (`db/seed.sql` ou équivalent).
+- **Monitoring Sentry runtime** : nécessite que Sentry SaaS soit
+  provisionné + DSN câblé en env Vercel. Test canary
+  `throw new Error('sentry-canary-step20')` reporté.
+- **Monitoring Supabase** : quotas API / DB CPU / DB memory sur 7 jours,
+  alertes Slack — à observer une fois du trafic réel.
+- **Retours utilisateur·rices** : pas de comptes créés réels (staging
+  non exposé HTTPS), donc pas de bounce rate `/auth/confirm` à reporter.
+
+### Bundle après ajout
+
+| Avant étape 20 (fin janitor 19) | Après étape 20 |
+| --- | --- |
+| `index.js` 47.09 kB / gzip 13.28 kB | `index.js` 47.27 kB / gzip 13.31 kB |
+| — | `TransparencePage.js` 4.79 kB / gzip 2.08 kB (lazy) |
+| `react`, `router`, `supabase`, `sentry` | inchangé |
+
+Coût net en entry : +0.03 kB gzip (négligeable). Le chunk
+`TransparencePage` n'est téléchargé que lors de la première visite sur
+`/transparence`.
+
+### Décisions
+
+- **Index unique partiel `WHERE source_event_id IS NOT NULL`** plutôt
+  qu'index unique `nulls not distinct` : les deux conviendraient (PG 15+
+  supporte `nulls not distinct`), mais l'index partiel est plus
+  défensif côté planificateur (Postgres ne scanne que les lignes avec
+  un event_id, donc l'index reste petit même si on accumule des millions
+  de crédits manuels sans event_id). Aussi : `nulls not distinct` est
+  un peu moins répandu dans les bases ; un opérateur DB qui reverrait
+  le schéma comprend immédiatement l'intention « unique sur les
+  lignes non-null ».
+- **`drop function if exists public.credit_t99cp(uuid, integer, text)`** :
+  le seul appelant actuel est l'Edge Function (que nous mettons à jour
+  dans la même PR), donc pas de breaking change utilisateur. Si une
+  app tierce appelait l'ancienne signature, elle aurait reçu une
+  erreur PostgREST « function not found » — mais aucune app tierce
+  ne consomme cette RPC en l'état (cf. grep `credit_t99cp` qui ne
+  trouve que l'Edge Function et les types).
+- **Extraction `handler.ts` plutôt qu'inclusion de
+  `supabase/functions/` dans `tsconfig.app.json`** : le découpage
+  pure-handler + bootstrap-Deno permet aux tests vitest côté `web/`
+  d'importer le handler via un chemin relatif sans tirer d'imports
+  Deno-only (`https://esm.sh/...`). Plus propre que d'élargir le
+  scope tsconfig.
+- **Page `/transparence` publique non liée dans la nav** : la
+  `RootLayout` ne contient pas de footer global aujourd'hui (les
+  pages légales sont également non-liées dans la nav). On évite de
+  modifier le composant nav sans validation design. Découvrable par
+  URL directe + liens internes (politique de confidentialité, contact).
+- **Pattern `FetchState` discriminé** : explicite l'invariant « pas
+  d'erreur ET de succès simultanés » et lève le warning
+  `react-hooks/set-state-in-effect`. Plus simple à raisonner que
+  `loading/data/error` triple-useState.
+
+### Hygiène
+
+- Pas de modification du prototype (`app/Maintenant.html`, `Theme.jsx`).
+- Pas d'emojis dans les fichiers TS / commits / PR.
+- Tokens `T.*` (CSS vars `--mn-*`) **intacts** — TransparencePage
+  réutilise `--mn-text-1`, `--mn-text-2`, `--mn-text-3`, `--mn-surface-2`,
+  `--mn-border`, `--mn-brand`, comme les autres pages légales.
+- Pas de clé service_role dans le bundle front.
+- Aucune `console.warn` ou `console.error` ajoutée hors guard
+  `import.meta.env.DEV` ou contexte serveur.
+
+### Checks finaux
+
+```
+> npm run typecheck && npm run lint && npx vitest run && npm run build
+
+✓ typecheck   (tsc -b + e2e/tsconfig.json)
+✓ lint        (eslint .)
+✓ vitest      (126 files, 839 tests passed, ~61s)
+✓ build       (entry 47.27 kB / gzip 13.31 kB ; TransparencePage 4.79 kB / gzip 2.08 kB lazy ; sentry 436.2 kB / gzip 143 kB lazy)
+```
+
+### Migration DB
+
+- **Additive uniquement** côté tables : ajout de colonne
+  `t99cp_transactions.source_event_id` + index unique partiel.
+- **Drop d'une fonction surchargée** : `drop function if exists
+  public.credit_t99cp(uuid, integer, text)`. Cohérent avec « pas de
+  suppression de RPC sans listé dans le prompt » : la migration est
+  **explicitement listée dans le prompt étape 20** comme priorité 1,
+  donc autorisée par CLAUDE.md « Conditions d'arrêt malgré
+  l'autorisation permanente ».
+- **Régénérer `web/src/types/database.ts` après application en prod** :
+  `supabase gen types typescript --project-id <id>`. Diff attendu :
+  aucun (le type a été aligné manuellement).
+- **Procédure de déploiement** :
+  1. `pg_dump` complet → bucket Supabase Storage privé.
+  2. Appliquer `db/schema.sql` (idempotent).
+  3. Redéployer l'Edge Function `stripe-webhook` (nouvelle signature de
+     `creditT99cp`).
+  4. Vérifier qu'un test event Stripe (CLI `stripe trigger
+     invoice.payment_succeeded`) crédite bien le wallet **une seule
+     fois** quand l'event est livré deux fois (idempotence
+     applicative + DB).
+
+---
+
 ## Étape 19 — Sprint 6 / Mise en prod réelle ✅
 
 **Branche** : `claude/review-project-rules-pZtyS`
@@ -4462,6 +4735,257 @@ provisionnement réel des comptes externes décrits dans
 - Plan d'upgrade Pro recommandé : **à l'annonce publique du go-live**.
   Toggle en un clic, sans interruption ni migration de données.
   Coût ~25 USD/mois.
+
+---
+
+## Prompt pour la session N+15 (étape 21)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD, Lighthouse
+>    ≥ 95, axe-core ≥ 95, `prefers-reduced-motion`). Note la section
+>    « Politique de PR » qui t'autorise à enchaîner ouverture + merge
+>    des PR sans confirmation **jusqu'à la session 50 incluse**. Note
+>    aussi la section « Recopie systématique du prompt de la session
+>    suivante » : **à la clôture de cette étape, recopier le prompt
+>    étape 22 à la fois dans `HANDOFF-PROGRESS.md` ET dans la réponse de
+>    chat finale**. Et enfin la section « Audit récurrent vibe janitor
+>    de fin d'étape » : **après le merge de la PR principale de
+>    l'étape 21, tu dois enchaîner une PR janitor séparée
+>    `chore(janitor): post-step 21 — …` et inclure cette même
+>    instruction janitor dans le prompt étape 22.**
+> 2. `HANDOFF.md` §11 (Points d'attention) + §12 (Suivi) + §13
+>    (Sécurité).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 20 ✅ — étape 21 à faire).
+> 4. `docs/PROD-RUNBOOK.md` — runbook de provisionnement créé à
+>    l'étape 19.
+> 5. `docs/MODERATION.md` — procédure modération.
+> 6. `docs/USER-GUIDE.md` — FAQ utilisateur·rice.
+>
+> **État actuel à la fin de l'étape 20 + janitor post-step20** :
+>
+> - **Idempotence DB du webhook Stripe** : colonne
+>   `t99cp_transactions.source_event_id text` + index unique partiel
+>   `WHERE source_event_id IS NOT NULL`. RPC `credit_t99cp` étendue
+>   avec `p_source_event_id text default null` (court-circuit
+>   silencieux si déjà vu, gestion `unique_violation` pour les races).
+>   Edge Function passe `event.id` sur `invoice.payment_succeeded`.
+> - **Webhook handler extrait** dans
+>   `supabase/functions/stripe-webhook/handler.ts` (testé en vitest
+>   via 13 tests). `index.ts` ne contient plus que le bootstrap Deno.
+> - **Page `/transparence`** publique avec compteurs RLS-safe
+>   (members, petitions/mobilizations/campaigns/communes published,
+>   signatures). `web/src/lib/transparency.ts` + tests (8+6).
+> - **839 tests verts** (126 fichiers, durée ~61 s). +27 vs étape 19.
+> - Build entry `47.27 kB / gzip 13.31 kB` + chunks lazy
+>   (`TransparencePage` 4.79 kB / gzip 2.08 kB).
+> - Pas de migration appliquée à Supabase staging dans la session
+>   (étape DB faite côté schema.sql + types ; déploiement à
+>   l'équipe humaine via PROD-RUNBOOK §1).
+>
+> **Provisionnement externe — état au 2026-05-12 (inchangé depuis
+> étape 19)** :
+>
+> - ✅ Supabase **staging** provisionné (projet `maintenant-staging`,
+>   eu-west-3, Free, schéma `db/schema.sql` étape 19 appliqué — la
+>   migration étape 20 reste à appliquer). URL :
+>   `https://fdphrsqrsumkpzbxnjdj.supabase.co`. Clé `anon` legacy
+>   JWT stockée dans `web/.env.local` côté équipe humaine.
+> - 🔲 Vercel / Stripe live / Edge Functions / Sentry SaaS / PITR
+>   restent à provisionner par l'équipe humaine (cf.
+>   `docs/PROD-RUNBOOK.md` §2 à §4).
+>
+> **CONTEXTE D'OUVERTURE — à exécuter avant toute autre action** :
+>
+> 1. Vérifier qu'on est bien dans un workspace contenant `web/`. Si
+>    non (rare — branche partie d'un main obsolète),
+>    `git fetch origin main && git merge --ff-only origin/main`.
+> 2. `cd web && npm ci` (fallback : `npm install --legacy-peer-deps`).
+> 3. `npm run typecheck && npm run lint && npx vitest run && npm run build`
+>    pour vérifier le compteur de tests au point de départ (≥ 839
+>    verts après le janitor post-step 20, à incrémenter à chaque
+>    étape).
+> 4. **Demander à l'équipe humaine** :
+>    - La migration étape 20 (`db/schema.sql`) a-t-elle été appliquée
+>      à Supabase staging ? Si oui : récupérer le `pg_dump`
+>      pré-migration archivé.
+>    - Le provisionnement Vercel / Stripe / Sentry décrit dans
+>      `docs/PROD-RUNBOOK.md` est-il fait ?
+>    - Y a-t-il un projet Supabase de test seedé pour le test E2E
+>      « signature anonyme » ?
+>
+> **ÉTAPE 21 à exécuter — Post-go-live (audit réel + monitoring +
+> premiers retours + dette)** :
+>
+> 1. **Audit Lighthouse réel** :
+>    - Si Vercel preview/staging.maintenant.org est en ligne :
+>      `npx unlighthouse --site <url>` ou DevTools manuel sur 6
+>      pages clés (cf. PROD-RUNBOOK.md §5).
+>    - Documenter les scores dans `HANDOFF-PROGRESS.md § Audit
+>      Lighthouse étape 21` (perf / a11y / seo / best-practices).
+>    - Corriger les blocages < 95 (LCP, CLS, TBT). **Pas de
+>      changement design system sans validation designer**.
+>    - Si pas de staging HTTPS encore : différer une fois de plus à
+>      l'étape 22, ne PAS tenter d'audit en local-dev (résultats
+>      inexploitables).
+> 2. **Premier test E2E « happy path » réel** :
+>    - Si projet Supabase de test prêt : ajouter
+>      `web/e2e/happy-path.spec.ts` qui signe anonymement une
+>      pétition publique pré-seedée et vérifie le compteur.
+>    - Sinon ajouter un E2E « UI-only » qui rend
+>      `/transparence` et vérifie l'affichage de compteurs à zéro
+>      (mock du fetch) — au moins pour valider le routing.
+> 3. **Monitoring Sentry runtime** :
+>    - Si DSN configuré en preview : vérifier que les events
+>      arrivent bien (test canary
+>      `throw new Error('sentry-canary-step21')` depuis une page
+>      admin protégée + immédiatement retirer).
+>    - Documenter le taux d'erreur sur les 7 derniers jours, top 5
+>      des issues.
+> 4. **Monitoring Supabase** :
+>    - Quotas API / DB CPU / DB memory sur 7 jours.
+>    - Alertes Slack #alerts-prod actives ?
+>    - Top requêtes lentes (cf. dashboard Supabase → Performance).
+> 5. **Retours utilisateur·rices** (si trafic réel) :
+>    - Premiers comptes créés (combien ? bounce rate sur
+>      `/auth/confirm` ?).
+>    - Premiers signalements modération (cf. `/admin/reports` ou
+>      `is_flagged=true`).
+>    - Bugs remontés en email tech@maintenant.org.
+>    - Compiler une liste de fixes prioritaires pour l'étape 22.
+> 6. **Job de réconciliation Stripe (dette différée étape 20)** :
+>    - Décider si on implémente un job Edge Function qui scanne
+>      `stripe_events WHERE processed_at IS NULL AND received_at <
+>      now() - interval '15 min'` et alerte / rejoue.
+>    - Critère : si Sentry montre des erreurs récurrentes sur
+>      `stripe-webhook`, le job devient prioritaire. Sinon
+>      l'idempotence DB suffit (cf. décision étape 20).
+> 7. **Page transparence — compléments** :
+>    - Ajouter un cumul **« total contributions T99CP émises »**
+>      (somme de `t99cp_transactions.amount where kind='credit'`)
+>      si la donnée reste publique sans révéler de PII (à valider).
+>    - Optionnel : graphique d'évolution mensuelle des
+>      inscriptions (lib `recharts` ou SVG natif — favoriser SVG
+>      natif pour ne pas alourdir le bundle).
+> 8. **Dette technique à adresser** (priorité décroissante) :
+>    - Color-contrast `--mn-text-3` (195 usages) — nécessite
+>      validation designer (cf. étape 19 décision a11y).
+>    - Purge automatique `stripe_events.payload` (TTL 90 j ou
+>      scrub avant insert) — décision RGPD à prendre.
+>    - CSP `script-src https://js.stripe.com` si on ajoute Stripe
+>      Elements côté front (pas encore).
+> 9. **Tests** : suite vitest ≥ 839 + e2e Playwright verts en CI.
+> 10. `HANDOFF-PROGRESS.md` : étape 21 ✅ détaillée (sections
+>     « Audit Lighthouse », « E2E réel », « Monitoring Sentry »,
+>     « Monitoring Supabase », « Retours utilisateur », « Décisions »).
+> 11. **Recopier ce prompt étape 22** à la fois dans
+>     `HANDOFF-PROGRESS.md` ET dans la **réponse de chat finale**
+>     (règle récursive, cf. CLAUDE.md § Recopie systématique du
+>     prompt de la session suivante). **Inclure dans le prompt
+>     étape 22 la même instruction de recopie pour la session
+>     N+16, pour que la chaîne se propage. Inclure aussi
+>     l'instruction d'audit vibe janitor pour N+16** (cf.
+>     CLAUDE.md § Audit récurrent vibe janitor).
+>
+> **PHASE 1 — Clôture de l'étape principale (workflow auto-merge)** :
+>
+> Conformément à CLAUDE.md § « Politique de PR », tu as
+> autorisation permanente d'enchaîner les étapes ci-dessous sans
+> confirmation. Procéder dans l'ordre, sans s'arrêter entre les
+> étapes :
+>
+> 1. Vérifier les 4 checks locaux verts :
+>    `npm run typecheck && npm run lint && npx vitest run && npm
+>    run build`. Si un check échoue → corriger, ne pas commit.
+> 2. Commit :
+>    `chore(prod): step 21 — post-go-live (lighthouse + e2e + monitoring + transparence v2)`.
+>    Pas d'emojis dans le message.
+> 3. Push sur la branche imposée par l'harness
+>    (`git push -u origin <branch>`, retry exponentiel
+>    2/4/8/16 s).
+> 4. Ouvrir la PR vers `main` via
+>    `mcp__github__create_pull_request` (titre identique au commit,
+>    body Summary + Décisions + Test plan).
+> 5. Attendre les checks GitHub Actions si présents. S'ils sont
+>    rouges → autofix puis re-push.
+> 6. Merger la PR via `mcp__github__merge_pull_request` (merge
+>    ou squash).
+>
+> **PHASE 2 — Audit vibe janitor (après le merge de la PR principale)** :
+>
+> Conformément à CLAUDE.md § « Audit récurrent vibe janitor de fin
+> d'étape », après le merge de la PR principale et avant de clôturer
+> la session :
+>
+> 1. Sync : `git checkout main && git pull --ff-only origin main`,
+>    puis `git checkout -b claude/janitor-post-step21` (ou nom
+>    similaire imposé par l'harness).
+> 2. Audit en parallèle via 2 à 3 subagents `general-purpose` :
+>    architecture / élégance, robustesse / edge cases, sécurité /
+>    cohérence handoff. Chaque agent produit un rapport ; ne fait
+>    aucune modification.
+> 3. Synthétiser les findings par sévérité + risque de
+>    régression.
+> 4. Appliquer UNIQUEMENT les fixes safe-first (cf. CLAUDE.md
+>    pour la liste des conditions impératives). Pour rappel — règle
+>    d'or « primum non nocere » :
+>    - Aucun fix qui casse un test existant (rollback immédiat
+>      si test casse).
+>    - Aucun nouveau problème introduit par le fix.
+>    - Design system `T.*` intouchable.
+>    - Pas de migration DB en mode janitor.
+>    - Pas de breaking change utilisateur.
+>    - Les fixes risque medium/high sont reportés et documentés
+>      en dette technique.
+> 5. Vérifier les 4 checks locaux verts avant push.
+> 6. PR janitor séparée : titre
+>    `chore(janitor): post-step 21 — <résumé court>`. Body :
+>    Summary + Findings (sévérité + risque) + Fixes appliqués +
+>    Fixes déférés + Test plan.
+> 7. Merger la PR janitor (même workflow auto-merge).
+> 8. Documenter dans `HANDOFF-PROGRESS.md` : section
+>    `### Audit vibe janitor étape 21` avec findings totaux, fixes
+>    appliqués (chacun avec son risque évalué), dette ajoutée,
+>    compteur de tests final.
+>
+> **Phase 3 — Recopie du prompt étape 22** (toujours obligatoire) :
+>
+> 1. Recopier le prompt étape 22 dans la **réponse de chat finale**,
+>    en plus de l'avoir écrit dans `HANDOFF-PROGRESS.md`. Le prompt
+>    étape 22 doit lui-même inclure les Phases 1, 2, 3 récursives
+>    pour la session N+16.
+>
+> **Conditions d'arrêt malgré l'autorisation permanente**
+> (mise en prod = risque accru) :
+>
+> - Migration DB risquée (suppression / rename de table / colonne /
+>   RPC non listée). Aucune migration DB explicitement listée pour
+>   l'étape 21 — demander confirmation si nécessaire.
+> - Changement RGPD non listé (nouvelle collecte, nouveau cookie,
+>   transfert hors UE).
+> - Breaking change visible utilisateur.
+> - Erreur Vercel / Supabase impossible à debugger en < 3 tentatives.
+> - Review humaine ou commentaire GitHub arrivé avant le merge.
+> - En phase janitor uniquement : un fix nécessite de toucher au
+>   design system `T.*`, ou casse un test existant sans rollback
+>   possible, ou nécessite un bump majeur de dépendance.
+>
+> Dans tous ces cas : demander confirmation explicite avant de
+> merger.
+>
+> **Contraintes générales** :
+>
+> - Ne pas toucher au prototype.
+> - TS strict + no `any`.
+> - Conserver les checks verts à chaque étape.
+> - Pas d'emojis dans le code TS ni dans les commits / PR.
+> - Vérifier qu'aucun changement de design ne casse les tokens `T.*`.
+> - Sauvegarder la DB AVANT toute migration prod (export `pg_dump`
+>   dans un bucket privé Supabase Storage).
 
 ---
 

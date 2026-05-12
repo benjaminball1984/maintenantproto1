@@ -1,248 +1,24 @@
 // =====================================================================================
-// stripe-webhook — Edge Function (Deno)
+// stripe-webhook — Edge Function (Deno) — bootstrap
 //
-// Reçoit les évènements Stripe et synchronise `public.adhesions` + crédite
-// le wallet T99CP via la RPC `credit_t99cp`. Cette fonction tourne avec la
-// service-role (cf. `Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')`) afin de
-// pouvoir bypasser les policies RLS et écrire le ledger T99CP.
+// Réception des évènements Stripe en production. La logique pure du handler
+// vit dans `./handler.ts` (testable depuis vitest côté `web/`). Ce fichier
+// se contente d'instancier les dépendances Deno-only (Stripe SDK, supabase-js)
+// et d'appeler `handle(req, deps)`.
 //
 // Variables d'environnement attendues :
 //   STRIPE_SECRET_KEY            — clé secrète (pour la lib stripe)
 //   STRIPE_WEBHOOK_SECRET        — secret du webhook (signature)
 //   SUPABASE_URL                 — base URL du projet
 //   SUPABASE_SERVICE_ROLE_KEY    — clé service-role (server-only)
-//
-// Évènements gérés :
-//   checkout.session.completed       → upsert adhesion (status='active')
-//   customer.subscription.deleted    → adhesions.status='cancelled'
-//   customer.subscription.updated    → status='cancelled' si Stripe status
-//                                      ∈ { canceled, unpaid, incomplete_expired }
-//                                      sinon synchronise current_period_end
-//   invoice.payment_succeeded        → credit_t99cp(user, 60, 'adhesion_renewal')
-//
-// La fonction est testable en isolation via `handle(req, deps)` (DI). Le
-// guard `import.meta.main` empêche l'exécution du bootstrap Deno côté Node.
 // =====================================================================================
 
-export interface AdhesionUpsert {
-  userId: string;
-  tier: 'soutien' | 'engage';
-  status: 'active' | 'cancelled' | 'expired' | 'pending';
-  stripeSubscriptionId: string;
-  endsOn: string | null;
-}
+import {
+  handle,
+  type StripeEvent,
+  type StripeWebhookDeps,
+} from './handler.ts';
 
-export interface AdhesionStatusUpdate {
-  stripeSubscriptionId: string;
-  status: 'active' | 'cancelled' | 'expired';
-  endsOn: string | null;
-}
-
-export interface CreditInput {
-  userId: string;
-  amount: number;
-  reason: string;
-}
-
-export interface StripeWebhookDeps {
-  /** Vérifie la signature Stripe et renvoie l'évènement parsé. */
-  verifyEvent: (payload: string, signature: string) => Promise<StripeEvent>;
-  /** Upsert d'une adhésion (clé : stripe_subscription_id). */
-  upsertAdhesion: (input: AdhesionUpsert) => Promise<void>;
-  /** Met à jour le statut d'une adhésion. */
-  updateAdhesionStatus: (input: AdhesionStatusUpdate) => Promise<void>;
-  /** Appelle la RPC credit_t99cp. */
-  creditT99cp: (input: CreditInput) => Promise<void>;
-  /** Bonus mensuel en T99CP crédité à chaque paiement réussi. */
-  monthlyT99cpBonus: () => number;
-  /**
-   * Insère l'évènement dans `stripe_events` (PK = id). Renvoie `false` si la
-   * PK est déjà présente (évènement déjà traité, on répond 200 idempotent).
-   * Renvoie `true` si la ligne vient d'être créée.
-   */
-  recordEventStart: (event: StripeEvent) => Promise<boolean>;
-  /** Marque la ligne stripe_events.processed_at = now() après exécution. */
-  recordEventProcessed: (eventId: string) => Promise<void>;
-}
-
-// Sous-ensemble minimal des types Stripe utilisé ici. On reste laxiste sur les
-// champs facultatifs : la lib stripe-node renvoie déjà ces formes. Pour rester
-// compatible avec un mock simple côté tests, on n'utilise pas les types natifs.
-export interface StripeEvent {
-  id: string;
-  type: string;
-  data: { object: StripeEventObject };
-}
-
-export interface StripeEventObject {
-  id?: string;
-  client_reference_id?: string | null;
-  subscription?: string | null;
-  customer?: string | null;
-  customer_email?: string | null;
-  status?: string;
-  current_period_end?: number | null;
-  metadata?: Record<string, string> | null;
-  // Spécifique aux invoices : ref vers la subscription + customer.
-  parent?: { subscription_details?: { metadata?: Record<string, string> | null } } | null;
-}
-
-const CANCEL_STATUSES = new Set(['canceled', 'unpaid', 'incomplete_expired']);
-
-function readTier(metadata: Record<string, string> | null | undefined): AdhesionUpsert['tier'] {
-  const tier = metadata?.tier;
-  if (tier === 'soutien' || tier === 'engage') return tier;
-  // Fallback prudent : on traite comme 'soutien' (et on logge).
-  console.warn('stripe-webhook: missing tier metadata, defaulting to soutien');
-  return 'soutien';
-}
-
-function readUserId(metadata: Record<string, string> | null | undefined): string | null {
-  return metadata?.user_id ?? null;
-}
-
-function epochToIso(seconds: number | null | undefined): string | null {
-  if (!seconds) return null;
-  return new Date(seconds * 1000).toISOString();
-}
-
-export async function handle(req: Request, deps: StripeWebhookDeps): Promise<Response> {
-  if (req.method !== 'POST') {
-    return new Response('method_not_allowed', { status: 405 });
-  }
-  const signature = req.headers.get('stripe-signature');
-  if (!signature) {
-    return new Response('missing_signature', { status: 400 });
-  }
-  const body = await req.text();
-
-  let event: StripeEvent;
-  try {
-    event = await deps.verifyEvent(body, signature);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'invalid_signature';
-    return new Response(`invalid_signature: ${message}`, { status: 400 });
-  }
-
-  // Idempotence : Stripe garantit l'« at-least-once delivery ». La PK
-  // stripe_events.id (= event.id) garantit qu'on n'exécute le handler qu'une
-  // fois par évènement. Si la ligne existe déjà : retour 200 + idempotent.
-  let isNewEvent: boolean;
-  try {
-    isNewEvent = await deps.recordEventStart(event);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'idempotency_store_error';
-    return new Response(`idempotency_store_error: ${message}`, { status: 500 });
-  }
-  if (!isNewEvent) {
-    return new Response(JSON.stringify({ received: true, idempotent: true, id: event.id }), {
-      status: 200,
-      headers: { 'content-type': 'application/json; charset=utf-8' },
-    });
-  }
-
-  try {
-    switch (event.type) {
-      case 'checkout.session.completed': {
-        const obj = event.data.object;
-        const userId = readUserId(obj.metadata) ?? obj.client_reference_id ?? null;
-        const subscriptionId =
-          typeof obj.subscription === 'string' ? obj.subscription : (obj.subscription ?? '');
-        if (!userId || !subscriptionId) {
-          return new Response('missing_user_or_subscription', { status: 400 });
-        }
-        await deps.upsertAdhesion({
-          userId,
-          tier: readTier(obj.metadata),
-          status: 'active',
-          stripeSubscriptionId: subscriptionId,
-          endsOn: epochToIso(obj.current_period_end ?? null),
-        });
-        break;
-      }
-      case 'customer.subscription.deleted': {
-        const obj = event.data.object;
-        if (!obj.id) return new Response('missing_subscription_id', { status: 400 });
-        await deps.updateAdhesionStatus({
-          stripeSubscriptionId: obj.id,
-          status: 'cancelled',
-          endsOn: epochToIso(obj.current_period_end ?? null),
-        });
-        break;
-      }
-      case 'customer.subscription.updated': {
-        const obj = event.data.object;
-        if (!obj.id) return new Response('missing_subscription_id', { status: 400 });
-        const stripeStatus = obj.status ?? '';
-        const nextStatus: AdhesionStatusUpdate['status'] = CANCEL_STATUSES.has(stripeStatus)
-          ? 'cancelled'
-          : 'active';
-        await deps.updateAdhesionStatus({
-          stripeSubscriptionId: obj.id,
-          status: nextStatus,
-          endsOn: epochToIso(obj.current_period_end ?? null),
-        });
-        break;
-      }
-      case 'invoice.payment_succeeded': {
-        const obj = event.data.object;
-        // Sur les invoices Stripe, l'user_id est porté par la subscription parente
-        // (cf. subscription_data.metadata au moment du checkout).
-        const userId =
-          readUserId(obj.metadata) ??
-          readUserId(obj.parent?.subscription_details?.metadata ?? null);
-        if (!userId) {
-          return new Response('missing_user_metadata', { status: 400 });
-        }
-        await deps.creditT99cp({
-          userId,
-          amount: deps.monthlyT99cpBonus(),
-          reason: 'adhesion_renewal',
-        });
-        break;
-      }
-      default:
-        // Évènement non géré : on accuse réception (200) pour que Stripe ne
-        // retente pas indéfiniment. C'est explicite et documenté. On marque
-        // tout de même la ligne `processed_at` pour distinguer « non géré »
-        // de « jamais traité ». Si le marquage échoue, on log et on
-        // répond quand même 200 (cohérent avec la branche success en
-        // bas du try/catch principal).
-        try {
-          await deps.recordEventProcessed(event.id);
-        } catch (err) {
-          console.warn('stripe-webhook: recordEventProcessed (default case) failed', err);
-        }
-        return new Response(JSON.stringify({ received: true, ignored: event.type }), {
-          status: 200,
-          headers: { 'content-type': 'application/json; charset=utf-8' },
-        });
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'handler_error';
-    // Note : on ne marque PAS processed_at en cas d'erreur. La ligne reste
-    // avec processed_at=null pour audit. Stripe retentera (jusqu'à 3 jours).
-    return new Response(`handler_error: ${message}`, { status: 500 });
-  }
-
-  try {
-    await deps.recordEventProcessed(event.id);
-  } catch (err) {
-    // Échec du marquage final : on log mais on répond 200 (l'event a bien été
-    // traité côté métier — un retry Stripe ré-exécuterait inutilement les
-    // upserts, déjà idempotents par stripe_subscription_id de toute façon).
-    console.warn('stripe-webhook: recordEventProcessed failed', err);
-  }
-
-  return new Response(JSON.stringify({ received: true, id: event.id }), {
-    status: 200,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
-  });
-}
-
-// =====================================================================================
-// Bootstrap Deno
-// =====================================================================================
 declare const Deno: { env: { get: (name: string) => string | undefined }; serve?: unknown };
 
 async function denoBootstrap(): Promise<void> {
@@ -289,11 +65,17 @@ async function denoBootstrap(): Promise<void> {
         .eq('stripe_subscription_id', stripeSubscriptionId);
       if (error) throw new Error(error.message);
     },
-    creditT99cp: async ({ userId, amount, reason }) => {
+    creditT99cp: async ({ userId, amount, reason, sourceEventId }) => {
+      // sourceEventId est passé à la RPC `credit_t99cp` comme
+      // `p_source_event_id` (étape 20). Côté DB, un index unique partiel
+      // sur `t99cp_transactions.source_event_id` garantit qu'un même
+      // event.id Stripe ne créditera pas le wallet deux fois, même si la
+      // ligne `stripe_events` a été manuellement supprimée.
       const { error } = await admin.rpc('credit_t99cp', {
         p_user: userId,
         p_amount: amount,
         p_reason: reason,
+        p_source_event_id: sourceEventId ?? null,
       });
       if (error) throw new Error(error.message);
     },
