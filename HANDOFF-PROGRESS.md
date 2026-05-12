@@ -4355,6 +4355,80 @@ Lighthouse mesuré, premier test E2E branché sur un Supabase de test
 seedé, monitoring runtime côté Sentry + Supabase, retour utilisateur
 sur les premiers comptes créés.
 
+### Audit vibe janitor étape 19
+
+**Branche** : `claude/janitor-post-step19` (PR #14 mergée).
+
+Audit en parallèle via 3 subagents `general-purpose` (architecture /
+robustesse / sécurité). Synthèse + application des fixes safe-first
+uniquement, conformément à `CLAUDE.md § Audit récurrent vibe janitor`.
+
+#### Findings totaux
+
+| Catégorie | Critical | High | Medium | Low |
+| --- | --- | --- | --- | --- |
+| Architecture | 0 | 0 | 3 | 7 |
+| Robustesse | 2 | 4 | 4 | 6 |
+| Sécurité / cohérence | 0 | 2 | 4 | 4 |
+| **Total** | **2** | **6** | **11** | **17** |
+
+#### Fixes appliqués (5)
+
+| Finding | Sévérité | Risque régression | Fichier |
+| --- | --- | --- | --- |
+| H3 robustness — try/catch autour de `recordEventProcessed` dans `default:` (un throw DB renvoyait 500 au lieu du 200 promis) | high | low | `supabase/functions/stripe-webhook/index.ts:204-213` |
+| M3 architecture+robustness — +2 tests `loadAndInitSentry` (chunk introuvable + `Sentry.init` throw) | medium | low | `web/src/lib/sentry.test.ts:198-235` |
+| H2 security — `VITE_SUPPORT_USER_ID` / `VITE_SUPPORT_EMAIL` ajoutés dans `.env.example` racine | high | low | `.env.example:26-30` |
+| H1 security — disclaimer *(roadmap)* sur les sous-routes admin dans `MODERATION.md` (seule `/admin` existe) | high | low | `docs/MODERATION.md` § Outils |
+| M1 security RGPD — procédure de purge manuelle `stripe_events` ajoutée au workflow droit-à-l'oubli | medium | low | `docs/MODERATION.md` § RGPD |
+| L2 security — note explicative `--no-verify-jwt` ajoutée au runbook | low | low | `docs/PROD-RUNBOOK.md` §1.7 |
+
+#### Fixes déférés (dette technique)
+
+| Finding | Sévérité | Risque régression | Pourquoi déféré |
+| --- | --- | --- | --- |
+| **C1 robustness — `stripe_events` orpheline en cas de crash handler** | **critical** | medium | Le retry Stripe voit la PK et skip → exécution métier silencieusement perdue. Nécessite soit migration `t99cp_ledger.source_event_id` UNIQUE, soit job de réconciliation `processed_at IS NULL AND received_at < now() - 15m`. Migration DB hors scope janitor — à traiter en étape dédiée. |
+| **C2 robustness — `credit_t99cp` non idempotent par event_id côté DB** | **critical** | medium | Défense en profondeur si une ligne `stripe_events` est manuellement supprimée. Migration DB. |
+| M1 architecture — tests unit `handle()` webhook | medium | medium | Nécessite d'élargir `tsconfig.app.json` à `supabase/functions/`. Risque d'effets de bord sur le typecheck du reste. À refactor : extraire `handle()` dans `web/src/lib/stripeWebhook.ts` et le re-export depuis l'Edge Function. |
+| M1 security RGPD — purge automatique `stripe_events.payload` | medium | medium | Cron TTL 90j OU scrubbing avant insert (garder `id`/`type`/`subscription`/`metadata.user_id`). Décision RGPD à prendre en équipe. |
+| M2 security — élargir `scrubEvent` PII_KEYS (name, ip, birth, siret) | medium | medium | Risque faux positifs masquant des données debug utiles (`username`, `componentName`, etc.). Débat RGPD à mener. |
+| M3 security — CSP `worker-src 'self' blob;` | medium | low | À vérifier si `@sentry/browser` v10 utilise un Web Worker. Sinon overkill. |
+| M4 security — CSP `script-src https://js.stripe.com` | medium | low | Non bloquant tant que `loadStripe(...)` n'est pas appelé côté front (le checkout passe par l'Edge Function `create-checkout-session` qui retourne une URL Stripe Checkout, puis redirect — pas d'iframe Stripe Elements pour l'instant). Devient critique le jour où on ajoute Stripe Elements. |
+| L1 architecture — placement `web/load/` vs `scripts/load/` | low | medium | Convention plus propre mais rename de chemin = casser tous les liens `docs/*` qui pointent dessus. Différer. |
+| L1/L2 robustness — simplification des casts `as unknown as` | low | low | Refactor seam-injectable plus propre mais hors scope janitor strict. |
+| L5 robustness — k6 cleanup `WRITE=1` non implémenté | low | low | Pas de scénario `WRITE=1` activé pour l'instant. À ajouter quand on testera l'écriture. |
+
+#### Tests
+
+- **812 tests verts** (123 fichiers, durée ~58 s). +2 vs étape 19 (810).
+- 4 checks locaux verts (typecheck, lint, vitest, build).
+- Build : entry 47.09 kB / gzip 13.28 kB (+0.01 kB du fait du `try/catch`
+  ajouté côté Edge Function — n'impacte pas le bundle front).
+- Pas de changement design system `T.*`.
+- Pas de migration DB.
+- Pas de breaking change utilisateur.
+
+#### Décisions
+
+- **Critical findings non corrigés** : C1 + C2 nécessitent une
+  migration DB explicite (`UNIQUE` constraint sur
+  `t99cp_ledger.source_event_id` OU job de réconciliation). Listés
+  comme priorité 1 pour l'étape 20 dans `HANDOFF-PROGRESS.md` —
+  l'équipe devra trancher avant le premier vrai paiement Stripe en
+  production.
+- **Sécurité CSP** : `script-src https://js.stripe.com` et
+  `worker-src 'self' blob;` reportés. Le runbook PROD recommande
+  un `curl -I` post-déploiement pour vérifier que les headers
+  s'appliquent — s'il y a une page qui casse à cause de la CSP,
+  l'erreur sera dans la console JS et trivialement détectable.
+- **Pas de PR janitor sur le critical C1/C2** car `CLAUDE.md § Audit
+  vibe janitor` est explicite : « Pas de migration DB en mode
+  janitor ». Le bouchon de sécurité actuel (`stripe_events.id`
+  PK + check anti-doublon dans le webhook) est suffisant **tant
+  qu'on ne supprime pas manuellement de ligne `stripe_events`**.
+  Une note explicite à ce sujet doit être ajoutée à la doc admin
+  avant le passage en prod live.
+
 ---
 
 ## Prompt pour la session N+14 (étape 20)
