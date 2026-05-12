@@ -197,10 +197,20 @@ export async function fetchMonthlySignups(
   if (error) {
     return { data: null, error };
   }
-  const buckets: MonthlySignupBucket[] = (data ?? []).map((row) => ({
-    monthIso: row.month_iso,
-    count: row.count,
-  }));
+  // Validation défensive : `data` est typé `{ month_iso: string; count:
+  // number }[]` côté `Database.Functions`, mais PostgREST peut renvoyer
+  // `null` si la RPC échoue silencieusement, et si Postgres décide un
+  // jour de sérialiser `count(*)` en `bigint` (string), `Number(...)`
+  // ramène à un number ou `NaN`. On filtre les rows malformées plutôt
+  // que de propager des `monthIso: undefined` ou `count: NaN` au chart.
+  const buckets: MonthlySignupBucket[] = [];
+  for (const row of data ?? []) {
+    if (!row || typeof row.month_iso !== 'string') continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(row.month_iso)) continue;
+    const count = Number(row.count);
+    if (!Number.isFinite(count) || count < 0) continue;
+    buckets.push({ monthIso: row.month_iso, count });
+  }
   return { data: buckets, error: null };
 }
 

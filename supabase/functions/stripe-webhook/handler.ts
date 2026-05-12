@@ -13,12 +13,8 @@
 // pour rester couvert par les tests vitest.
 // =====================================================================================
 
-export {
-  handle,
-  type AdhesionStatusUpdate,
-  type AdhesionUpsert,
-  type CreditInput,
-  type StripeEvent,
-  type StripeEventObject,
-  type StripeWebhookDeps,
-} from '../../../web/src/lib/stripeWebhookHandler.ts';
+// IMPORTANT — Ne pas retirer le suffixe `.ts` : Deno l'exige pour les
+// imports relatifs (le bundler `supabase functions deploy` utilise Deno).
+// `export *` plutôt que re-export multi-clauses : zéro dette de synchro
+// si un nouveau symbole est ajouté à `stripeWebhookHandler.ts`.
+export * from '../../../web/src/lib/stripeWebhookHandler.ts';

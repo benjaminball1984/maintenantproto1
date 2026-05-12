@@ -1994,8 +1994,11 @@ grant execute on function public.debit_t99cp(uuid, integer, text)         to ser
 -- Dette H1-rob (étape 21+22) : `fetchMonthlySignups` côté client lisait
 -- toutes les lignes `users.created_at` des 12 derniers mois pour les
 -- agréger en JS. Tant que `users` reste < ~1000 lignes c'est ok, mais
--- PostgREST a un `max_rows = 1000` (cf. supabase/config.toml §[api]) qui
--- tronque silencieusement au-delà → agrégation biaisée.
+-- PostgREST plafonne le **transfert HTTP** à `max_rows = 1000` (cf.
+-- supabase/config.toml §[api]) → au-delà, l'API tronque silencieusement
+-- la projection envoyée au client et l'agrégation devient biaisée. Le
+-- scan DB lui-même n'est pas limité ; c'est uniquement la sérialisation
+-- des rows vers le client qui pose problème.
 --
 -- Cette RPC déplace l'agrégation côté DB. Elle est SECURITY DEFINER
 -- pour s'affranchir des contraintes RLS futures sur `users` (par ex. si

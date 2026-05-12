@@ -6225,6 +6225,159 @@ Procédure d'application en staging avant l'étape 24
 
 ---
 
+### Audit vibe janitor étape 23
+
+**Branche** : `claude/janitor-post-step23`.
+
+Audit en parallèle via 3 subagents `general-purpose` (architecture /
+élégance, robustesse / edge cases, sécurité / cohérence handoff) sur
+le scope PR #23 / commit `26ba751`. Synthèse + application des fixes
+safe-first uniquement, conformément à `CLAUDE.md § Audit récurrent
+vibe janitor`.
+
+#### Trouvaille hors-périmètre janitor — CI Playwright cassée depuis l'étape 22
+
+Pendant l'audit, l'utilisateur a notifié l'échec récurrent du job
+`Playwright E2E + axe-core a11y` sur les PR #21, #22 et #23 (le job
+n'a jamais été investigué auparavant, le check n'étant pas dans la
+liste des 4 checks bloquants définis par CLAUDE.md). L'examen du
+rapport Playwright (téléchargé via l'artifact `playwright-report`
+de la PR #23) a isolé **un seul test en échec** sur 29 : `transparence.spec.ts
+>> Page /transparence — compteurs et graphique non-nuls >> affiche
+les compteurs publics avec des valeurs non-nulles`. Les 28 autres
+tests E2E sont verts.
+
+**Root cause** (analyse trace `0-trace.network`) : la réponse
+fournie par Playwright `route.fulfill` côté `mockSupabase.ts`
+contient bien `content-range: 0-0/42`, mais il manque
+`access-control-expose-headers: content-range`. La page tourne sur
+`http://127.0.0.1:4173` (vite preview) tandis que l'API mockée est
+sur `http://127.0.0.1:54321` (Supabase URL) → CORS cross-origin
+strict : le browser refuse à JavaScript l'accès à tout header de
+réponse non-safelisté qui n'est pas explicitement exposé via
+`Access-Control-Expose-Headers`. Le header `content-range` n'est PAS
+dans la safelist HTTP. Conséquence : `res.headers.get("content-range")`
+côté postgrest-js retourne `null` (alors que le header est techniquement
+présent dans la réponse réseau), le count n'est jamais parsé, tous
+les compteurs tombent à 0 → l'assertion `getByText('42', exact: true)`
+ne trouve rien.
+
+Bug **pré-existant** depuis l'étape 22 (introduction du test
+« compteurs non-nuls »). N'a jamais été détecté car (a) le check
+Playwright n'est pas dans les 4 checks locaux/CI bloquants, et
+(b) les autres tests E2E qui passent ne valident jamais l'exactitude
+des valeurs de count (juste la visibilité de la `list`).
+
+**Fix safe-first appliqué** (cf. **R0-cors** ci-dessous) : ajouter
+`'access-control-expose-headers': 'content-range'` aux deux branches
+`route.fulfill` (override et catch-all par défaut) dans
+`web/e2e/utils/mockSupabase.ts`. Diff additif, E2E-only, hors bundle
+prod. Risque régression : **low**. Bénéfice : passe de **1 test
+Playwright en échec à 0** (à valider sur CI step 24).
+
+#### Findings totaux
+
+| Catégorie | Critical | High | Medium | Low |
+| --- | --- | --- | --- | --- |
+| Architecture (12) | 0 | 0 | 4 | 8 |
+| Robustesse (15) | 0 | 1 | 5 | 9 |
+| Sécurité / cohérence (14) | 0 | 0 | 2 | 12 |
+| **Total** | **0** | **1** | **11** | **29** |
+
+Le seul `high` est **R1/S5** : risque de bundling cross-package
+Deno pour le re-export `supabase/functions/stripe-webhook/handler.ts`
+→ `../../../web/src/lib/stripeWebhookHandler.ts`. Fix safe non-trivial
+(soit smoke CI `supabase functions deploy --dry-run`, soit
+duplication du handler). **Reporté en dette H4-deploy** (cf. tableau
+ci-dessous).
+
+#### Fixes appliqués (7)
+
+| Finding | Sévérité | Risque régression | Fichier |
+| --- | --- | --- | --- |
+| **R0-cors** robustesse — CI Playwright cassée par CORS expose-headers manquant | high | low | `web/e2e/utils/mockSupabase.ts:127-130, 142-145` |
+| **A2** architecture — `export *` au lieu du re-export multi-clauses (zéro dette de synchro pour nouveaux symboles) | low | low | `supabase/functions/stripe-webhook/handler.ts:17` |
+| **A3 + R3** architecture/robustesse — guard runtime sur `row.month_iso` (regex strict YYYY-MM-DD) + `Number(row.count)` défensif dans `fetchMonthlySignups` | medium | low | `web/src/lib/transparency.ts:194-210` |
+| **R2** robustesse — `Number(row.count)` cast (anticipe une future sérialisation `bigint` PostgREST en string) | medium | low | inclus dans A3+R3 |
+| **A5** architecture — clarif commentaire SQL : distinguer le scan DB (non limité) vs le transfert HTTP (tronqué à `max_rows = 1000`) | medium | low | `db/schema.sql:1995-2000` |
+| **S7** sécurité/cohérence — PROD-RUNBOOK §1.2 : ajouter un sanity check 2 côté anon (curl PostgREST) car psql en superuser bypasse les grants | low | low | `docs/PROD-RUNBOOK.md:82-92` |
+
+#### Fixes déférés (dette technique)
+
+| Finding | Sévérité | Risque régression | Pourquoi déféré |
+| --- | --- | --- | --- |
+| **R1/S5 — Risque bundling cross-package Deno** (H4-deploy) | high | medium | Fix safe demande soit un smoke CI `supabase functions deploy --dry-run`, soit duplication handler. Hors scope janitor safe-first. Reporté en dette **H4-deploy** (nouveau). |
+| **S1+S2 sécurité — `set search_path` SECURITY DEFINER ne couvre pas `pg_catalog, pg_temp`** | medium | low | Migration DB (additive `alter function ... set search_path = ...`), [STOP-PR]. Reporté pour groupage avec une future étape RLS hardening (cf. dette H3-sec). |
+| **A4 architecture — `buildMonthsRange` exporté sans appelant runtime** | low | medium | Utilisé par `MonthlySignupsChart.test.tsx` comme helper test. Le supprimer casse 4 tests pour zéro bénéfice runtime. JSDoc déjà clair. Garder. |
+| **A6 architecture — renommer column `count` en `signup_count`** | low | low | [STOP-PR] migration DB + alignement type TS + tests E2E. Hors scope. |
+| **A8 architecture — mock RPC orphelin sans warn** | medium | low | Ajouter `console.warn` côté Playwright peut polluer le rapport en CI. À discuter en passe E2E dédiée. |
+| **A9 robustesse — regex NNBSP `petition-signature.spec.ts`** | low | medium | La regex actuelle accepte aussi espaces simples. Durcir à `[  \s]?` risque de casser sur ICU différent en CI. Reporter à passe de durcissement E2E. |
+| **R5 robustesse — `timezone()` côté date_trunc** | low | low | [STOP-PR] migration DB. Risque non bloquant (Supabase par défaut UTC). |
+| **R9 robustesse — `getByText(/^42$/)` strict-mode-violation potentielle** | medium | medium | Refacto vers `data-testid` touche `PetitionDetailPage.tsx` (composant rendu). Hors scope janitor safe-first. À traiter en passe E2E dédiée. |
+| **R11 robustesse — `buildMonthsRange` non-runtime** | low | medium | Voir A4. |
+| **R13 robustesse — `MonthlySignupsChart` div/0 latent** | low | low | Hors périmètre diff PR #23 (composant inchangé étape 23). |
+| **S3 sécurité — grant `service_role` sur `users_signups_monthly` non justifié** | low | low | Cohérence avec § 20 (autres RPC) + défense en profondeur. Garder pour symétrie. |
+| **S4 sécurité — `extra_search_path` ne couvre pas `extensions`** | low | medium | Pas d'usage actuel d'extensions PG dans la RPC. À surveiller. |
+
+#### Dette technique consolidée — mise à jour
+
+| ID | Sévérité | Risque rég. | Description courte | Étape cible |
+| --- | --- | --- | --- | --- |
+| H3-sec | high | high | `users.email` exposé via `users_select_public for select using (true)` | étape RLS hardening dédiée |
+| **H4-deploy (nouveau)** | high | medium | Re-export cross-package `supabase/functions/stripe-webhook/handler.ts` → `web/src/lib/` : bundler `supabase functions deploy` n'est pas validé en CI ; risque de déployer une version stale du handler | étape 24+ (smoke deploy CI ou duplication) |
+| ~~H2-rob~~ | ~~high~~ | ~~medium~~ | ~~grant `service_role` sur `credit_t99cp(uuid,integer,text,text)`~~ | **clôturée étape 22** |
+| ~~H2-arch~~ | ~~high~~ | ~~medium~~ | ~~`stripeWebhook.test.ts` cross-package import~~ | **clôturée étape 23** |
+| ~~H1-rob~~ | ~~high~~ | ~~medium~~ | ~~`fetchMonthlySignups` sans `range()/limit()` → biais > 1000 lignes~~ | **clôturée étape 23** |
+| **S1+S2-sec (nouveau)** | medium | low | `users_signups_monthly` SECURITY DEFINER avec `set search_path = public` seul (vs `pg_catalog, public, pg_temp` recommandé) | étape RLS hardening dédiée |
+| M2-sec | medium | high | `signatures_select_public` permet enum signataires (RGPD Art. 9) | étape RLS hardening |
+| M5-rob | medium | low | `count: 'exact'` sur `signatures` au-delà ~100k lignes | étape stats matérialisées (suivre H1-rob) |
+| M3-rob | medium | medium | `processed_at` non marqué sur validation 4xx (event silencieusement abandonné) | étape 24 (migration DB) |
+| M1-RGPD | medium | medium | purge auto `stripe_events.payload` (TTL 90j ou scrub avant insert) | décision RGPD + migration |
+| **R9-e2e (nouveau)** | medium | medium | `getByText(/^42$/)` fragile dans `petition-signature.spec.ts` → strict-mode-violation potentielle | passe E2E dédiée |
+| L1-a11y | medium | high | color-contrast `--mn-text-3` (~195 usages) | étape design dédiée |
+| L3-arch | low | low | extraire hook `useFetchOnMount` | nice-to-have |
+| L4-sec | low | low | CSP `script-src https://js.stripe.com` | quand Stripe Elements activé |
+| L5-arch | low | medium | inline `CSSProperties` dupliqués | étape design dédiée |
+| L1-rob | low | low | tests `vi.fn<typeof ...>` pattern inconsistant | passe test hygiene |
+
+#### Tests
+
+- **860 tests vitest verts** (127 fichiers, durée ~60 s). Compte
+  **inchangé** vs étape 23 — les guards défensifs A3+R3 ne changent
+  pas le comportement pour les rows valides (couverts par les 6
+  tests RPC existants) et le code mort filtré ne nécessite pas de
+  test supplémentaire (filtres pure-fonction).
+- 4 checks locaux verts (typecheck, lint, vitest, build).
+- Build : entry `47.34 kB / gzip 13.32 kB` (inchangé), chunk
+  `TransparencePage` 7.53 kB / gzip 3.04 kB (inchangé).
+- **R0-cors** : à valider sur le prochain CI step 24 — la suite
+  Playwright devrait maintenant passer à 29/29 verts (vs 28/29
+  historique).
+- Pas de changement design system `T.*`.
+- Pas de migration DB.
+- Pas de breaking change utilisateur.
+- Pas de bump majeur de dépendance.
+
+#### Décisions
+
+- **R0-cors prioritaire** : bien que techniquement hors périmètre
+  janitor (bug pré-existant depuis étape 22, non causé par le diff
+  PR #23), le fix est trivial (2 lignes, additif, E2E-only) et
+  débloque la CI Playwright. Critère « primum non nocere » respecté.
+- **H4-deploy reporté en dette** plutôt que rollback du refacto
+  H2-arch : le rollback réintroduirait la dette qu'on vient de
+  clôturer. La solution propre (smoke CI deploy ou duplication)
+  demande une étape dédiée avec validation utilisateur.
+- **Guards défensifs A3+R3 appliqués** : risque medium signalé mais
+  les tests vitest passent identiquement (les rows valides ne sont
+  pas filtrées). Bénéfice net : robustesse contre futurs changements
+  de sérialisation PostgREST.
+- **Pas de fix design system, pas de migration DB, pas de
+  breaking change, pas de bump majeur** — conditions d'arrêt
+  CLAUDE.md respectées.
+
+---
+
 ## Prompt pour la session N+17 (étape 23)
 
 > Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
