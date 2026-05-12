@@ -153,6 +153,104 @@ généré doit comporter une ligne du type :
 Objectif : ne plus jamais avoir à demander manuellement « peux-tu me
 donner le prompt pour la session suivante ? ».
 
+## Audit récurrent « vibe janitor » de fin d'étape
+
+À partir de la session N+13 (étape 19) incluse, et **jusqu'à la
+50ème session du projet incluse**, chaque session doit, **après le
+merge de sa PR principale** (la PR de livraison de l'étape),
+enchaîner automatiquement une phase **« vibe janitor »** de
+nettoyage / debug / robustification, dans une PR séparée.
+
+Cette règle complète la « Politique de PR » et la « Recopie
+systématique du prompt » ci-dessus. Elle s'arrête après la
+session 50, comme l'autorisation auto-merge.
+
+### Déroulé
+
+1. **Audit en parallèle** via 2 à 3 subagents `general-purpose` :
+   - Architecture / élégance (router, composants, lib, hooks,
+     organisation, dépendances mortes, duplications).
+   - Robustesse / edge cases (gestion erreurs, race conditions,
+     dates/timezones/locales, validation, cleanup `useEffect`,
+     tests fragiles).
+   - Sécurité / cohérence handoff (CSP, fuites secrets, RLS
+     supposée, cohérence `HANDOFF-PROGRESS.md` vs code, dépendances
+     vulnérables).
+
+2. **Synthèse + priorisation** des findings par sévérité
+   (critical / high / medium / low) ET **risque de régression**
+   (low / medium / high).
+
+3. **Application des fixes safe-first UNIQUEMENT** :
+   - **PRIMUM NON NOCERE** : aucun fix qui casse un test existant.
+     Si un test casse après l'application d'un fix, **rollback
+     immédiat** du fix.
+   - **Pas de problème nouveau** : un fix qui résout A mais ouvre
+     un risque B (perf, a11y, type, comportement utilisateur, etc.)
+     est **reporté**, pas appliqué.
+   - **Design system `T.*` intouchable** (cf. § Conventions). Toute
+     violation contraste / typo / token reste **documentée** mais
+     **non corrigée** tant qu'une étape dédiée ne valide pas le
+     durcissement.
+   - **Pas de migration DB** (suppression / rename de table /
+     colonne / RPC) en mode janitor.
+   - **Pas de breaking change visible utilisateur** (route
+     supprimée, format URL changé, schéma localStorage modifié,
+     prix Stripe changé).
+   - **Pas de remplacement de dépendance majeure** (bump major
+     React / Vite / Supabase SDK) — uniquement patchs/minors si
+     vraiment nécessaires.
+   - Les fixes risque-`medium` / `high` sont **documentés** dans
+     la dette technique de `HANDOFF-PROGRESS.md` et **reportés**
+     à la prochaine étape principale (ou à une étape dédiée si
+     trop lourd).
+
+4. **PR janitor séparée** de la PR principale :
+   - Titre : `chore(janitor): post-step N — <résumé court>`.
+   - Body : Summary + Findings (avec sévérité + risque de
+     régression) + Fixes appliqués + Fixes déférés + Test plan.
+   - Même workflow auto-merge que la PR principale (cf. §
+     Politique de PR), 4 checks locaux verts AVANT push.
+
+5. **Documentation** dans `HANDOFF-PROGRESS.md` :
+   - Section `### Audit vibe janitor étape N` après la narrative
+     de l'étape principale, avec : findings totaux par sévérité,
+     fixes appliqués (chacun avec son risque évalué), dette
+     ajoutée, compteur de tests final.
+
+### Récursivité
+
+Cette règle est **récursive** : chaque prompt généré pour la
+session N+X doit inclure cette même instruction d'audit janitor à
+appliquer en fin d'étape, avec clause de propagation pour
+N+X+1.
+
+Concrètement, chaque prompt généré doit comporter une ligne du
+type :
+
+> À la clôture de cette étape, **après le merge de la PR
+> principale**, lancer l'audit vibe janitor (cf. `CLAUDE.md §
+> Audit récurrent « vibe janitor » de fin d'étape`) et merger
+> la PR `chore(janitor): post-step N — …` séparément. Inclure
+> cette même instruction dans le prompt pour la session N+X+1.
+
+### Conditions d'arrêt malgré l'autorisation
+
+L'audit janitor **s'arrête et demande confirmation explicite** si :
+
+- Un fix nécessite une migration DB.
+- Un fix touche au design system `T.*`.
+- Un fix risque de casser un test existant **et** le rollback du
+  fix réintroduit le problème originel (impasse).
+- 3 tentatives consécutives n'ont pas suffi à rendre les 4 checks
+  locaux verts.
+- Une review humaine ou un commentaire GitHub arrive avant le
+  merge janitor.
+- Un fix nécessite un bump majeur de dépendance.
+
+Au-delà de la session 50, revenir au workflow « pas d'audit
+janitor sans demande explicite de l'utilisateur ».
+
 ---
 
 **Bonne migration. Tout est dans `HANDOFF.md`.**

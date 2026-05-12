@@ -4153,7 +4153,11 @@ vitest, build). Build : entry 44.7 kB + chunks lazy.
 >    Note aussi la section « Recopie systématique du prompt de la
 >    session suivante » : à la clôture de cette étape, recopier le
 >    prompt étape 20 à la fois dans `HANDOFF-PROGRESS.md` ET dans la
->    réponse de chat finale.**
+>    réponse de chat finale. Et enfin la section « Audit récurrent
+>    vibe janitor de fin d'étape » : après le merge de la PR
+>    principale de l'étape 19, tu dois enchaîner une PR janitor
+>    séparée `chore(janitor): post-step 19 — …` et inclure cette
+>    même instruction janitor dans le prompt étape 20.**
 > 2. `HANDOFF.md` §9 (Déploiement) + §10 Sprint 6 (Production) +
 >    §11 (Points d'attention) + §13 (Sécurité).
 > 3. `HANDOFF-PROGRESS.md` — journal (étape 18 ✅ — étape 19 à faire).
@@ -4261,8 +4265,10 @@ vitest, build). Build : entry 44.7 kB + chunks lazy.
 >     `CLAUDE.md § Recopie systématique du prompt de la session
 >     suivante`). Inclure dans le prompt étape 20 la même instruction
 >     de recopie pour la session N+14, pour que la chaîne se propage.
+>     **Inclure aussi l'instruction d'audit vibe janitor pour
+>     N+14** (cf. `CLAUDE.md § Audit récurrent vibe janitor`).
 >
-> **CLÔTURE DE L'ÉTAPE — workflow auto-merge** :
+> **PHASE 1 — Clôture de l'étape principale (workflow auto-merge)** :
 >
 > Conformément à `CLAUDE.md` § « Politique de PR », tu as autorisation
 > permanente d'enchaîner les étapes ci-dessous sans confirmation.
@@ -4282,8 +4288,49 @@ vitest, build). Build : entry 44.7 kB + chunks lazy.
 >    rouges → autofix puis re-push.
 > 6. **Merger la PR** via `mcp__github__merge_pull_request` (`merge`
 >    ou `squash`).
-> 7. **Recopier le prompt étape 20 dans la réponse de chat finale**,
->    en plus de l'avoir écrit dans `HANDOFF-PROGRESS.md`.
+>
+> **PHASE 2 — Audit vibe janitor (après le merge de la PR principale)** :
+>
+> Conformément à `CLAUDE.md` § « Audit récurrent vibe janitor de fin
+> d'étape », après le merge de la PR principale et avant de clôturer
+> la session :
+>
+> 1. **Sync** : `git checkout main && git pull --ff-only origin main`,
+>    puis `git checkout -b claude/janitor-post-step19` (ou nom
+>    similaire imposé par l'harness).
+> 2. **Audit en parallèle** via 2 à 3 subagents `general-purpose` :
+>    architecture / élégance, robustesse / edge cases, sécurité /
+>    cohérence handoff. Chaque agent produit un rapport ; ne fait
+>    aucune modification.
+> 3. **Synthétiser** les findings par sévérité + risque de régression.
+> 4. **Appliquer UNIQUEMENT les fixes safe-first** (cf. CLAUDE.md
+>    pour la liste des conditions impératives). Pour rappel — règle
+>    d'or « primum non nocere » :
+>    - **Aucun fix qui casse un test existant** (rollback immédiat
+>      si test casse).
+>    - **Aucun nouveau problème introduit** par le fix (régression
+>      perf, a11y, type, comportement utilisateur).
+>    - **Design system `T.*` intouchable**.
+>    - **Pas de migration DB** en mode janitor.
+>    - **Pas de breaking change utilisateur**.
+>    - Les fixes à risque medium/high sont **reportés** et documentés
+>      en dette technique.
+> 5. **Vérifier les 4 checks locaux verts** avant push.
+> 6. **PR janitor séparée** : titre `chore(janitor): post-step 19 —
+>    <résumé court>`. Body : Summary + Findings (sévérité + risque) +
+>    Fixes appliqués + Fixes déférés + Test plan.
+> 7. **Merger la PR janitor** (même workflow auto-merge).
+> 8. **Documenter** dans `HANDOFF-PROGRESS.md` : section
+>    `### Audit vibe janitor étape 19` avec findings totaux, fixes
+>    appliqués (chacun avec son risque évalué), dette ajoutée,
+>    compteur de tests final.
+>
+> **Phase 3 — Recopie du prompt étape 20** (toujours obligatoire) :
+>
+> 1. **Recopier le prompt étape 20 dans la réponse de chat finale**,
+>    en plus de l'avoir écrit dans `HANDOFF-PROGRESS.md`. Le prompt
+>    étape 20 doit lui-même inclure les Phases 1, 2, 3 récursives
+>    pour la session N+14.
 >
 > **Conditions d'arrêt malgré l'autorisation permanente**
 > (mise en prod = risque accru, contrairement aux étapes précédentes !) :
