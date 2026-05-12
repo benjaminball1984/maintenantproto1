@@ -108,13 +108,16 @@ test.describe('Pétitions — flow consultation + signature stubée', () => {
     await page.goto(`/petitions/${petitionFixture.slug}`);
     const signupCta = page.getByRole('link', { name: /Se connecter pour signer/i });
     await expect(signupCta).toBeVisible({ timeout: 10_000 });
-    // Le href doit contenir `auth=login` et un `next=` encodé pointant
-    // vers la fiche pétition courante (slug encodé URI-safe).
-    const expectedNext = encodeURIComponent(`/petitions/${petitionFixture.slug}`);
-    await expect(signupCta).toHaveAttribute(
-      'href',
-      new RegExp(`auth=login.*next=${expectedNext}`),
-    );
+    // Le href doit ouvrir la modale d'authentification (`auth=login`) et
+    // mémoriser la fiche pétition pour y revenir après login (`next=<pathname>`).
+    // On parse via URL + URLSearchParams plutôt qu'un regex ordonné, pour
+    // rester robuste aux refactos qui changeraient l'ordre des paramètres
+    // ou en ajouteraient (J25-A3 / R2).
+    const href = await signupCta.getAttribute('href');
+    expect(href).not.toBeNull();
+    const parsed = new URL(href ?? '', 'http://localhost');
+    expect(parsed.searchParams.get('auth')).toBe('login');
+    expect(parsed.searchParams.get('next')).toBe(`/petitions/${petitionFixture.slug}`);
     // Le bouton « Signer cette pétition » ne doit PAS être rendu en
     // parallèle (sinon le CTA anonyme serait dupliqué côté UI).
     await expect(
