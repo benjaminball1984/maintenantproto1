@@ -168,6 +168,12 @@ describe('buildMonthsRange', () => {
     const ref = new Date(Date.UTC(2026, 4, 12));
     expect(buildMonthsRange(ref, 0)).toEqual([]);
   });
+
+  it('renvoie [] sur une Date invalide (NaN) plutôt que des NaN-NaN-01', () => {
+    const invalid = new Date('not-a-date');
+    expect(Number.isNaN(invalid.getTime())).toBe(true);
+    expect(buildMonthsRange(invalid, 12)).toEqual([]);
+  });
 });
 
 describe('formatMonthShortFr', () => {
