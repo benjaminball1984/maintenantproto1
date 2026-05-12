@@ -184,4 +184,65 @@ test.describe('Pétitions — flow consultation + signature stubée', () => {
       page.getByRole('link', { name: /Se connecter pour signer/i }),
     ).toHaveCount(0);
   });
+
+  test('affiche « Signer cette pétition » pour un signataire authentifié non encore signé', async ({
+    page,
+  }) => {
+    // Étape 27 — 4e itération du pattern « +1 test mock E2E » : couvre
+    // le complément symétrique de l'état testé étape 26. Ici
+    // `authStatus === 'authenticated' && signed === false` — l'utilisateur
+    // est connecté mais n'a pas encore signé cette pétition. Le bouton
+    // doit afficher « Signer cette pétition » avec `aria-pressed="false"`
+    // (état toggle initial), et le CTA anonyme « Se connecter pour
+    // signer » NE doit PAS être rendu en parallèle.
+    //
+    // Seed de session identique à l'étape 26 (cf. commentaire 124-148) —
+    // même formule storage key `sb-127-auth-token` côté CI/E2E, même
+    // pattern `addInitScript`. Seul le `user_id` change (pour rester
+    // distinct du test précédent et faciliter le debug en cas de fuite
+    // cross-test improbable).
+    const stubUserId = 'stub-unsigned-user-id';
+    const stubSession = {
+      access_token: 'stub-access-token',
+      token_type: 'bearer',
+      expires_in: 86_400,
+      expires_at: Math.floor(Date.now() / 1000) + 86_400,
+      refresh_token: 'stub-refresh-token',
+      user: {
+        id: stubUserId,
+        aud: 'authenticated',
+        email: 'curieux@example.org',
+        user_metadata: { display_name: 'Curieux Stub' },
+        app_metadata: { provider: 'email' },
+      },
+    };
+    await page.addInitScript((session) => {
+      window.localStorage.setItem('sb-127-auth-token', JSON.stringify(session));
+    }, stubSession);
+
+    // Mock du hit `hasUserSigned(petition.id, user.id)` : renvoie un body
+    // vide → `Boolean(data) === false` → `signed = false` côté usePetition
+    // (cf. `web/src/lib/petitions.ts:268`). `.maybeSingle()` accepte un
+    // array vide comme « zero row » sans throw.
+    await page.route('**/rest/v1/signatures**', async (route: Route) => {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      });
+    });
+
+    await page.goto(`/petitions/${petitionFixture.slug}`);
+    const signButton = page.getByRole('button', { name: /Signer cette pétition/i });
+    await expect(signButton).toBeVisible({ timeout: 10_000 });
+    // aria-pressed="false" reflète l'état toggle initial (non signé).
+    // React rend les booléens ARIA en string "true"/"false" dans le DOM
+    // (contrairement aux attributs HTML booléens classiques type `disabled`).
+    await expect(signButton).toHaveAttribute('aria-pressed', 'false');
+    // Le CTA anonyme « Se connecter pour signer » NE doit PAS être rendu
+    // en parallèle.
+    await expect(
+      page.getByRole('link', { name: /Se connecter pour signer/i }),
+    ).toHaveCount(0);
+  });
 });
