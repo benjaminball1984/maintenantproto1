@@ -124,4 +124,76 @@ test.describe('Pétitions — flow consultation + signature stubée', () => {
       page.getByRole('button', { name: /Signer cette pétition/i }),
     ).toHaveCount(0);
   });
+
+  test('affiche « Signée — retirer ma signature » pour un signataire authentifié', async ({
+    page,
+  }) => {
+    // Étape 26 — 3e itération du pattern « +1 test mock E2E » : couvre
+    // l'état `authStatus === 'authenticated' && signed === true` de
+    // PetitionDetailPage, jusqu'ici testé uniquement en unit (vitest).
+    // Le bouton doit afficher « Signée — retirer ma signature » avec
+    // `aria-pressed="true"` (toggle accessibilité), et le CTA anonyme
+    // « Se connecter pour signer » NE doit PAS être rendu en parallèle.
+    //
+    // Seed de la session authentifiée :
+    // supabase-js v2 dérive `storageKey = sb-${hostname.split('.')[0]}-auth-token`
+    // de `VITE_SUPABASE_URL`. En CI/E2E l'URL est `http://127.0.0.1:54321`
+    // (cf. `.github/workflows/ci.yml`), donc la clé localStorage est
+    // `sb-127-auth-token`. On pré-remplit la session via `addInitScript`
+    // AVANT le `goto` : au boot, `useAuth` appelle `getSession()` qui
+    // lit la session depuis localStorage → `setSession(...)` → `status`
+    // passe directement à `'authenticated'` sans hit réseau /auth/v1/token.
+    //
+    // Pas de signal d'expiration : `expires_at` est calé à ~24h dans
+    // le futur, large marge vs la durée d'un run E2E (<30s).
+    const stubUserId = 'stub-signed-user-id';
+    const stubSession = {
+      access_token: 'stub-access-token',
+      token_type: 'bearer',
+      expires_in: 86_400,
+      expires_at: Math.floor(Date.now() / 1000) + 86_400,
+      refresh_token: 'stub-refresh-token',
+      user: {
+        id: stubUserId,
+        aud: 'authenticated',
+        email: 'signataire@example.org',
+        user_metadata: { display_name: 'Signataire Stub' },
+        app_metadata: { provider: 'email' },
+      },
+    };
+    await page.addInitScript((session) => {
+      window.localStorage.setItem('sb-127-auth-token', JSON.stringify(session));
+    }, stubSession);
+
+    // Mock du hit `hasUserSigned(petition.id, user.id)` : renvoie une
+    // ligne `signatures` non vide → `signed = true` côté usePetition.
+    // Le client supabase-js sur `.maybeSingle()` accepte indifféremment
+    // un body `[{...}]` ou `{...}` (singular row mode). On reste sur
+    // un array pour cohérence avec les autres mocks REST de la suite.
+    await page.route('**/rest/v1/signatures**', async (route: Route) => {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'sig-stub-1',
+            petition_id: petitionFixture.id,
+            user_id: stubUserId,
+            created_at: new Date().toISOString(),
+          },
+        ]),
+      });
+    });
+
+    await page.goto(`/petitions/${petitionFixture.slug}`);
+    const signedButton = page.getByRole('button', { name: /Signée — retirer ma signature/i });
+    await expect(signedButton).toBeVisible({ timeout: 10_000 });
+    // aria-pressed="true" reflète l'état toggle pour les screen readers.
+    await expect(signedButton).toHaveAttribute('aria-pressed', 'true');
+    // Le CTA anonyme « Se connecter pour signer » NE doit PAS être rendu
+    // en parallèle (sinon l'UI est ambiguë : qui signe ?).
+    await expect(
+      page.getByRole('link', { name: /Se connecter pour signer/i }),
+    ).toHaveCount(0);
+  });
 });
