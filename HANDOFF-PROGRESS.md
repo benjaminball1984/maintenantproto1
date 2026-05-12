@@ -4429,6 +4429,40 @@ uniquement, conformément à `CLAUDE.md § Audit récurrent vibe janitor`.
   Une note explicite à ce sujet doit être ajoutée à la doc admin
   avant le passage en prod live.
 
+### État du provisionnement externe (à jour 2026-05-12)
+
+Une **session manuelle** avec l'équipe humaine a démarré le
+provisionnement réel des comptes externes décrits dans
+`docs/PROD-RUNBOOK.md`. État au 2026-05-12 :
+
+| Service | Statut | Détails |
+| --- | --- | --- |
+| **Supabase** | ✅ **staging provisionné** | Projet `maintenant-staging` créé en `eu-west-3` (Paris), plan **Free** (à upgrader Pro avant le vrai go-live pour PITR). URL : `https://fdphrsqrsumkpzbxnjdj.supabase.co`. Schéma `db/schema.sql` appliqué (38 tables, 123 policies RLS, 5 RPCs dont `credit_t99cp` / `debit_t99cp` en SECURITY DEFINER). Bucket Storage `avatars` actif + 4 policies. Auth configurée : Site URL `http://localhost:5173`, Redirect URLs whitelist incluant `localhost:5173/**`, `127.0.0.1:5173/**`, `localhost:5173/auth/callback`. |
+| **Supabase — clé API** | ⚠️ **legacy JWT en local** | Les nouvelles clés `sb_publishable_*` (introduites en 2025) ont un système de **« Domain Allowlist »** qui rejette les origines non listées. Pour staging on utilise la clé `anon` legacy (format `eyJ...`, role `anon`, exp 2036) qui n'a pas cette restriction. Stockée dans `web/.env.local` côté machine équipe humaine (gitignored, jamais commitée). À l'étape Vercel : reporter cette clé dans les env vars Vercel, ou migrer vers `sb_publishable_*` + ajouter `localhost`, `*.vercel.app`, `maintenant.org` à l'allowlist. |
+| **Supabase — smoke test local** | ⏸️ **différé** | Le sandbox Claude ne peut pas appeler `*.supabase.co` (filtre edge anti-bot Cloudflare bloque les IPs datacenter). La validation réelle se fera depuis le déploiement Vercel preview (vrai navigateur, vrai User-Agent). |
+| **Vercel** | 🔲 à faire | Liaison repo, env vars (URL + anon key + Stripe publishable + Sentry DSN + support user/email), vérification CSP via `curl -I`, domaine custom. |
+| **Stripe** | 🔲 à faire | Compte live, 3 produits (gratuit / soutien 2€ / engagé 5€), webhook vers `https://fdphrsqrsumkpzbxnjdj.supabase.co/functions/v1/stripe-webhook` avec `STRIPE_WEBHOOK_SECRET`. |
+| **Edge Functions Supabase** | 🔲 à faire | Déployer `create-checkout-session` et `stripe-webhook` via `npx supabase functions deploy --no-verify-jwt`. Renseigner les env vars `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET`. |
+| **Sentry** | 🔲 à faire | Créer projet `maintenant-web` (Browser JavaScript / React), récupérer DSN, ajouter à env Vercel. |
+| **Point-in-Time Recovery** | 🔲 à faire | Indispensable avant upgrade Pro. Sur Free actuel : seulement 7 daily backups Supabase. |
+
+**Notes pour l'équipe humaine** :
+
+- Le mot de passe DB du projet `maintenant-staging` a été généré
+  côté Supabase à la création et doit être stocké en gestionnaire de
+  mots de passe (1Password / Bitwarden). Il sert à `psql` / `pg_dump`
+  / les Edge Functions (variable `SUPABASE_SERVICE_ROLE_KEY` est
+  distincte et récupérable depuis le dashboard).
+- La clé `service_role` (secret backend) n'a **pas** été partagée
+  dans cette session. À récupérer pour configurer les Edge
+  Functions au moment du déploiement Stripe.
+- Le projet Free se **met en pause après 7 jours d'inactivité** —
+  pas un problème tant qu'on développe régulièrement. Réveil
+  automatique au premier appel (~30 s de latence).
+- Plan d'upgrade Pro recommandé : **à l'annonce publique du go-live**.
+  Toggle en un clic, sans interruption ni migration de données.
+  Coût ~25 USD/mois.
+
 ---
 
 ## Prompt pour la session N+14 (étape 20)
@@ -4459,22 +4493,34 @@ uniquement, conformément à `CLAUDE.md § Audit récurrent vibe janitor`.
 > 5. `docs/MODERATION.md` — procédure modération.
 > 6. `docs/USER-GUIDE.md` — FAQ utilisateur·rice.
 >
-> **État actuel à la fin de l'étape 19** :
+> **État actuel à la fin de l'étape 19 + janitor + provisionnement
+> Supabase staging** :
 >
 > - Webhook Stripe idempotent via `public.stripe_events` (PK = event.id).
 > - Sentry SDK installé en chunk lazy (~143 kB gzip), DSN-gated.
 > - Scripts k6 dans `web/load/` (smoke + ramp 0→50 VUs).
 > - 3 docs Markdown : USER-GUIDE, MODERATION, PROD-RUNBOOK.
-> - **810 tests verts** (123 fichiers).
-> - Build entry 47.09 kB / gzip 13.27 kB + chunks lazy.
+> - **812 tests verts** (123 fichiers, +2 dans le janitor post-step19).
+> - Build entry 47.09 kB / gzip 13.28 kB + chunks lazy.
 > - Pas de migration DB structurelle depuis l'étape 16 ; ajout additif
 >   de `stripe_events` à l'étape 19.
 > - Dette : `color-contrast` toujours désactivé (token
 >   `--mn-text-3` 195 usages, besoin validation designer avant
 >   modification).
-> - **Provisionnement externe non exécuté** par Claude (pas d'accès
->   aux comptes Supabase / Vercel / Stripe / Sentry). Listé dans
->   `docs/PROD-RUNBOOK.md` pour exécution équipe humaine.
+> - **Provisionnement externe — état mixte** (cf. section « État du
+>   provisionnement externe (à jour 2026-05-12) » dans
+>   `HANDOFF-PROGRESS.md` juste avant ce prompt) :
+>   - ✅ **Supabase staging provisionné** (projet
+>     `maintenant-staging` en eu-west-3, plan Free, schéma
+>     `db/schema.sql` appliqué, RLS active sur 38 tables, 123
+>     policies, 5 RPCs, bucket avatars OK, Auth configurée
+>     localhost). URL :
+>     `https://fdphrsqrsumkpzbxnjdj.supabase.co`. Clé `anon`
+>     legacy JWT stockée dans `web/.env.local` côté équipe humaine
+>     (gitignored).
+>   - 🔲 **Vercel / Stripe live / Edge Functions / Sentry SaaS /
+>     PITR** restent à provisionner par l'équipe humaine (cf.
+>     `docs/PROD-RUNBOOK.md` §2 à §4).
 >
 > **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
 >
