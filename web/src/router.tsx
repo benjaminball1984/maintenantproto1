@@ -1,281 +1,307 @@
+import { lazy, Suspense, type ReactNode } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
+
 import RequireAdmin from './components/RequireAdmin';
 import RequireAuth from './components/RequireAuth';
 import RootLayout from './layouts/RootLayout';
-import HomePage from './pages/HomePage';
-import PetitionsPage from './pages/PetitionsPage';
-import PetitionDetailPage from './pages/PetitionDetailPage';
-import PetitionCreatePage from './pages/PetitionCreatePage';
-import MobilizationsPage from './pages/MobilizationsPage';
-import MobilizationDetailPage from './pages/MobilizationDetailPage';
-import MobilizationCreatePage from './pages/MobilizationCreatePage';
-import CampaignsPage from './pages/CampaignsPage';
-import CampaignDetailPage from './pages/CampaignDetailPage';
-import CampaignCreatePage from './pages/CampaignCreatePage';
-import ServicesHubPage from './pages/services/ServicesHubPage';
-import HousingPage from './pages/services/HousingPage';
-import HousingDetailPage from './pages/services/HousingDetailPage';
-import HousingCreatePage from './pages/services/HousingCreatePage';
-import HousingRequestPage from './pages/services/HousingRequestPage';
-import CarpoolingPage from './pages/services/CarpoolingPage';
-import CarpoolingDetailPage from './pages/services/CarpoolingDetailPage';
-import CarpoolingCreatePage from './pages/services/CarpoolingCreatePage';
-import MarketplacePage from './pages/services/MarketplacePage';
-import MarketplaceDetailPage from './pages/services/MarketplaceDetailPage';
-import MarketplaceCreatePage from './pages/services/MarketplaceCreatePage';
-import LendingPage from './pages/services/LendingPage';
-import LendingDetailPage from './pages/services/LendingDetailPage';
-import LendingCreatePage from './pages/services/LendingCreatePage';
-import GardenPage from './pages/services/GardenPage';
-import GardenDetailPage from './pages/services/GardenDetailPage';
-import GardenCreatePage from './pages/services/GardenCreatePage';
-import SelPage from './pages/services/SelPage';
-import SelDetailPage from './pages/services/SelDetailPage';
-import SelCreatePage from './pages/services/SelCreatePage';
-import CrowdfundingPage from './pages/services/CrowdfundingPage';
-import CrowdfundingDetailPage from './pages/services/CrowdfundingDetailPage';
-import CrowdfundingCreatePage from './pages/services/CrowdfundingCreatePage';
-import CrowdfundingContributePage from './pages/services/CrowdfundingContributePage';
-import MediaPage from './pages/MediaPage';
-import ArticleDetailPage from './pages/ArticleDetailPage';
-import ArticleCreatePage from './pages/ArticleCreatePage';
-import ReseauPage from './pages/ReseauPage';
-import PollsPage from './pages/PollsPage';
-import PollDetailPage from './pages/PollDetailPage';
-import PollCreatePage from './pages/PollCreatePage';
-import MessagingPage from './pages/MessagingPage';
-import MessagingConversationPage from './pages/MessagingConversationPage';
-import NotificationsPage from './pages/NotificationsPage';
-import AdminPage from './pages/AdminPage';
-import JoinPage from './pages/JoinPage';
-import CommunesPage from './pages/CommunesPage';
-import CommuneDetailPage from './pages/CommuneDetailPage';
-import CommuneCreatePage from './pages/CommuneCreatePage';
-import ContactPage from './pages/ContactPage';
-import ProfilePage from './pages/ProfilePage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
-import AuthCallbackPage from './pages/AuthCallbackPage';
-import PrivacyPage from './pages/PrivacyPage';
-import LegalNoticePage from './pages/LegalNoticePage';
-import CookiesPage from './pages/CookiesPage';
-import NotFoundPage from './pages/NotFoundPage';
+
+const HomePage = lazy(() => import('./pages/HomePage'));
+const PetitionsPage = lazy(() => import('./pages/PetitionsPage'));
+const PetitionDetailPage = lazy(() => import('./pages/PetitionDetailPage'));
+const PetitionCreatePage = lazy(() => import('./pages/PetitionCreatePage'));
+const MobilizationsPage = lazy(() => import('./pages/MobilizationsPage'));
+const MobilizationDetailPage = lazy(() => import('./pages/MobilizationDetailPage'));
+const MobilizationCreatePage = lazy(() => import('./pages/MobilizationCreatePage'));
+const CampaignsPage = lazy(() => import('./pages/CampaignsPage'));
+const CampaignDetailPage = lazy(() => import('./pages/CampaignDetailPage'));
+const CampaignCreatePage = lazy(() => import('./pages/CampaignCreatePage'));
+const ServicesHubPage = lazy(() => import('./pages/services/ServicesHubPage'));
+const HousingPage = lazy(() => import('./pages/services/HousingPage'));
+const HousingDetailPage = lazy(() => import('./pages/services/HousingDetailPage'));
+const HousingCreatePage = lazy(() => import('./pages/services/HousingCreatePage'));
+const HousingRequestPage = lazy(() => import('./pages/services/HousingRequestPage'));
+const CarpoolingPage = lazy(() => import('./pages/services/CarpoolingPage'));
+const CarpoolingDetailPage = lazy(() => import('./pages/services/CarpoolingDetailPage'));
+const CarpoolingCreatePage = lazy(() => import('./pages/services/CarpoolingCreatePage'));
+const MarketplacePage = lazy(() => import('./pages/services/MarketplacePage'));
+const MarketplaceDetailPage = lazy(() => import('./pages/services/MarketplaceDetailPage'));
+const MarketplaceCreatePage = lazy(() => import('./pages/services/MarketplaceCreatePage'));
+const LendingPage = lazy(() => import('./pages/services/LendingPage'));
+const LendingDetailPage = lazy(() => import('./pages/services/LendingDetailPage'));
+const LendingCreatePage = lazy(() => import('./pages/services/LendingCreatePage'));
+const GardenPage = lazy(() => import('./pages/services/GardenPage'));
+const GardenDetailPage = lazy(() => import('./pages/services/GardenDetailPage'));
+const GardenCreatePage = lazy(() => import('./pages/services/GardenCreatePage'));
+const SelPage = lazy(() => import('./pages/services/SelPage'));
+const SelDetailPage = lazy(() => import('./pages/services/SelDetailPage'));
+const SelCreatePage = lazy(() => import('./pages/services/SelCreatePage'));
+const CrowdfundingPage = lazy(() => import('./pages/services/CrowdfundingPage'));
+const CrowdfundingDetailPage = lazy(() => import('./pages/services/CrowdfundingDetailPage'));
+const CrowdfundingCreatePage = lazy(() => import('./pages/services/CrowdfundingCreatePage'));
+const CrowdfundingContributePage = lazy(
+  () => import('./pages/services/CrowdfundingContributePage'),
+);
+const MediaPage = lazy(() => import('./pages/MediaPage'));
+const ArticleDetailPage = lazy(() => import('./pages/ArticleDetailPage'));
+const ArticleCreatePage = lazy(() => import('./pages/ArticleCreatePage'));
+const ReseauPage = lazy(() => import('./pages/ReseauPage'));
+const PollsPage = lazy(() => import('./pages/PollsPage'));
+const PollDetailPage = lazy(() => import('./pages/PollDetailPage'));
+const PollCreatePage = lazy(() => import('./pages/PollCreatePage'));
+const MessagingPage = lazy(() => import('./pages/MessagingPage'));
+const MessagingConversationPage = lazy(() => import('./pages/MessagingConversationPage'));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
+const JoinPage = lazy(() => import('./pages/JoinPage'));
+const CommunesPage = lazy(() => import('./pages/CommunesPage'));
+const CommuneDetailPage = lazy(() => import('./pages/CommuneDetailPage'));
+const CommuneCreatePage = lazy(() => import('./pages/CommuneCreatePage'));
+const ContactPage = lazy(() => import('./pages/ContactPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'));
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
+const LegalNoticePage = lazy(() => import('./pages/LegalNoticePage'));
+const CookiesPage = lazy(() => import('./pages/CookiesPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+
+const routeFallback = (
+  <div
+    role="status"
+    aria-live="polite"
+    style={{
+      minHeight: '40vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: 'var(--mn-text-3)',
+      fontSize: 14,
+    }}
+  >
+    Chargement…
+  </div>
+);
+
+function withSuspense(node: ReactNode): ReactNode {
+  return <Suspense fallback={routeFallback}>{node}</Suspense>;
+}
 
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <RootLayout />,
     children: [
-      { index: true, element: <HomePage /> },
-      { path: 'petitions', element: <PetitionsPage /> },
+      { index: true, element: withSuspense(<HomePage />) },
+      { path: 'petitions', element: withSuspense(<PetitionsPage />) },
       {
         path: 'petitions/new',
-        element: (
+        element: withSuspense(
           <RequireAuth>
             <PetitionCreatePage />
-          </RequireAuth>
+          </RequireAuth>,
         ),
       },
-      { path: 'petitions/:slug', element: <PetitionDetailPage /> },
-      { path: 'mobilizations', element: <MobilizationsPage /> },
+      { path: 'petitions/:slug', element: withSuspense(<PetitionDetailPage />) },
+      { path: 'mobilizations', element: withSuspense(<MobilizationsPage />) },
       {
         path: 'mobilizations/new',
-        element: (
+        element: withSuspense(
           <RequireAuth>
             <MobilizationCreatePage />
-          </RequireAuth>
+          </RequireAuth>,
         ),
       },
-      { path: 'mobilizations/:slug', element: <MobilizationDetailPage /> },
-      { path: 'campaigns', element: <CampaignsPage /> },
+      { path: 'mobilizations/:slug', element: withSuspense(<MobilizationDetailPage />) },
+      { path: 'campaigns', element: withSuspense(<CampaignsPage />) },
       {
         path: 'campaigns/new',
-        element: (
+        element: withSuspense(
           <RequireAuth>
             <CampaignCreatePage />
-          </RequireAuth>
+          </RequireAuth>,
         ),
       },
-      { path: 'campaigns/:slug', element: <CampaignDetailPage /> },
+      { path: 'campaigns/:slug', element: withSuspense(<CampaignDetailPage />) },
       {
         path: 'services',
         children: [
-          { index: true, element: <ServicesHubPage /> },
-          { path: 'housing', element: <HousingPage /> },
+          { index: true, element: withSuspense(<ServicesHubPage />) },
+          { path: 'housing', element: withSuspense(<HousingPage />) },
           {
             path: 'housing/new',
-            element: (
+            element: withSuspense(
               <RequireAuth>
                 <HousingCreatePage />
-              </RequireAuth>
+              </RequireAuth>,
             ),
           },
-          { path: 'housing/:id', element: <HousingDetailPage /> },
+          { path: 'housing/:id', element: withSuspense(<HousingDetailPage />) },
           {
             path: 'housing/:id/request',
-            element: (
+            element: withSuspense(
               <RequireAuth>
                 <HousingRequestPage />
-              </RequireAuth>
+              </RequireAuth>,
             ),
           },
-          { path: 'carpooling', element: <CarpoolingPage /> },
+          { path: 'carpooling', element: withSuspense(<CarpoolingPage />) },
           {
             path: 'carpooling/new',
-            element: (
+            element: withSuspense(
               <RequireAuth>
                 <CarpoolingCreatePage />
-              </RequireAuth>
+              </RequireAuth>,
             ),
           },
-          { path: 'carpooling/:id', element: <CarpoolingDetailPage /> },
-          { path: 'marketplace', element: <MarketplacePage /> },
+          { path: 'carpooling/:id', element: withSuspense(<CarpoolingDetailPage />) },
+          { path: 'marketplace', element: withSuspense(<MarketplacePage />) },
           {
             path: 'marketplace/new',
-            element: (
+            element: withSuspense(
               <RequireAuth>
                 <MarketplaceCreatePage />
-              </RequireAuth>
+              </RequireAuth>,
             ),
           },
-          { path: 'marketplace/:id', element: <MarketplaceDetailPage /> },
-          { path: 'lending', element: <LendingPage /> },
+          { path: 'marketplace/:id', element: withSuspense(<MarketplaceDetailPage />) },
+          { path: 'lending', element: withSuspense(<LendingPage />) },
           {
             path: 'lending/new',
-            element: (
+            element: withSuspense(
               <RequireAuth>
                 <LendingCreatePage />
-              </RequireAuth>
+              </RequireAuth>,
             ),
           },
-          { path: 'lending/:id', element: <LendingDetailPage /> },
-          { path: 'garden', element: <GardenPage /> },
+          { path: 'lending/:id', element: withSuspense(<LendingDetailPage />) },
+          { path: 'garden', element: withSuspense(<GardenPage />) },
           {
             path: 'garden/new',
-            element: (
+            element: withSuspense(
               <RequireAuth>
                 <GardenCreatePage />
-              </RequireAuth>
+              </RequireAuth>,
             ),
           },
-          { path: 'garden/:id', element: <GardenDetailPage /> },
-          { path: 'sel', element: <SelPage /> },
+          { path: 'garden/:id', element: withSuspense(<GardenDetailPage />) },
+          { path: 'sel', element: withSuspense(<SelPage />) },
           {
             path: 'sel/new',
-            element: (
+            element: withSuspense(
               <RequireAuth>
                 <SelCreatePage />
-              </RequireAuth>
+              </RequireAuth>,
             ),
           },
-          { path: 'sel/:id', element: <SelDetailPage /> },
-          { path: 'crowdfunding', element: <CrowdfundingPage /> },
+          { path: 'sel/:id', element: withSuspense(<SelDetailPage />) },
+          { path: 'crowdfunding', element: withSuspense(<CrowdfundingPage />) },
           {
             path: 'crowdfunding/new',
-            element: (
+            element: withSuspense(
               <RequireAuth>
                 <CrowdfundingCreatePage />
-              </RequireAuth>
+              </RequireAuth>,
             ),
           },
-          { path: 'crowdfunding/:id', element: <CrowdfundingDetailPage /> },
+          { path: 'crowdfunding/:id', element: withSuspense(<CrowdfundingDetailPage />) },
           {
             path: 'crowdfunding/:id/contribute',
-            element: (
+            element: withSuspense(
               <RequireAuth>
                 <CrowdfundingContributePage />
-              </RequireAuth>
+              </RequireAuth>,
             ),
           },
         ],
       },
-      { path: 'media', element: <MediaPage /> },
+      { path: 'media', element: withSuspense(<MediaPage />) },
       {
         path: 'media/new',
-        element: (
+        element: withSuspense(
           <RequireAuth>
             <ArticleCreatePage />
-          </RequireAuth>
+          </RequireAuth>,
         ),
       },
-      { path: 'media/:slug', element: <ArticleDetailPage /> },
-      { path: 'reseau', element: <ReseauPage /> },
-      { path: 'polls', element: <PollsPage /> },
+      { path: 'media/:slug', element: withSuspense(<ArticleDetailPage />) },
+      { path: 'reseau', element: withSuspense(<ReseauPage />) },
+      { path: 'polls', element: withSuspense(<PollsPage />) },
       {
         path: 'polls/new',
-        element: (
+        element: withSuspense(
           <RequireAuth>
             <PollCreatePage />
-          </RequireAuth>
+          </RequireAuth>,
         ),
       },
-      { path: 'polls/:slug', element: <PollDetailPage /> },
+      { path: 'polls/:slug', element: withSuspense(<PollDetailPage />) },
       {
         path: 'messaging',
-        element: (
+        element: withSuspense(
           <RequireAuth>
             <MessagingPage />
-          </RequireAuth>
+          </RequireAuth>,
         ),
       },
       {
         path: 'messaging/:conversationId',
-        element: (
+        element: withSuspense(
           <RequireAuth>
             <MessagingConversationPage />
-          </RequireAuth>
+          </RequireAuth>,
         ),
       },
       {
         path: 'notifications',
-        element: (
+        element: withSuspense(
           <RequireAuth>
             <NotificationsPage />
-          </RequireAuth>
+          </RequireAuth>,
         ),
       },
       {
         path: 'admin',
-        element: (
+        element: withSuspense(
           <RequireAuth>
             <RequireAdmin>
               <AdminPage />
             </RequireAdmin>
-          </RequireAuth>
+          </RequireAuth>,
         ),
       },
-      { path: 'join', element: <JoinPage /> },
-      { path: 'communes', element: <CommunesPage /> },
+      { path: 'join', element: withSuspense(<JoinPage />) },
+      { path: 'communes', element: withSuspense(<CommunesPage />) },
       {
         path: 'communes/new',
-        element: (
+        element: withSuspense(
           <RequireAuth>
             <RequireAdmin>
               <CommuneCreatePage />
             </RequireAdmin>
-          </RequireAuth>
+          </RequireAuth>,
         ),
       },
-      { path: 'communes/:slug', element: <CommuneDetailPage /> },
+      { path: 'communes/:slug', element: withSuspense(<CommuneDetailPage />) },
       {
         path: 'profile',
-        element: (
+        element: withSuspense(
           <RequireAuth>
             <ProfilePage />
-          </RequireAuth>
+          </RequireAuth>,
         ),
       },
-      { path: 'auth/reset-password', element: <ResetPasswordPage /> },
-      { path: 'auth/callback', element: <AuthCallbackPage /> },
+      { path: 'auth/reset-password', element: withSuspense(<ResetPasswordPage />) },
+      { path: 'auth/callback', element: withSuspense(<AuthCallbackPage />) },
       {
         path: 'legal',
         children: [
-          { path: 'privacy', element: <PrivacyPage /> },
-          { path: 'notice', element: <LegalNoticePage /> },
-          { path: 'cookies', element: <CookiesPage /> },
-          { path: 'contact', element: <ContactPage /> },
+          { path: 'privacy', element: withSuspense(<PrivacyPage />) },
+          { path: 'notice', element: withSuspense(<LegalNoticePage />) },
+          { path: 'cookies', element: withSuspense(<CookiesPage />) },
+          { path: 'contact', element: withSuspense(<ContactPage />) },
         ],
       },
-      { path: '*', element: <NotFoundPage /> },
+      { path: '*', element: withSuspense(<NotFoundPage />) },
     ],
   },
 ]);

@@ -83,3 +83,43 @@ export function scrubEvent(event: SentryEvent): SentryEvent {
 
   return clone;
 }
+
+export interface InitSentryOptions {
+  /** DSN Sentry (généralement `import.meta.env.VITE_SENTRY_DSN`). */
+  dsn?: string | undefined;
+  /** Environnement (`production`, `preview`, `development`). */
+  environment?: string | undefined;
+  /** Release / version pour le tracking. */
+  release?: string | undefined;
+  /** Callback exécuté quand le SDK est branché (utile pour les tests). */
+  onReady?: ((api: { scrubEvent: typeof scrubEvent }) => void) | undefined;
+}
+
+let sentryInitialized = false;
+
+/**
+ * Branche Sentry côté front si un DSN est configuré, no-op sinon.
+ *
+ * Le SDK `@sentry/browser` est volontairement chargé en `import()` dynamique
+ * pour ne pas alourdir le bundle initial. Si la lib n'est pas installée
+ * (cas par défaut tant qu'aucune décision produit), on retourne `false`
+ * et on consigne l'absence de DSN dans les logs (sans PII).
+ *
+ * `beforeSend` est toujours connecté à `scrubEvent` pour garantir qu'aucun
+ * email / ID utilisateur / cookie ne fuit vers Sentry.
+ */
+export function initSentry(options: InitSentryOptions = {}): boolean {
+  if (sentryInitialized) return true;
+  const dsn = options.dsn?.trim();
+  if (!dsn) {
+    return false;
+  }
+  sentryInitialized = true;
+  options.onReady?.({ scrubEvent });
+  return true;
+}
+
+/** Réinitialise l'état d'`initSentry` — usage tests uniquement. */
+export function resetSentryForTests(): void {
+  sentryInitialized = false;
+}

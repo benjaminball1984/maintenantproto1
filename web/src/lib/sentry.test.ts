@@ -1,5 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { PII_KEY_PATTERN, REDACTED, scrubEvent } from './sentry';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import {
+  PII_KEY_PATTERN,
+  REDACTED,
+  scrubEvent,
+  initSentry,
+  resetSentryForTests,
+} from './sentry';
 
 describe('sentry.PII_KEY_PATTERN', () => {
   it('matche les clés sensibles', () => {
@@ -85,5 +91,48 @@ describe('sentry.scrubEvent', () => {
     expect(event.extra.email).toBe('x@y.z');
     expect(out.user).toBe(REDACTED);
     expect(out.extra?.email).toBe(REDACTED);
+  });
+});
+
+describe('sentry.initSentry', () => {
+  beforeEach(() => {
+    resetSentryForTests();
+  });
+
+  it('renvoie false quand aucun DSN n’est fourni', () => {
+    expect(initSentry({})).toBe(false);
+  });
+
+  it('renvoie false quand le DSN est une chaîne vide', () => {
+    expect(initSentry({ dsn: '' })).toBe(false);
+    expect(initSentry({ dsn: '   ' })).toBe(false);
+  });
+
+  it('renvoie true quand un DSN valide est fourni', () => {
+    expect(initSentry({ dsn: 'https://abc@sentry.io/1' })).toBe(true);
+  });
+
+  it('appelle onReady avec scrubEvent quand le DSN est valide', () => {
+    const onReady = vi.fn();
+    initSentry({ dsn: 'https://abc@sentry.io/1', onReady });
+    expect(onReady).toHaveBeenCalledTimes(1);
+    const arg = onReady.mock.calls[0]?.[0] as { scrubEvent: typeof scrubEvent };
+    expect(typeof arg.scrubEvent).toBe('function');
+    expect(arg.scrubEvent({ user: 'leak' })).toEqual({ user: REDACTED });
+  });
+
+  it('est idempotent — second appel renvoie true sans réinitialiser', () => {
+    const onReady = vi.fn();
+    expect(initSentry({ dsn: 'https://abc@sentry.io/1', onReady })).toBe(true);
+    expect(initSentry({ dsn: 'https://abc@sentry.io/1', onReady })).toBe(true);
+    expect(onReady).toHaveBeenCalledTimes(1);
+  });
+
+  it('résout proprement après resetSentryForTests', () => {
+    expect(initSentry({ dsn: 'https://abc@sentry.io/1' })).toBe(true);
+    resetSentryForTests();
+    const onReady = vi.fn();
+    initSentry({ dsn: 'https://def@sentry.io/2', onReady });
+    expect(onReady).toHaveBeenCalledTimes(1);
   });
 });
