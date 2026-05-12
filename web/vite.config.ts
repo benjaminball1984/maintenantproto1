@@ -18,11 +18,18 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (!id.includes('node_modules')) return undefined;
-          if (id.includes('react-router')) return 'router';
-          if (id.includes('@supabase')) return 'supabase';
-          if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/'))
-            return 'react';
+          // Bornes strictes : on cible uniquement les paquets installés dans
+          // node_modules (et leur nom exact), pas un sous-dossier user nommé
+          // "react" / des packages dont le nom contient "react" (e.g.
+          // `react-is`, `@types/react`, `zustand/react`, `eslint-plugin-react`).
+          // Séparateurs unix + windows pour la portabilité CI/dev local.
+          const reactCore = /[\\/]node_modules[\\/](?:react|react-dom|scheduler)[\\/]/;
+          const router = /[\\/]node_modules[\\/]react-router(?:-dom)?[\\/]/;
+          const supabase = /[\\/]node_modules[\\/]@supabase[\\/]/;
+          if (!/[\\/]node_modules[\\/]/.test(id)) return undefined;
+          if (router.test(id)) return 'router';
+          if (supabase.test(id)) return 'supabase';
+          if (reactCore.test(id)) return 'react';
           return 'vendor';
         },
       },

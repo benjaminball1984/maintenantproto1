@@ -135,4 +135,17 @@ describe('sentry.initSentry', () => {
     initSentry({ dsn: 'https://def@sentry.io/2', onReady });
     expect(onReady).toHaveBeenCalledTimes(1);
   });
+
+  it('roll back si onReady throw — pas marqué initialisé, reste réessayable', () => {
+    const throwingOnReady = vi.fn(() => {
+      throw new Error('boom');
+    });
+    expect(initSentry({ dsn: 'https://abc@sentry.io/1', onReady: throwingOnReady })).toBe(false);
+    expect(throwingOnReady).toHaveBeenCalledTimes(1);
+
+    // Le second appel doit pouvoir réessayer (état non corrompu).
+    const okOnReady = vi.fn();
+    expect(initSentry({ dsn: 'https://abc@sentry.io/1', onReady: okOnReady })).toBe(true);
+    expect(okOnReady).toHaveBeenCalledTimes(1);
+  });
 });

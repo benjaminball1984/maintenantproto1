@@ -25,11 +25,16 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `npm run preview -- --host 127.0.0.1 --port ${PORT}`,
+    // `--strictPort` : fail-fast si le port est déjà occupé plutôt que de
+    // laisser Vite preview choisir un autre port que Playwright n'irait
+    // jamais sonder (timeout 120 s silencieux en CI). `stdout: 'pipe'`
+    // pour pouvoir diagnostiquer un éventuel échec côté serveur (Vite
+    // écrit son ready signal sur stdout, pas stderr).
+    command: `npm run preview -- --host 127.0.0.1 --port ${PORT} --strictPort`,
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    stdout: 'ignore',
+    stdout: 'pipe',
     stderr: 'pipe',
   },
 });
