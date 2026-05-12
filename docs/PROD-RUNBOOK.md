@@ -73,6 +73,15 @@ order by policy_count;
 \df+ public.credit_t99cp
 \df+ public.debit_t99cp
 \df+ public.is_admin
+-- Étape 23 : RPC publique d'agrégation des inscriptions mensuelles
+-- (security definer, grant execute to anon + authenticated, bornée
+-- à p_months_back ∈ [1, 60] côté DB). Appelée par TransparencePage.
+\df+ public.users_signups_monthly
+
+-- Sanity check côté anon (lecture seule, agrégat) :
+-- depuis psql en mode anon (anon JWT), l'appel doit retourner 12 lignes
+-- (par défaut p_months_back=12) avec count >= 0. Jamais permission denied.
+select * from public.users_signups_monthly() limit 3;
 ```
 
 ### 1.3 Régénération des types TypeScript

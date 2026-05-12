@@ -5,10 +5,15 @@ import {
   type CreditInput,
   type StripeEvent,
   type StripeWebhookDeps,
-} from '../../../supabase/functions/stripe-webhook/handler.ts';
+} from './stripeWebhookHandler';
 
 // =====================================================================================
-// Tests vitest pour `handle(req, deps)` extrait de l'Edge Function Stripe.
+// Tests vitest pour `handle(req, deps)` — handler pur du webhook Stripe.
+//
+// Le handler vit dans `./stripeWebhookHandler.ts` (étape 23). Le bootstrap
+// Deno côté `supabase/functions/stripe-webhook/index.ts` réutilise le même
+// module via un thin re-export (`./handler.ts`) — on teste donc la même
+// logique que celle déployée en production.
 //
 // Ces tests couvrent :
 //   - Cas nominal `invoice.payment_succeeded` (passe `source_event_id = event.id`

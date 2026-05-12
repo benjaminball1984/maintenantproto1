@@ -1761,6 +1761,10 @@ export interface Database {
         Args: { input: string };
         Returns: string;
       };
+      users_signups_monthly: {
+        Args: { p_months_back?: number };
+        Returns: { month_iso: string; count: number }[];
+      };
     };
     Enums: {
       adhesion_status: 'active' | 'cancelled' | 'expired' | 'pending';

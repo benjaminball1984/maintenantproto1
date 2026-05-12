@@ -64,4 +64,18 @@ test.describe('Pétitions — flow consultation + signature stubée', () => {
       timeout: 10_000,
     });
   });
+
+  test('affiche le compteur de signatures (signature_count / target_count)', async ({
+    page,
+  }) => {
+    // Étape 23 — test mock supplémentaire : vérifie que la fiche pétition
+    // rend bien la jauge signature_count / target_count formatée en français
+    // (espace insécable étroit entre milliers). Lecture-only, pas d'écriture.
+    await page.goto(`/petitions/${petitionFixture.slug}`);
+    // signature_count = 42, target_count = 1000 → "42" puis "/ 1 000 signatures"
+    // Le format fr-FR insère un narrow no-break space (U+202F) ; on matche
+    // avec un \s flexible pour rester robuste aux variations ICU.
+    await expect(page.getByText(/^42$/)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/\/\s*1\s?000\s*signatures/)).toBeVisible();
+  });
 });
