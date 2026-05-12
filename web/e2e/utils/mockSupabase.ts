@@ -114,6 +114,16 @@ export async function installSupabaseStubs(
     // wildcard `**/rest/v1/**` qui filtre déjà), `table` reste `''`,
     // aucune override ne matche et on retombe sur la réponse par défaut
     // `[]` / `content-range: 0-0/0`.
+    //
+    // **CORS expose-headers** : la page est servie sur le port 4173
+    // (vite preview), l'API mockée sur le port 54321 → cross-origin.
+    // Par défaut, le browser ne donne accès qu'aux headers safelist
+    // (Content-Type, Content-Length, etc.) à JavaScript. Le header
+    // `content-range` n'y est PAS — il faut le déclarer explicitement
+    // via `access-control-expose-headers` pour que supabase-js puisse
+    // le lire et parser le `count: 'exact'` côté
+    // `fetchTransparencyCounts`. Sans ça, `res.headers.get("content-range")`
+    // renvoie `null` côté postgrest-js et tous les compteurs tombent à 0.
     const match = /\/rest\/v1\/([^/?]+)/.exec(url);
     const table = match?.[1] ?? '';
     const override = restOverrides[table];
@@ -124,14 +134,20 @@ export async function installSupabaseStubs(
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        headers: { 'content-range': `0-${endIdx}/${count}` },
+        headers: {
+          'content-range': `0-${endIdx}/${count}`,
+          'access-control-expose-headers': 'content-range',
+        },
         body: JSON.stringify(rows),
       });
     }
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
-      headers: { 'content-range': '0-0/0' },
+      headers: {
+        'content-range': '0-0/0',
+        'access-control-expose-headers': 'content-range',
+      },
       body: '[]',
     });
   });

@@ -78,10 +78,18 @@ order by policy_count;
 -- à p_months_back ∈ [1, 60] côté DB). Appelée par TransparencePage.
 \df+ public.users_signups_monthly
 
--- Sanity check côté anon (lecture seule, agrégat) :
--- depuis psql en mode anon (anon JWT), l'appel doit retourner 12 lignes
--- (par défaut p_months_back=12) avec count >= 0. Jamais permission denied.
+-- Sanity check 1 — exécution côté admin (psql connecté en superuser) :
+-- vérifie que la RPC répond et que le format est OK. Ne valide PAS les
+-- grants `anon` car superuser bypasse les ACLs Postgres.
 select * from public.users_signups_monthly() limit 3;
+
+-- Sanity check 2 — exécution côté anon (via PostgREST + anon JWT) :
+-- vérifie réellement les grants execute. Doit retourner 12 lignes JSON
+-- (mois UTC, count >= 0), jamais 401/403 « permission denied ».
+-- $ANON_KEY = clé `anon` (Project Settings → API).
+-- $SUPABASE_URL = https://<project-id>.supabase.co
+--   curl -s -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY" \
+--        "$SUPABASE_URL/rest/v1/rpc/users_signups_monthly"
 ```
 
 ### 1.3 Régénération des types TypeScript
