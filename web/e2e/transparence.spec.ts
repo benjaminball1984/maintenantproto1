@@ -51,26 +51,38 @@ test.describe('Page /transparence — smoke UI', () => {
 });
 
 test.describe('Page /transparence — compteurs et graphique non-nuls', () => {
-  // Trois inscriptions de mai 2026 (mois courant, étape 19 GO_LIVE_DATE_ISO),
-  // une de mars 2026, une de novembre 2025. Le bucketing UTC est confirmé
-  // par le test unitaire transparency.test.ts ; ici on vérifie le rendu UI.
-  const usersRows = [
-    { created_at: '2026-05-12T10:00:00Z' },
-    { created_at: '2026-05-08T15:30:00Z' },
-    { created_at: '2026-05-01T09:00:00Z' },
-    { created_at: '2026-03-15T12:00:00Z' },
-    { created_at: '2025-11-04T18:45:00Z' },
+  // Buckets RPC users_signups_monthly : 12 mois UTC croissants, certains
+  // avec count > 0 pour vérifier que le SVG s'affiche bien. Le bucketing
+  // est désormais fait côté DB (étape 23, dette H1-rob clôturée), donc
+  // on stube directement la réponse de la RPC plutôt que des rows brutes
+  // de `users`.
+  const monthlySignupsRows = [
+    { month_iso: '2025-06-01', count: 0 },
+    { month_iso: '2025-07-01', count: 0 },
+    { month_iso: '2025-08-01', count: 0 },
+    { month_iso: '2025-09-01', count: 0 },
+    { month_iso: '2025-10-01', count: 0 },
+    { month_iso: '2025-11-01', count: 1 },
+    { month_iso: '2025-12-01', count: 0 },
+    { month_iso: '2026-01-01', count: 0 },
+    { month_iso: '2026-02-01', count: 0 },
+    { month_iso: '2026-03-01', count: 1 },
+    { month_iso: '2026-04-01', count: 0 },
+    { month_iso: '2026-05-01', count: 3 },
   ];
 
   test.beforeEach(async ({ page }) => {
     await installSupabaseStubs(page, {
       rest: {
-        users: { count: 42, rows: usersRows },
+        users: { count: 42 },
         petitions: { count: 7 },
         mobilizations: { count: 3 },
         campaigns: { count: 2 },
         communes: { count: 5 },
         signatures: { count: 128 },
+      },
+      rpc: {
+        users_signups_monthly: { rows: monthlySignupsRows },
       },
     });
   });

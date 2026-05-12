@@ -191,94 +191,78 @@ describe('formatMonthShortFr', () => {
   });
 });
 
-interface SignupRow {
-  created_at: string;
+interface RpcRow {
+  month_iso: string;
+  count: number;
 }
 
-interface SignupsResult {
-  data: SignupRow[] | null;
+interface RpcResult {
+  data: RpcRow[] | null;
   error: { message: string } | null;
 }
 
-function buildSignupsClient(result: SignupsResult): SupabaseClient<Database> {
-  const fromMock = vi.fn((_table: string) => {
-    const chain = {
-      select: vi.fn(() => chain),
-      gte: vi.fn(() => chain),
-      then: vi.fn((onFulfilled: (v: SignupsResult) => unknown) =>
-        Promise.resolve(onFulfilled(result)),
-      ),
-    };
-    return chain;
-  });
-  return { from: fromMock } as unknown as SupabaseClient<Database>;
+function buildRpcClient(result: RpcResult): {
+  client: SupabaseClient<Database>;
+  rpcMock: ReturnType<typeof vi.fn>;
+} {
+  const rpcMock = vi.fn((_fn: string, _args?: Record<string, unknown>) =>
+    Promise.resolve(result),
+  );
+  const client = { rpc: rpcMock } as unknown as SupabaseClient<Database>;
+  return { client, rpcMock };
 }
 
 describe('fetchMonthlySignups', () => {
-  const NOW = new Date(Date.UTC(2026, 4, 12, 10, 0, 0)); // 2026-05-12
+  it('appelle la RPC users_signups_monthly avec p_months_back', async () => {
+    const { client, rpcMock } = buildRpcClient({ data: [], error: null });
+    await fetchMonthlySignups(client, 12);
+    expect(rpcMock).toHaveBeenCalledWith('users_signups_monthly', { p_months_back: 12 });
+  });
 
-  it('agrège les inscriptions par mois UTC', async () => {
-    const client = buildSignupsClient({
+  it('passe la valeur monthsBack à la RPC', async () => {
+    const { client, rpcMock } = buildRpcClient({ data: [], error: null });
+    await fetchMonthlySignups(client, 6);
+    expect(rpcMock).toHaveBeenCalledWith('users_signups_monthly', { p_months_back: 6 });
+  });
+
+  it('mappe les lignes RPC en MonthlySignupBucket', async () => {
+    const { client } = buildRpcClient({
       data: [
-        { created_at: '2026-05-01T00:00:00Z' },
-        { created_at: '2026-05-31T23:59:59Z' },
-        { created_at: '2026-04-15T12:00:00Z' },
-        { created_at: '2025-06-02T00:00:00Z' },
+        { month_iso: '2025-06-01', count: 1 },
+        { month_iso: '2026-04-01', count: 1 },
+        { month_iso: '2026-05-01', count: 2 },
       ],
       error: null,
     });
-    const { data, error } = await fetchMonthlySignups(client, 12, NOW);
+    const { data, error } = await fetchMonthlySignups(client, 12);
     expect(error).toBeNull();
-    expect(data).toHaveLength(12);
-    const may = data?.find((b) => b.monthIso === '2026-05-01');
-    expect(may?.count).toBe(2);
-    const april = data?.find((b) => b.monthIso === '2026-04-01');
-    expect(april?.count).toBe(1);
-    const june25 = data?.find((b) => b.monthIso === '2025-06-01');
-    expect(june25?.count).toBe(1);
+    expect(data).toEqual([
+      { monthIso: '2025-06-01', count: 1 },
+      { monthIso: '2026-04-01', count: 1 },
+      { monthIso: '2026-05-01', count: 2 },
+    ]);
   });
 
-  it('renvoie tous les mois à zéro quand aucune inscription', async () => {
-    const client = buildSignupsClient({ data: [], error: null });
-    const { data, error } = await fetchMonthlySignups(client, 6, NOW);
+  it('renvoie [] quand la RPC retourne null (cas défensif)', async () => {
+    const { client } = buildRpcClient({ data: null, error: null });
+    const { data, error } = await fetchMonthlySignups(client, 12);
     expect(error).toBeNull();
-    expect(data).toHaveLength(6);
-    expect(data?.every((b) => b.count === 0)).toBe(true);
+    expect(data).toEqual([]);
   });
 
-  it('propage une erreur PostgREST', async () => {
-    const client = buildSignupsClient({
+  it('propage l\'erreur de la RPC', async () => {
+    const { client } = buildRpcClient({
       data: null,
-      error: { message: 'rls_denied' },
+      error: { message: 'function_not_found' },
     });
-    const { data, error } = await fetchMonthlySignups(client, 12, NOW);
+    const { data, error } = await fetchMonthlySignups(client, 12);
     expect(data).toBeNull();
-    expect(error?.message).toBe('rls_denied');
+    expect(error?.message).toBe('function_not_found');
   });
 
-  it('ignore les created_at hors fenêtre (antérieurs au premier mois)', async () => {
-    const client = buildSignupsClient({
-      data: [
-        { created_at: '2024-01-01T00:00:00Z' }, // hors fenêtre
-        { created_at: '2026-05-01T00:00:00Z' },
-      ],
-      error: null,
-    });
-    const { data } = await fetchMonthlySignups(client, 12, NOW);
-    const total = (data ?? []).reduce((s, b) => s + b.count, 0);
-    expect(total).toBe(1);
-  });
-
-  it('ignore les valeurs created_at non-string', async () => {
-    const client = buildSignupsClient({
-      data: [
-        { created_at: null as unknown as string },
-        { created_at: '2026-05-01T00:00:00Z' },
-      ],
-      error: null,
-    });
-    const { data } = await fetchMonthlySignups(client, 12, NOW);
-    const total = (data ?? []).reduce((s, b) => s + b.count, 0);
-    expect(total).toBe(1);
+  it('utilise 12 comme valeur par défaut de monthsBack', async () => {
+    const { client, rpcMock } = buildRpcClient({ data: [], error: null });
+    await fetchMonthlySignups(client);
+    expect(rpcMock).toHaveBeenCalledWith('users_signups_monthly', { p_months_back: 12 });
   });
 });

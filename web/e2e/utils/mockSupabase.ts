@@ -10,8 +10,9 @@ import type { Page, Route } from '@playwright/test';
  *   utilisée pour fabriquer le header `content-range: 0-N/<count>`.
  * - `rows` : pour les requêtes non-`head`, body JSON renvoyé.
  *
- * Les clés correspondent au nom de la table PostgREST (segment juste
- * après `/rest/v1/`, avant `?`).
+ * Les clés `rest` correspondent au nom de la table PostgREST (segment
+ * juste après `/rest/v1/`, avant `?`). Les clés `rpc` correspondent au
+ * nom de la fonction (segment juste après `/rest/v1/rpc/`, avant `?`).
  *
  * **Limites volontaires** (E2E only, pas un vrai PostgREST) :
  * - Si la même table reçoit DEUX requêtes différentes (ex. `users` :
@@ -21,17 +22,15 @@ import type { Page, Route } from '@playwright/test';
  *   head (body ignoré) et `rows` depuis le body sur la requête non-head
  *   (header content-range non utilisé). Heureux hasard fonctionnel :
  *   pour le test transparence c'est exactement ce qu'on veut.
- * - Le mock ne couvre QUE les tables PostgREST (`/rest/v1/<table>`),
- *   pas les RPC (`/rest/v1/rpc/<fn>`). Si un futur test stub une RPC,
- *   ajouter une clé `rpc` à `SupabaseStubOverrides`.
  * - Le mock n'applique PAS les filtres PostgREST (`.eq()`, `.gte()`,
- *   `.order()`, `.limit()`, `.range()`). `rows` est renvoyé tel quel
- *   au client, qui filtre/agrège côté JS si nécessaire. Pour les
- *   tests qui dépendent du filtrage SQL réel, utiliser un projet
- *   Supabase de test seedé (cf. PROD-RUNBOOK §6).
+ *   `.order()`, `.limit()`, `.range()`) ni les arguments RPC : `rows`
+ *   est renvoyé tel quel au client, qui filtre/agrège côté JS si
+ *   nécessaire. Pour les tests qui dépendent du filtrage SQL réel,
+ *   utiliser un projet Supabase de test seedé (cf. PROD-RUNBOOK §6).
  */
 export interface SupabaseStubOverrides {
   rest?: Record<string, { count?: number; rows?: unknown[] }>;
+  rpc?: Record<string, { rows?: unknown[] }>;
 }
 
 /**
@@ -93,7 +92,23 @@ export async function installSupabaseStubs(
 
   await page.route('**/rest/v1/**', async (route: Route) => {
     const restOverrides = overrides.rest ?? {};
+    const rpcOverrides = overrides.rpc ?? {};
     const url = route.request().url();
+    // Distingue les appels RPC (`/rest/v1/rpc/<fn>`) des appels REST
+    // table (`/rest/v1/<table>`). Pour les RPC, supabase-js POSTe les
+    // arguments dans le body — on les ignore et on renvoie le `rows`
+    // override tel quel.
+    const rpcMatch = /\/rest\/v1\/rpc\/([^/?]+)/.exec(url);
+    if (rpcMatch) {
+      const fn = rpcMatch[1] ?? '';
+      const override = rpcOverrides[fn];
+      const rows = override?.rows ?? [];
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(rows),
+      });
+    }
     // Extrait la table PostgREST : `/rest/v1/<table>?...`. Si la regex
     // ne matche pas (URL malformée — ne devrait jamais arriver vu le
     // wildcard `**/rest/v1/**` qui filtre déjà), `table` reste `''`,

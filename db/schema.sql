@@ -1989,5 +1989,64 @@ grant execute on function public.credit_t99cp(uuid, integer, text, text) to serv
 grant execute on function public.debit_t99cp(uuid, integer, text)         to service_role;
 
 -- =====================================================================================
+-- 21 · Transparence — RPC publique users_signups_monthly() (étape 23)
+-- =====================================================================================
+-- Dette H1-rob (étape 21+22) : `fetchMonthlySignups` côté client lisait
+-- toutes les lignes `users.created_at` des 12 derniers mois pour les
+-- agréger en JS. Tant que `users` reste < ~1000 lignes c'est ok, mais
+-- PostgREST a un `max_rows = 1000` (cf. supabase/config.toml §[api]) qui
+-- tronque silencieusement au-delà → agrégation biaisée.
+--
+-- Cette RPC déplace l'agrégation côté DB. Elle est SECURITY DEFINER
+-- pour s'affranchir des contraintes RLS futures sur `users` (par ex. si
+-- on durcit `users_select_public` ; cf. dette H3-sec) et n'expose que des
+-- métriques agrégées (mois + nombre), pas de PII.
+--
+-- Paramètre `p_months_back` borné à `[1, 60]` côté DB pour éviter qu'un
+-- anonyme demande un scan multi-années abusif. Le client par défaut
+-- passe 12.
+--
+-- Retour : 1 ligne par mois UTC dans la fenêtre, dans l'ordre
+-- chronologique croissant. Les mois sans inscription apparaissent avec
+-- count=0 — l'échelle reste stable côté chart.
+create or replace function public.users_signups_monthly(
+  p_months_back integer default 12
+)
+  returns table (month_iso date, count integer)
+  language sql
+  stable
+  security definer
+  set search_path = public
+as $$
+  with params as (
+    select least(greatest(coalesce(p_months_back, 12), 1), 60) as n,
+           date_trunc('month', timezone('UTC', now()))::date as cur_month
+  ),
+  months as (
+    select (p.cur_month - ((p.n - 1 - g.n) || ' months')::interval)::date as m
+    from params p, generate_series(0, p.n - 1) as g(n)
+  ),
+  agg as (
+    select date_trunc('month', timezone('UTC', u.created_at))::date as m,
+           count(*)::integer as c
+    from public.users u, params p
+    where u.created_at >= (p.cur_month - ((p.n - 1) || ' months')::interval)
+    group by 1
+  )
+  select months.m, coalesce(agg.c, 0)::integer
+  from months
+  left join agg on agg.m = months.m
+  order by months.m asc;
+$$;
+
+revoke all on function public.users_signups_monthly(integer) from public;
+grant execute on function public.users_signups_monthly(integer) to anon, authenticated;
+-- service_role grant explicite par cohérence avec credit_t99cp / debit_t99cp
+-- (cf. note ci-dessus § 20) — no-op sur projet non-hardened, déblocant
+-- sur projet hardened si un futur outil interne (job de rapport
+-- transparence par exemple) appelle la RPC en service-role.
+grant execute on function public.users_signups_monthly(integer) to service_role;
+
+-- =====================================================================================
 -- FIN du schéma. Régénérer les types : `supabase gen types typescript --local`.
 -- =====================================================================================
