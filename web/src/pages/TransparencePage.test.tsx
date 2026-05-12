@@ -5,14 +5,17 @@ import { MemoryRouter } from 'react-router-dom';
 import type * as TransparencyModule from '@/lib/transparency';
 
 type TransparencyResult = TransparencyModule.TransparencyResult;
+type MonthlySignupsResult = TransparencyModule.MonthlySignupsResult;
 
 const fetchTransparencyCountsMock = vi.fn<() => Promise<TransparencyResult>>();
+const fetchMonthlySignupsMock = vi.fn<() => Promise<MonthlySignupsResult>>();
 
 vi.mock('@/lib/transparency', async () => {
   const actual = await vi.importActual<typeof TransparencyModule>('@/lib/transparency');
   return {
     ...actual,
     fetchTransparencyCounts: (...args: unknown[]) => fetchTransparencyCountsMock(...(args as [])),
+    fetchMonthlySignups: (...args: unknown[]) => fetchMonthlySignupsMock(...(args as [])),
   };
 });
 
@@ -37,6 +40,10 @@ const ZERO_COUNTS = {
 
 beforeEach(() => {
   fetchTransparencyCountsMock.mockReset();
+  fetchMonthlySignupsMock.mockReset();
+  // Par défaut : tous les buckets à zéro. Évite que les tests existants
+  // doivent expliciter ce second fetch à chaque fois.
+  fetchMonthlySignupsMock.mockResolvedValue({ data: [], error: null });
 });
 
 describe('TransparencePage', () => {
@@ -127,5 +134,59 @@ describe('TransparencePage', () => {
       error: null,
     });
     await new Promise((r) => setTimeout(r, 0));
+  });
+
+  it('affiche le graphique mensuel quand des inscriptions existent', async () => {
+    fetchTransparencyCountsMock.mockResolvedValueOnce({ data: ZERO_COUNTS, error: null });
+    fetchMonthlySignupsMock.mockReset();
+    fetchMonthlySignupsMock.mockResolvedValueOnce({
+      data: [
+        { monthIso: '2025-06-01', count: 0 },
+        { monthIso: '2025-07-01', count: 3 },
+        { monthIso: '2026-05-01', count: 8 },
+      ],
+      error: null,
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(
+        screen.getByRole('img', { name: /Inscriptions par mois/i }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('affiche l\'état vide du graphique quand 0 inscription', async () => {
+    fetchTransparencyCountsMock.mockResolvedValueOnce({ data: ZERO_COUNTS, error: null });
+    fetchMonthlySignupsMock.mockReset();
+    fetchMonthlySignupsMock.mockResolvedValueOnce({
+      data: [
+        { monthIso: '2026-04-01', count: 0 },
+        { monthIso: '2026-05-01', count: 0 },
+      ],
+      error: null,
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText(/Aucune inscription enregistrée/i)).toBeInTheDocument();
+    });
+  });
+
+  it('affiche un message d\'erreur dédié quand le fetch du graphique échoue', async () => {
+    fetchTransparencyCountsMock.mockResolvedValueOnce({ data: ZERO_COUNTS, error: null });
+    fetchMonthlySignupsMock.mockReset();
+    fetchMonthlySignupsMock.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message: 'rls_denied',
+        details: '',
+        hint: '',
+        code: 'PGRST',
+        name: 'PostgrestError',
+      } as never,
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText(/Graphique indisponible/i)).toBeInTheDocument();
+    });
   });
 });
