@@ -4025,7 +4025,12 @@ faute de `VITE_SUPABASE_*` en CI — pas une régression introduite ici).
 >    les flows critiques. Cible totale ≥ 800 tests (771 + ≥ 30 nouveaux
 >    en unitaire / hooks + suite E2E).
 > 6. **HANDOFF-PROGRESS.md** : étape 18 ✅ + clôture du sprint 6 ou
->    prompt étape 19 (mise en prod réelle).
+>    prompt étape 19 (mise en prod réelle). **Recopier ce prompt étape
+>    19 à la fois dans `HANDOFF-PROGRESS.md` ET dans la réponse de chat
+>    finale** (règle récursive, cf. `CLAUDE.md § Recopie systématique
+>    du prompt de la session suivante`). Inclure dans le prompt étape
+>    19 la même instruction de recopie pour la session N+13, pour que
+>    la chaîne se propage.
 >
 > **CLÔTURE DE L'ÉTAPE — workflow auto-merge** :
 >

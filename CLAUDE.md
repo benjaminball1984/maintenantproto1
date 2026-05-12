@@ -128,6 +128,31 @@ Au-delà de la session 50, revenir au workflow « pas de PR mergée sans review 
 Le compteur de sessions vit dans `HANDOFF-PROGRESS.md` (« État global » +
 « Prompt pour la session N+X »).
 
+## Recopie systématique du prompt de la session suivante
+
+À la **fin de chaque session / étape**, et même quand l'utilisateur n'en
+fait pas explicitement la demande, Claude doit :
+
+1. **Écrire** le prompt complet pour la session N+1 dans
+   `HANDOFF-PROGRESS.md` sous une section dédiée
+   « Prompt pour la session N+X (étape Y) » (déjà couvert par les
+   instructions « ÉTAPE à exécuter »).
+2. **Recopier** intégralement ce même prompt dans la **réponse de chat
+   finale** de la session, juste après la confirmation du merge de la PR.
+   Format suggéré : un titre `## Prompt pour la session suivante (étape Y)`
+   puis le prompt entre guillemets de citation Markdown (`> `).
+
+Cette règle est **récursive** : chaque prompt généré pour une session
+N+1 doit lui-même inclure cette instruction de recopie pour que la
+session N+2 continue de la respecter. Concrètement, chaque prompt
+généré doit comporter une ligne du type :
+
+> À la clôture de cette étape, recopier le prompt pour la session N+X+1
+> à la fois dans `HANDOFF-PROGRESS.md` ET dans la réponse de chat finale.
+
+Objectif : ne plus jamais avoir à demander manuellement « peux-tu me
+donner le prompt pour la session suivante ? ».
+
 ---
 
 **Bonne migration. Tout est dans `HANDOFF.md`.**
