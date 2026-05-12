@@ -4529,20 +4529,45 @@ provisionnement réel des comptes externes décrits dans
 >    `git fetch origin main && git merge --ff-only origin/main`.
 > 2. `cd web && npm ci` (fallback : `npm install --legacy-peer-deps`).
 > 3. `npm run typecheck && npm run lint && npx vitest run && npm run build`
->    pour vérifier le compteur de tests au point de départ (≥ 810
->    verts à la fin de l'étape 19, à incrémenter à chaque étape).
+>    pour vérifier le compteur de tests au point de départ (≥ 812
+>    verts après le janitor post-step19, à incrémenter à chaque
+>    étape).
 > 4. **Demander à l'équipe humaine** :
->    - Le provisionnement Supabase / Vercel / Stripe / Sentry décrit
->      dans `docs/PROD-RUNBOOK.md` est-il fait ? Si non, l'étape 20
->      doit s'adapter (focus tests + monitoring stub plutôt que
->      audit réel).
+>    - Supabase staging est-il accessible (cf. URL ci-dessus
+>      `https://fdphrsqrsumkpzbxnjdj.supabase.co`) ?
+>    - Le provisionnement Vercel / Stripe / Sentry décrit dans
+>      `docs/PROD-RUNBOOK.md` est-il fait ? Si non, l'étape 20 doit
+>      s'adapter (focus idempotence DB + tests, plutôt que audits
+>      mesurés sur staging réel).
 >    - Y a-t-il un projet Supabase de test seedé pour le test E2E
 >      « signature anonyme » ?
+>    - La dette critique C1/C2 (idempotence `stripe_events` orpheline
+>      + `credit_t99cp` non idempotent côté DB) doit-elle être
+>      adressée à cette étape (migration DB explicite priorité 1) ?
 >
-> **ÉTAPE 20 à exécuter — Post-go-live (audit réel + monitoring +
-> retours)** :
+> **ÉTAPE 20 à exécuter — Post-go-live (idempotence DB priorité 1 +
+> audit réel + monitoring + retours)** :
 >
-> 1. **Audit Lighthouse réel** :
+> 1. **PRIORITÉ 1 — Idempotence DB du webhook Stripe** (dette
+>    critique étape 19, cf. § Audit vibe janitor étape 19) :
+>    - Ajouter `t99cp_transactions.source_event_id text unique nulls not distinct`
+>      (additif). Update RPC `credit_t99cp` pour accepter un nouveau
+>      paramètre `p_source_event_id` et insérer avec cette colonne.
+>    - Update `supabase/functions/stripe-webhook/index.ts` pour passer
+>      `source_event_id = event.id` aux appels `creditT99cp` (case
+>      `invoice.payment_succeeded`).
+>    - **OU**, en alternative : job de réconciliation Edge Function
+>      qui scanne `stripe_events WHERE processed_at IS NULL AND
+>      received_at < now() - interval '15 min'` et alerte / rejoue.
+>      Documenter la décision.
+>    - Tests vitest pour la nouvelle signature de `credit_t99cp`
+>      (idempotence par event_id : 2 appels avec même source_event_id
+>      → un seul crédit).
+>    - **Migration listée explicitement dans le commit + PR.**
+>    - Sauvegarder `pg_dump` du projet staging Supabase AVANT la
+>      migration (CLAUDE.md « Sauvegarder la DB AVANT toute
+>      migration prod »).
+> 2. **Audit Lighthouse réel** :
 >    - Si `staging.maintenant.org` (ou équivalent) est en ligne :
 >      `npx unlighthouse --site https://staging.maintenant.org` ou
 >      DevTools manuel sur 6 pages clés (cf. `PROD-RUNBOOK.md` §5).
@@ -4550,40 +4575,42 @@ provisionnement réel des comptes externes décrits dans
 >      Lighthouse étape 20 (perf / a11y / seo / best-practices).
 >    - Corriger les blocages < 95 (LCP, CLS, TBT). Pas de changement
 >      design system sans validation designer.
-> 2. **Premier test E2E « happy path » réel** :
+> 3. **Premier test E2E « happy path » réel** :
 >    - Si projet Supabase de test prêt : ajouter
 >      `web/e2e/happy-path.spec.ts` qui signe anonymement une
 >      pétition publique pré-seedée et vérifie le compteur. Sinon
 >      laisser pour l'étape 21.
-> 3. **Monitoring Sentry runtime** :
+> 4. **Monitoring Sentry runtime** :
 >    - Si DSN configuré en preview : vérifier que les events
 >      arrivent bien (test canary `throw new Error('sentry-canary-step20')`
 >      depuis une page admin protégée + immédiatement retirer).
 >    - Documenter le taux d'erreur sur les 7 derniers jours, top 5
 >      des issues.
-> 4. **Monitoring Supabase** :
+> 5. **Monitoring Supabase** :
 >    - Quotas API / DB CPU / DB memory sur 7 jours.
 >    - Alertes Slack #alerts-prod actives ?
 >    - Top requêtes lentes (cf. dashboard Supabase → Performance).
-> 5. **Retours utilisateur·rices** :
+> 6. **Retours utilisateur·rices** :
 >    - Premiers comptes créés (combien ? bounce rate sur
 >      `/auth/confirm` ?).
 >    - Premiers signalements modération (cf. `/admin/reports`).
 >    - Bugs remontés en email `tech@maintenant.org`.
 >    - Compiler une liste de fixes prioritaires pour l'étape 21.
-> 6. **Documentation `/transparence`** :
+> 7. **Documentation `/transparence`** :
 >    - Créer ou compléter `web/src/pages/TransparencePage.tsx` (route
 >      `/transparence`, publique) avec : date de mise en prod,
 >      nombre cumulé de comptes, pétitions, mobilisations,
 >      signalements traités. Données générées dynamiquement via
 >      requêtes RLS-safe (compteurs publics).
-> 7. **Tests** : suite vitest ≥ 810 + e2e Playwright verts en CI.
->    Ajouter ≥ 5 tests autour de la page transparence + nouveau test
->    E2E si applicable.
-> 8. **HANDOFF-PROGRESS.md** : étape 20 ✅ détaillée (sections
->    « Audit Lighthouse », « E2E réel » si applicable, « Monitoring
->    Sentry », « Monitoring Supabase », « Retours utilisateur »,
->    « Page transparence », « Décisions »).
+> 8. **Tests** : suite vitest ≥ 812 + e2e Playwright verts en CI.
+>    Ajouter ≥ 5 tests autour de la page transparence + tests
+>    idempotence `credit_t99cp` (priorité 1) + nouveau test E2E si
+>    applicable.
+> 9. **HANDOFF-PROGRESS.md** : étape 20 ✅ détaillée (sections
+>    « Idempotence DB » (priorité 1), « Audit Lighthouse », « E2E
+>    réel » si applicable, « Monitoring Sentry », « Monitoring
+>    Supabase », « Retours utilisateur », « Page transparence »,
+>    « Décisions »).
 >    **Recopier ce prompt étape 21 à la fois dans
 >    `HANDOFF-PROGRESS.md` ET dans la réponse de chat finale** (règle
 >    récursive, cf. `CLAUDE.md § Recopie systématique du prompt de
@@ -4602,8 +4629,9 @@ provisionnement réel des comptes externes décrits dans
 > 1. **Vérifier les 4 checks locaux verts** : `npm run typecheck &&
 >    npm run lint && npx vitest run && npm run build`. Si un check
 >    échoue → corriger, ne pas commit.
-> 2. **Commit** : `chore(prod): step 20 — post-go-live (lighthouse +
->    monitoring + transparence)`. Pas d'emojis dans le message.
+> 2. **Commit** : `chore(prod): step 20 — post-go-live (idempotence
+>    DB + lighthouse + monitoring + transparence)`. Pas d'emojis dans
+>    le message.
 > 3. **Push** sur la branche imposée par l'harness
 >    (`git push -u origin <branch>`, retry exponentiel 2/4/8/16 s).
 > 4. **Ouvrir la PR** vers `main` via
@@ -4662,8 +4690,12 @@ provisionnement réel des comptes externes décrits dans
 > (mise en prod = risque accru) :
 >
 > - Migration DB risquée (suppression / rename de table / colonne /
->   RPC non listée). En particulier, toute modification du schéma
->   live nécessite l'approbation humaine explicite.
+>   RPC non listée). La migration additive de la priorité 1
+>   (`t99cp_transactions.source_event_id` UNIQUE + nouveau paramètre
+>   `p_source_event_id` sur la RPC `credit_t99cp`) est **explicitement
+>   listée** dans ce prompt — OK à appliquer sans confirmation
+>   additionnelle. Toute autre migration nécessite l'approbation
+>   humaine explicite.
 > - Changement RGPD non listé (nouvelle collecte, nouveau cookie,
 >   transfert hors UE).
 > - Breaking change visible utilisateur (changement de prix Stripe,
