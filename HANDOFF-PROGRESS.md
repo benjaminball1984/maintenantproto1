@@ -6765,6 +6765,209 @@ Playwright sera validé par la CI (sandbox local : CDN
   un test mock E2E ciblé (3e itération du pattern « pas de
   Supabase test seedé ? → +1 spec mock »).
 
+### Audit vibe janitor étape 25
+
+**Branche** : `claude/janitor-post-step25`
+
+Audit en parallèle via 3 subagents `general-purpose` après le merge
+de la PR principale #27 (commit `chore(prod): step 25 …`) :
+architecture / élégance, robustesse / edge cases, sécurité / RGPD
+/ cohérence handoff.
+
+#### Findings par sévérité
+
+| Axe | Total | critical | high | medium | low | Fixable safe-first | Déférés |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Architecture | 7 | 0 | 0 | 1 | 6 | 1 | 6 (dont 2 déjà tracés) |
+| Robustesse | 7 | 0 | 0 | 1 | 6 | 1 (= A3) | 6 (1 nouvelle dette `M6-rob`) |
+| Sécurité | 7 | 0 | 0 | 0 | 7 | 1 | 6 |
+| **Total** | **21** | **0** | **0** | **2** | **19** | **2 uniques** | **18** |
+
+> Note : A3 et R2 sont **le même finding** (vu sous deux angles) ;
+> on l'a compté une seule fois côté « fixable safe-first ».
+
+#### Fixes appliqués (safe-first)
+
+**J25-A3 / R2** (low / low-risk) — robustification du test E2E
+ajouté à l'étape 25 (`affiche le CTA « Se connecter pour signer »
+pour un visiteur anonyme`). La regex initiale
+`new RegExp('auth=login.*next=<encodedNext>')` imposait l'ordre
+des query params dans le `href` du `<Link to="/?auth=login&next=...">`.
+Refacto vers un parsing structuré via `new URL(href, 'http://localhost')`
++ `URLSearchParams` :
+
+```ts
+const href = await signupCta.getAttribute('href');
+expect(href).not.toBeNull();
+const parsed = new URL(href ?? '', 'http://localhost');
+expect(parsed.searchParams.get('auth')).toBe('login');
+expect(parsed.searchParams.get('next')).toBe(`/petitions/${petitionFixture.slug}`);
+```
+
+Asserte la **sémantique** (deux params nommés) plutôt que la
+**syntaxe** (chaîne ordonnée). Survit à une éventuelle
+factorisation future `buildLoginHref(pathname)` (dette A2)
+qui pourrait inverser l'ordre des params.
+
+Aucun impact côté runtime production. Aucun test cassé. Compteur
+E2E inchangé (31 tests).
+
+**J25-S1** (low / low-risk) — nettoyage de la CSP `vercel.json`.
+La directive autorisait `https://fonts.googleapis.com` (style-src)
+et `https://fonts.gstatic.com` (font-src), mais **aucune ressource
+Google Fonts n'est chargée** par le bundle (`grep` sur `web/src/`
+et `web/index.html` → zéro `@import` Google Fonts, zéro
+`<link rel="stylesheet" href="https://fonts.googleapis.com...">`).
+Les références `font-family: 'Sora', sans-serif` côté JSX/CSS
+inline tombent sur le fallback `sans-serif` (la famille Sora n'est
+jamais chargée en runtime, héritage du prototype). Retrait des
+deux origines tierces :
+
+```diff
+- "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; ...; font-src 'self' data: https://fonts.gstatic.com; ..."
++ "style-src 'self' 'unsafe-inline'; ...; font-src 'self' data:; ..."
+```
+
+Réduit la surface d'exfiltration via injection CSS de polices /
+keylogger via custom font glyph trick. Si un futur sprint design
+re-introduit Google Fonts, la CSP devra être ré-élargie en même
+temps (cohérent — atomicité).
+
+Aucun impact UI : la police rendue reste celle utilisée
+aujourd'hui (`sans-serif` système). Aucun test cassé. Bundle entry
+inchangé.
+
+#### Fixes déférés (dette nouvelle ou existante)
+
+**J25-A1 / R1** (low / low-risk) — duplication de l'expression
+`Math.min(100, Math.round((count / target) * 100))` dans 5 pages
+(`PetitionsPage.tsx:204`, `PetitionDetailPage.tsx:212`,
+`PollDetailPage.tsx:224`, `CrowdfundingPage.tsx:203`,
+`CrowdfundingDetailPage.tsx:250`). **Déféré** : l'extraction
+vers `web/src/lib/progress.ts` toucherait 5 fichiers et
+introduirait un nouveau module + son test associé. C'est de la
+refacto cosmétique, mieux planifiée comme item dédié.
+**Ajouté à la dette consolidée** sous `L6-arch-progress` (nouveau).
+
+**J25-A2** (low / low-risk) — duplication de l'expression
+`/?auth=login&next=${encodeURIComponent(location.pathname)}`
+dans 3 pages (`PetitionDetailPage.tsx:240`,
+`MobilizationDetailPage.tsx:291`, `PollDetailPage.tsx:279`).
+**Déféré** : extraction `buildLoginHref(pathname)` toucherait 3
+fichiers. Idem cosmétique, à mutualiser avec J25-A1 lors d'une
+étape dédiée. **Ajouté à la dette consolidée** sous
+`L7-arch-loginhref` (nouveau).
+
+**J25-A5** (medium / medium-risk) — `PollDetailPage.tsx` à 473
+LOC dépasse le seuil mou des autres pages Detail (~250-350 LOC).
+**Déféré** : restructure architecturale, hors scope janitor.
+
+**J25-R3 / M6-rob** (medium / medium-risk) — pattern récurrent
+`useEffect(() => { queueMicrotask(() => void fetch(...)); }, [deps])`
+sans flag `cancelled` dans ~22 hooks de fetch (`usePetition`,
+`usePetitions`, `useNotifications`, etc.). Race conditions
+possibles lors de changements rapides de slug/filtre, amplifiées
+par le double-render React 19 strict mode en dev. Seul
+`useIsAdmin.ts` applique le pattern correct. **Déféré + nouvelle
+dette `M6-rob`** : fix global toucherait 20+ hooks, chacun avec
+ses tests vitest — pas safe-first. À adresser hook par hook
+lors d'étapes dédiées de durcissement.
+
+**J25-R4** (low / low-risk) — `Intl.DateTimeFormat('fr-FR')` sans
+`timeZone` explicite dans ~6 fichiers (`mobilizationFormat.ts`,
+`CommuneDetailPage.tsx`, etc.). Décalage de jour pour utilisateurs
+hors Europe/Paris. **Déféré** : risque de casser des snapshots de
+tests si appliqué (les tests fixent une heure UTC, le formatage
+local diverge selon TZ système de la CI vs locale).
+
+**J25-R5** (low / low-risk) — `setTimeout` redirect sans cleanup
+dans `ResetPasswordPage.tsx:184` et
+`services/CrowdfundingContributePage.tsx:214`. **Déféré** : le
+fix nécessite un `useRef<number | null>` + `useEffect` cleanup,
+ce qui touche au cycle de vie de la page. En React 19 strict
+mode dev, le double-mount pourrait clearer le timer trop tôt
+au remount — risque de casser le test
+`ResetPasswordPage.test.tsx:101` (`waitFor(getByTestId('profile'))`
+sous `timeout: 2000` qui dépend de la navigation timed-out).
+
+**J25-R7** — déjà fixé en réalité : `console.error` est
+**déjà** gardé par `if (import.meta.env.DEV)` ligne 73 de
+`RouteErrorBoundary.tsx`. Le subagent a manqué la guard
+englobante. **Non-finding.**
+
+**J25-S2 / S3 / S4 / S5 / S6 / S7** — tous documentaires ou
+couverts par des dettes existantes (H3-sec pour S6, monitoring
+différé pour S4, L1-a11y/L5-arch pour S5, etc.). Aucun fix
+appliqué.
+
+**J25-A4** — fixture `petitionFixture` à factoriser plus tard
+(YAGNI). Pas de duplication aujourd'hui.
+
+**J25-A6 / A7 / R6** — pré-existants, déjà connus.
+
+#### Hygiène (janitor étape 25)
+
+- Pas de modification du prototype.
+- Pas de modification du design system `T.*` (CSS vars `--mn-*`).
+- Pas de migration DB.
+- Pas de breaking change visible utilisateur (le retrait de
+  Google Fonts CSP est invisible : zéro ressource consommée).
+- Pas de nouvelle dépendance npm.
+- Pas de bump majeur.
+- TS strict + no `any`.
+- Aucun fix qui casse un test existant.
+- Aucun fix qui ouvre un risque B (cf. analyse fix par fix
+  ci-dessus).
+- Aucun nouveau `console.error` / `console.warn` (les patterns
+  existants sont conservés).
+
+#### Checks finaux (janitor étape 25)
+
+```
+> npm run typecheck && npm run lint && npx vitest run && npm run build
+
+✓ typecheck   (tsc -b + e2e/tsconfig.json)
+✓ lint        (eslint .)
+✓ vitest      (128 files, 872 tests passed, ~65s)
+✓ build       (entry 47.34 kB / gzip 13.32 kB ; TransparencePage 7.69 kB / gzip 3.11 kB lazy ; sentry 436.2 kB / gzip 143.08 kB lazy)
+```
+
+Compteur de tests **inchangé** (872 vitest + 31 E2E) : on
+refactorise un test E2E existant (J25-A3/R2) sans en ajouter, et
+on touche la CSP `vercel.json` (J25-S1) qui n'a pas de test
+associé côté repo.
+
+#### Dette technique consolidée — mise à jour
+
+Ajouts post-step 25 :
+
+| ID | Sévérité | Risque rég. | Description courte | Étape cible |
+| --- | --- | --- | --- | --- |
+| L6-arch-progress | low | low | helper `computeProgressRatio(count, target)` à extraire (5 call-sites dupliqués) | étape design dédiée |
+| L7-arch-loginhref | low | low | helper `buildLoginHref(pathname)` à extraire (3 call-sites dupliqués) | étape design dédiée |
+| M6-rob | medium | medium | pattern `useEffect` + fetch sans `cancelled` flag dans ~22 hooks (races possibles sous React 19 strict mode) | étape robustesse hooks dédiée |
+
+Les dettes existantes (H3-sec, M2-sec-policy, M5-rob, M1-RGPD,
+L1-a11y, L3-arch, L4-sec, L5-arch, L1-rob, H4-deploy-deno,
+L-sec-webhook-body) restent inchangées.
+
+#### Décisions janitor
+
+- **2 fixes safe-first appliqués** sur 21 findings — J25-A3/R2
+  (test E2E robustifié via `URLSearchParams`) et J25-S1 (CSP
+  Google Fonts cleanup). Les deux ont un impact côté code
+  minimal et un bénéfice clair (robustesse test / surface CSP
+  réduite).
+- **3 nouvelles dettes** documentées (L6-arch-progress,
+  L7-arch-loginhref, M6-rob).
+- **J25-R7 non-finding** : la guard `import.meta.env.DEV`
+  existe déjà ligne 73 de `RouteErrorBoundary.tsx` ; le
+  subagent l'a manquée par fenêtre de lecture.
+- **Toutes les dettes high (H3-sec) + medium-high (M2-sec-policy,
+  M5-rob, M1-RGPD, L1-a11y, M6-rob nouveau)** restent ouvertes,
+  à traiter dans des étapes dédiées (RLS hardening, design
+  dédié, décision RGPD, robustesse hooks).
+
 ---
 
 ## Prompt pour la session N+20 (étape 26)
