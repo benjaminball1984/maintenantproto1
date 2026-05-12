@@ -36,18 +36,6 @@ test.describe('Pétitions — flow consultation + signature stubée', () => {
         body: JSON.stringify([petitionFixture]),
       });
     });
-    await page.route('**/rest/v1/petition_signatures**', async (route: Route) => {
-      if (route.request().method() === 'POST') {
-        return route.fulfill({
-          status: 201,
-          contentType: 'application/json',
-          body: JSON.stringify([
-            { petition_id: petitionFixture.id, user_id: 'stub-user', created_at: new Date().toISOString() },
-          ]),
-        });
-      }
-      return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
-    });
   });
 
   test('la liste des pétitions s\'affiche', async ({ page }) => {

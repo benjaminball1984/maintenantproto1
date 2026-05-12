@@ -7239,6 +7239,216 @@ Playwright sera validé par la CI (sandbox local : CDN
   flow de signature côté UI avec POST `signatures` interceptée +
   refresh visible, ou un autre état non couvert en E2E).
 
+### Audit vibe janitor étape 26
+
+**Branche** : `claude/janitor-post-step26`
+
+Audit en parallèle via 3 subagents `general-purpose` après le merge
+de la PR principale #29 (commit `chore(prod): step 26 …`) :
+architecture / élégance, robustesse / edge cases, sécurité / RGPD
+/ cohérence handoff.
+
+#### Findings par sévérité
+
+| Axe | Total | critical | high | medium | low | Fixable safe-first | Déférés |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Architecture | 10 | 0 | 0 | 0 | 10 | 1 | 9 (dont 6 non-findings explicites) |
+| Robustesse | 10 | 0 | 0 | 3 | 7 | 0 | 10 (dont 4 non-findings explicites : R1/R2/R6/R8) |
+| Sécurité | 10 | 0 | 0 | 0 | 10 | 0 | 10 (dont 7 non-findings explicites) |
+| **Total** | **30** | **0** | **0** | **3** | **27** | **1 unique** | **29 (dont 17 non-findings)** |
+
+> Note : R10 et A1 sont **le même finding** (mock `petition_signatures`
+> dead code, vu sous deux angles : élégance et confusion futur dev).
+> On l'a compté côté architecture (fix appliqué).
+
+#### Fixes appliqués (safe-first)
+
+**J26-A1 / R10** (low / low-risk) — suppression du mock
+`**/rest/v1/petition_signatures**` mort dans
+`web/e2e/petition-signature.spec.ts` (lignes 39-50 du `beforeEach`).
+La vraie table s'appelle `signatures` (cf.
+`web/src/lib/petitions.ts:243,263,277` + `web/src/types/database.ts:1537`).
+Le mock visait une table qui n'existe nulle part dans le repo :
+
+```diff
+- await page.route('**/rest/v1/petition_signatures**', async (route: Route) => {
+-   if (route.request().method() === 'POST') {
+-     return route.fulfill({
+-       status: 201,
+-       contentType: 'application/json',
+-       body: JSON.stringify([
+-         { petition_id: petitionFixture.id, user_id: 'stub-user', created_at: new Date().toISOString() },
+-       ]),
+-     });
+-   }
+-   return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+- });
+```
+
+Vérifications :
+
+- Les 4 tests anonymes de la spec ne déclenchent pas
+  `hasUserSigned` (cf. `usePetition.ts:55` qui short-circuit
+  `if (currentUserId)` → `setSigned(false)` direct quand
+  `userId === null`).
+- Le test étape 26 (signataire authentifié) a sa propre route
+  `**/rest/v1/signatures**` locale, donc indépendant.
+- Aucune POST signature n'est jamais émise par les 5 tests (aucun
+  clic sur le bouton « Signer cette pétition »).
+
+→ Code mort, retrait safe-first. -12 lignes. Aucun test cassé.
+
+#### Fixes déférés (dette nouvelle ou existante)
+
+**J26-A2 / R9** (low / low-risk + medium / medium-risk) — extraction
+d'un helper `installAuthenticatedSession(page, { userId, email })`
+dans `e2e/utils/mockSupabase.ts`. Le pattern « addInitScript +
+localStorage `sb-127-auth-token` » introduit étape 26 est destiné à
+être réutilisé pour les futurs tests E2E qui auront besoin d'un
+user authentifié. **Déféré** : aucun 2e call-site n'existe
+aujourd'hui — règle YAGNI. **Ajouté à la dette consolidée** sous
+`L8-arch-authsession` (nouveau).
+
+**J26-A3 / R4** (low / low-risk + medium / low-risk) — constantes
+magiques `'sb-127-auth-token'` et `86_400`, et couplage implicite
+à la formule storage key de supabase-js
+(`sb-${hostname.split('.')[0]}-auth-token`). Un bump majeur
+supabase-js v3 qui changerait la dérivation casserait le test
+silencieusement (storage non lu → status anonymous → assertion
+timeout). **Déféré** : lié à J26-A2 (l'extraction du helper
+résoudra naturellement le sujet). Le commentaire 131-148 documente
+déjà le couplage CI ; pas de fix code urgent.
+**Ajouté à la dette consolidée** sous `M7-e2e-storagekey`
+(nouveau).
+
+**J26-A4** (low / low-risk) — commentaire pédagogique de 17 lignes
+sur la dérivation de la storage key supabase-js. Disproportionné
+pour un test isolé, mais justifié comme prose ad hoc en l'absence
+de helper partagé. **Déféré** : à déplacer dans la JSDoc du futur
+helper `installAuthenticatedSession` (cf. J26-A2 / L8).
+
+**J26-R3** (low / low-risk) — la route `**/rest/v1/signatures**`
+locale au test étape 26 ne filtre pas la méthode HTTP. Si un futur
+dev copie le test et ajoute un `click()` de retrait, la DELETE
+recevrait encore le row signé → flake. Non-bug aujourd'hui (pas
+de clic), pattern fragile. **Déféré** : modif de spec qui s'inscrit
+mieux dans une étape pattern E2E auth dédiée (cf. L8).
+
+**J26-R5** (low / medium-risk) — pas de support `VITE_SUPABASE_URL`
+override pour un run E2E hors CI (vrai staging Supabase). Hostname
+différent → storage key différente → test casse silencieusement.
+**Déféré** : nécessite refacto util (calcul dynamique de la storage
+key depuis `process.env`), à traiter dans l'étape pattern E2E auth.
+
+**J26-R7 / M6-rob** (medium / medium-risk) — `usePetition.useEffect`
+ne flag pas un `cancelled` local. Quand `userId` passe de `null`
+(anonyme initial) → `stubId` (auth chargée), 2 fetches concurrents
+lancés ; si la 1ère réponse arrive après la 2e, `setSigned(false)`
+peut écraser `setSigned(true)` → flake potentiel. Le nouveau test
+n'aggrave PAS la dette M6-rob mais en dépend pour ne pas flake.
+**Déféré** : dette M6-rob déjà tracée (~22 hooks similaires), fix
+au cas par cas hors scope janitor.
+
+**J26-R1 / R2 / R6 / R8** — **non-findings** explicites confirmés
+par le subagent robustesse :
+
+- **R1** : `addInitScript` injecte le localStorage AVANT tout script
+  de la page (garantie Playwright officielle). `getSession()` reste
+  synchrone-sur-localStorage. Aucune race.
+- **R2** : auto-refresh token. `AUTO_REFRESH_TICK_DURATION_MS=30000`,
+  `AUTO_REFRESH_TICK_THRESHOLD=3` → refresh déclenché uniquement à
+  &lt;90 s de `expires_at`. Avec `expires_at = now + 86400 s`,
+  86310 s de marge vs un timeout de 30 s → le mock `/auth/v1/token`
+  (qui retournerait le mauvais user `stub-user-id`) ne sera jamais
+  hit.
+- **R6** : `aria-pressed={true}` (React boolean) → `aria-pressed="true"`
+  (DOM string) → `toHaveAttribute('aria-pressed', 'true')` matche.
+  OK.
+- **R8** : `Date.now()` est toujours epoch UTC, indépendant de la TZ
+  machine de CI. OK.
+
+**J26-S1 à S10** — tous non-findings explicites côté sécurité /
+RGPD / cohérence handoff (statu quo conforme : pas de fuites
+secrets, RGPD email factice `example.org` safe, CSP inchangée,
+RLS inchangée, dépendances inchangées, compteurs cohérents,
+tableau de dette à 14 items vérifié, prompt étape 27 template
+respecté avec clause de propagation N+22, couplage `sb-127-...`
+ne contamine PAS le runtime production).
+
+**J26-A5 à A10** — non-findings explicites côté architecture
+(assertions `aria-busy`/`disabled` hors scope volontaire,
+cohérence stylistique avec les 4 tests précédents, cohérence
+narrative HANDOFF étape 26 vs 23-25, table dette 14 items vérifiée,
+décision « pas de mock signatures côté beforeEach » documentée,
+aucune duplication nouvelle).
+
+#### Hygiène (janitor étape 26)
+
+- Pas de modification du prototype.
+- Pas de modification du design system `T.*` (CSS vars `--mn-*`).
+- Pas de migration DB.
+- Pas de breaking change visible utilisateur (le retrait du mock
+  `petition_signatures` est invisible : zéro test consommait cette
+  route).
+- Pas de nouvelle dépendance npm.
+- Pas de bump majeur.
+- TS strict + no `any`.
+- Aucun fix qui casse un test existant.
+- Aucun fix qui ouvre un risque B (cf. vérification ci-dessus).
+- Aucun nouveau `console.error` / `console.warn`.
+
+#### Checks finaux (janitor étape 26)
+
+```
+> npm run typecheck && npm run lint && npx vitest run && npm run build
+
+✓ typecheck   (tsc -b + e2e/tsconfig.json)
+✓ lint        (eslint .)
+✓ vitest      (128 files, 872 tests passed, ~60s)
+✓ build       (entry 47.34 kB / gzip 13.32 kB ; TransparencePage 7.69 kB / gzip 3.11 kB lazy ; sentry 436.2 kB / gzip 143.08 kB lazy)
+```
+
+Compteur de tests **inchangé** (872 vitest + 32 E2E attendus en CI) :
+on retire 12 lignes de dead code sans toucher au runtime, aux
+fixtures ni aux assertions de la suite Playwright.
+
+#### Dette technique consolidée — mise à jour
+
+Ajouts post-step 26 :
+
+| ID | Sévérité | Risque rég. | Description courte | Étape cible |
+| --- | --- | --- | --- | --- |
+| L8-arch-authsession | low | low | helper `installAuthenticatedSession(page, user)` à extraire dans `e2e/utils/mockSupabase.ts` (pattern E2E réutilisable + JSDoc du commentaire 17 lignes) | étape pattern E2E auth dédiée |
+| M7-e2e-storagekey | medium | low | couplage implicite à la formule storage key supabase-js (`sb-${hostname.split('.')[0]}-auth-token`) — bump majeur v3 casserait le test silencieusement + pas de support `VITE_SUPABASE_URL` override hors CI + route `signatures` sans filter méthode HTTP | étape pattern E2E auth dédiée (mutualise avec L8) |
+
+Les dettes existantes (H3-sec, M2-sec-policy, M5-rob, M1-RGPD,
+M6-rob, L1-a11y, L3-arch, L4-sec, L5-arch, L6-arch-progress,
+L7-arch-loginhref, L1-rob, H4-deploy-deno, L-sec-webhook-body)
+restent inchangées.
+
+#### Décisions janitor
+
+- **1 fix safe-first appliqué** sur 30 findings — J26-A1/R10
+  (mock `petition_signatures` mort retiré). Impact côté code
+  minimal (-12 lignes), bénéfice clair (réduction de la
+  confusion pour les futurs devs qui chercheraient pourquoi
+  une POST `signatures` n'est pas mockée par la beforeEach).
+- **2 nouvelles dettes** documentées (L8-arch-authsession +
+  M7-e2e-storagekey). Elles convergent vers une **étape pattern
+  E2E auth dédiée** qui extrairait `installAuthenticatedSession`
+  helper + résoudrait simultanément A2, A3, A4, R3, R4, R5, R9.
+- **R7 (race usePetition)** confirmé comme dépendance latente
+  sur la dette M6-rob existante — pas nouveau, le nouveau test
+  n'aggrave pas le risque.
+- **17 non-findings explicites** (R1/R2/R6/R8 + A5-A10 +
+  S1-S10) : la PR #29 est techniquement propre, le périmètre est
+  minimal et bien isolé.
+- **Toutes les dettes high (H3-sec) + medium-high (M2-sec-policy,
+  M5-rob, M1-RGPD, L1-a11y, M6-rob, M7-e2e-storagekey nouveau)**
+  restent ouvertes, à traiter dans des étapes dédiées (RLS
+  hardening, design dédié, décision RGPD, robustesse hooks,
+  pattern E2E auth).
+
 ---
 
 ## Prompt pour la session N+21 (étape 27)
