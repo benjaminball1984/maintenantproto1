@@ -200,7 +200,21 @@ Reçues par email à `dpo@maintenant.org`. Procédure :
 1. Vérifier l'identité (email du compte ou pièce d'identité).
 2. Si la demande est légitime → suppression définitive du compte
    (anonymisation des signatures/posts qui restent en compteur public).
-3. Délai légal : **30 jours** max. Trace dans `admin_logs`.
+3. **Purger aussi `public.stripe_events`** où le `payload jsonb`
+   contient le `customer_email` ou le `customer` ID Stripe de
+   l'utilisateur·rice (la table archive les évènements Stripe bruts
+   pour audit ; le payload peut contenir des PII). Requête type :
+   `delete from public.stripe_events where payload->'data'->'object'->>'customer_email' = '<email>';`
+   (à adapter selon la forme exacte de l'event). À exécuter avec une
+   double validation admin.
+4. Délai légal : **30 jours** max. Trace dans `admin_logs`.
+
+> **Dette technique** : on devrait purger `stripe_events` plus
+> agressivement (TTL 90 jours par exemple) plutôt que de garder les
+> events Stripe bruts indéfiniment. À traiter dans une étape
+> dédiée — soit cron de purge, soit scrubbing du payload avant
+> insertion (garder seulement `id`, `type`, `subscription`,
+> `metadata.user_id` — pas d'email ni adresse).
 
 ---
 
@@ -250,15 +264,28 @@ sans identifier personne.
 
 ## Outils
 
-- `/admin/reports` — file des signalements.
-- `/admin/users/<id>` — fiche utilisateur (avertir, suspendre, bannir).
-- `/admin/pending` — file des suppressions / bannissements en attente
-  de seconde / troisième validation.
-- `/admin/logs` — consultation `admin_logs` filtrable par date / actor
-  / action.
-- `/admin/dashboard` — KPIs (modération, trafic, signalements).
+**État** : à la livraison de l'étape 19, seule la route `/admin` existe
+côté front — elle agrège les onglets « signalements / utilisateurs / logs
+/ dashboard » dans une seule page (cf. `web/src/pages/AdminPage.tsx`).
+Les chemins listés ci-dessous sont une **roadmap d'évolution** : à mesure
+que le volume de modération augmentera, on les éclatera en sous-routes
+dédiées. Pour l'instant, tout est accessible depuis `/admin`.
 
-Tous ces écrans requièrent `is_admin=true` (cf. RLS `admin_*_admin`
+- `/admin/reports` *(roadmap)* — file des signalements. Pour l'instant
+  onglet « Signalements » sur `/admin`.
+- `/admin/users/<id>` *(roadmap)* — fiche utilisateur (avertir,
+  suspendre, bannir). Pour l'instant onglet « Utilisateurs » sur
+  `/admin`.
+- `/admin/pending` *(roadmap)* — file des suppressions / bannissements
+  en attente de seconde / troisième validation. Pour l'instant
+  validation manuelle en équipe avant action.
+- `/admin/logs` *(roadmap)* — consultation `admin_logs` filtrable par
+  date / actor / action. Pour l'instant requête SQL directe côté
+  Supabase Studio.
+- `/admin/dashboard` *(roadmap)* — KPIs (modération, trafic,
+  signalements). Pour l'instant rapport manuel mensuel.
+
+Toutes ces routes requièrent `is_admin=true` (cf. RLS `admin_*_admin`
 policies + composant `RequireAdmin`).
 
 ---

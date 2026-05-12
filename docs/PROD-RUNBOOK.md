@@ -133,6 +133,21 @@ npx supabase functions deploy create-checkout-session --no-verify-jwt
 npx supabase functions deploy stripe-webhook --no-verify-jwt
 ```
 
+> **Pourquoi `--no-verify-jwt` sur `stripe-webhook` ?** Stripe ne sait
+> pas signer un JWT Supabase. La sécurité du endpoint repose sur la
+> vérification HMAC de l'en-tête `stripe-signature` via
+> `STRIPE_WEBHOOK_SECRET` (cf. `handle()` lignes 110-125). Sans ce
+> flag, l'Edge Function rejetterait tout appel sans Bearer Supabase
+> et le webhook ne pourrait jamais entrer. Toute modification future
+> doit conserver le check signature côté `handle()`.
+>
+> **Pourquoi sur `create-checkout-session` ?** Cette fonction peut
+> être appelée par un utilisateur·rice authentifié·e (Bearer
+> Supabase optionnel transmis automatiquement) ou anonyme (premier
+> paiement avant compte). Le check d'autorisation business (tier
+> valide, idempotence client_reference_id) est fait dans le corps de
+> la fonction. À durcir si on veut forcer l'auth Supabase.
+
 **Variables d'environnement** des fonctions (Project Settings →
 Edge Functions → Environment Variables) :
 

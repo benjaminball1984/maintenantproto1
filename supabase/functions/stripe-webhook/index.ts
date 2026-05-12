@@ -205,8 +205,14 @@ export async function handle(req: Request, deps: StripeWebhookDeps): Promise<Res
         // Évènement non géré : on accuse réception (200) pour que Stripe ne
         // retente pas indéfiniment. C'est explicite et documenté. On marque
         // tout de même la ligne `processed_at` pour distinguer « non géré »
-        // de « jamais traité ».
-        await deps.recordEventProcessed(event.id);
+        // de « jamais traité ». Si le marquage échoue, on log et on
+        // répond quand même 200 (cohérent avec la branche success en
+        // bas du try/catch principal).
+        try {
+          await deps.recordEventProcessed(event.id);
+        } catch (err) {
+          console.warn('stripe-webhook: recordEventProcessed (default case) failed', err);
+        }
         return new Response(JSON.stringify({ received: true, ignored: event.type }), {
           status: 200,
           headers: { 'content-type': 'application/json; charset=utf-8' },
