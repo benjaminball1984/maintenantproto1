@@ -126,6 +126,34 @@ function epochToIso(seconds: number | null | undefined): string | null {
   return new Date(seconds * 1000).toISOString();
 }
 
+// M3-rob (étape 24) — Marque la ligne `stripe_events` comme processed avant de
+// renvoyer un 400 de validation métier (payload Stripe incomplet). Sans ce
+// marquage, la ligne reste à `processed_at=null` et devient indiscernable
+// d'un évènement « jamais traité » pour les audits / un futur job de
+// réconciliation. Stripe ne retentera pas un 400 — l'évènement est mort de
+// toute façon, on documente juste le verdict. Échec du marquage non
+// escaladé (log warn) : la cohérence stripe_events est best-effort, le
+// status code 4xx prime.
+async function respondValidationFailure(
+  deps: StripeWebhookDeps,
+  eventId: string,
+  message: string,
+): Promise<Response> {
+  try {
+    await deps.recordEventProcessed(eventId);
+  } catch (err) {
+    // On log uniquement `err.message` (et pas l'objet brut) : la lib
+    // supabase-js peut embarquer `error.details` contenant un extrait de
+    // payload PostgREST — défense en profondeur côté logs Edge.
+    const detail = err instanceof Error ? err.message : 'unknown';
+    console.warn(
+      `stripe-webhook: recordEventProcessed (validation ${message}) failed:`,
+      detail,
+    );
+  }
+  return new Response(message, { status: 400 });
+}
+
 export async function handle(req: Request, deps: StripeWebhookDeps): Promise<Response> {
   if (req.method !== 'POST') {
     return new Response('method_not_allowed', { status: 405 });
@@ -166,7 +194,7 @@ export async function handle(req: Request, deps: StripeWebhookDeps): Promise<Res
         const subscriptionId =
           typeof obj.subscription === 'string' ? obj.subscription : (obj.subscription ?? '');
         if (!userId || !subscriptionId) {
-          return new Response('missing_user_or_subscription', { status: 400 });
+          return await respondValidationFailure(deps, event.id, 'missing_user_or_subscription');
         }
         await deps.upsertAdhesion({
           userId,
@@ -179,7 +207,9 @@ export async function handle(req: Request, deps: StripeWebhookDeps): Promise<Res
       }
       case 'customer.subscription.deleted': {
         const obj = event.data.object;
-        if (!obj.id) return new Response('missing_subscription_id', { status: 400 });
+        if (!obj.id) {
+          return await respondValidationFailure(deps, event.id, 'missing_subscription_id');
+        }
         await deps.updateAdhesionStatus({
           stripeSubscriptionId: obj.id,
           status: 'cancelled',
@@ -189,7 +219,9 @@ export async function handle(req: Request, deps: StripeWebhookDeps): Promise<Res
       }
       case 'customer.subscription.updated': {
         const obj = event.data.object;
-        if (!obj.id) return new Response('missing_subscription_id', { status: 400 });
+        if (!obj.id) {
+          return await respondValidationFailure(deps, event.id, 'missing_subscription_id');
+        }
         const stripeStatus = obj.status ?? '';
         const nextStatus: AdhesionStatusUpdate['status'] = CANCEL_STATUSES.has(stripeStatus)
           ? 'cancelled'
@@ -207,7 +239,7 @@ export async function handle(req: Request, deps: StripeWebhookDeps): Promise<Res
           readUserId(obj.metadata) ??
           readUserId(obj.parent?.subscription_details?.metadata ?? null);
         if (!userId) {
-          return new Response('missing_user_metadata', { status: 400 });
+          return await respondValidationFailure(deps, event.id, 'missing_user_metadata');
         }
         await deps.creditT99cp({
           userId,

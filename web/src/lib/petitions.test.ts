@@ -27,7 +27,10 @@ const mocks = vi.hoisted(() => {
     eq: vi.fn(),
     then: vi.fn(),
   };
-  return { selectChain, insertChain, deleteChain };
+  // rpc : appel direct supabase.rpc(name, args) → Promise<{ data, error }>.
+  // Étape 24 — utilisé par getPetitionSignatureCount.
+  const rpc = vi.fn();
+  return { selectChain, insertChain, deleteChain, rpc };
 });
 
 /** Rend le chain « thenable » : `await chain` renvoie {data,error}. */
@@ -63,12 +66,14 @@ vi.mock('@/lib/supabase', () => ({
         return mocks.deleteChain;
       },
     })),
+    rpc: (...args: unknown[]) => mocks.rpc(...args),
   },
 }));
 
 import {
   createPetition,
   getPetition,
+  getPetitionSignatureCount,
   hasUserSigned,
   listPetitions,
   PETITION_BODY_MIN,
@@ -338,5 +343,38 @@ describe('hasUserSigned', () => {
     mocks.selectChain.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
     const { signed } = await hasUserSigned('p1', 'u1');
     expect(signed).toBe(false);
+  });
+});
+
+describe('getPetitionSignatureCount (M2-sec — RPC scalar)', () => {
+  it('appelle la RPC signatures_count_for_petition avec p_petition', async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: 42, error: null });
+    const { count, error } = await getPetitionSignatureCount('p1');
+    expect(error).toBeNull();
+    expect(count).toBe(42);
+    expect(mocks.rpc).toHaveBeenCalledWith('signatures_count_for_petition', { p_petition: 'p1' });
+  });
+
+  it('propage une erreur Postgrest sans masquer', async () => {
+    const rpcError = { message: 'permission denied', code: '42501' };
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: rpcError });
+    const { count, error } = await getPetitionSignatureCount('p2');
+    expect(count).toBeNull();
+    expect(error).toEqual(rpcError);
+  });
+
+  it('défaut à 0 si la RPC renvoie null sans erreur (best-effort)', async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: null });
+    const { count, error } = await getPetitionSignatureCount('p3');
+    expect(error).toBeNull();
+    expect(count).toBe(0);
+  });
+
+  it('défaut à 0 si la RPC renvoie une valeur non numérique (défensif)', async () => {
+    // Bouclier : si PostgREST renvoie un body inattendu (string "42", NaN, etc.)
+    // on borne à 0 plutôt que de propager une valeur invalide dans l'UI.
+    mocks.rpc.mockResolvedValueOnce({ data: 'pas-un-nombre' as unknown as number, error: null });
+    const { count } = await getPetitionSignatureCount('p4');
+    expect(count).toBe(0);
   });
 });

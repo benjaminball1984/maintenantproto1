@@ -32,6 +32,7 @@
 | 21. Post-go-live — Transparence v2 (graphique mensuel) + E2E + dette différée |   ✅   |
 | 22. Post-go-live — Grant `service_role` (clôture H2-rob) + E2E densifié + dette différée |   ✅   |
 | 23. Post-go-live — RPC `users_signups_monthly` (clôture H1-rob) + refacto handler stripe (clôture H2-arch) |   ✅   |
+| 24. Post-go-live — M3-rob (4xx → processed_at) + M2-sec (RPC `signatures_count_for_petition`) + H4-deploy (test d'intégrité du re-export Deno) |   ✅   |
 
 ---
 
@@ -5972,6 +5973,700 @@ Procédure d'application en staging avant l'étape 24
   remplacer la lecture `signatures_select_public` (RGPD Art. 9).
 - Si Sentry remonte des erreurs `stripe-webhook` récurrentes →
   prioriser le job de réconciliation Edge Function.
+
+---
+
+## Étape 24 — Post-go-live / Clôture M3-rob (handler stripe processed_at sur 4xx) + M2-sec (RPC `signatures_count_for_petition`) + H4-deploy (test d'intégrité Deno re-export) ✅
+
+**Branche** : `claude/review-project-rules-LRuBh`
+
+Cinquième étape post-go-live. Le provisionnement Vercel / Stripe live /
+Sentry SaaS / PITR / projet Supabase de test **reste inchangé** depuis
+les étapes 20-23. Aucun trafic réel, aucune métrique Sentry runtime,
+aucun retour utilisateur·rice. L'étape se concentre sur la dette
+livrable sans environnement externe : **clôture de M3-rob**
+(distinguer « validation refusée » de « jamais traité » côté
+`stripe_events`), **fondation M2-sec** (RPC scalaire de comptage des
+signatures par pétition, additive — le durcissement de la policy
+existante `signatures_select_public` reste différé pour validation
+explicite produit / DPO), **clôture H4-deploy** (test d'intégrité
+qui vérifie que le re-export Deno `supabase/functions/stripe-webhook/
+handler.ts` résout toujours sur `web/src/lib/stripeWebhookHandler.ts`).
+
+### Audit Lighthouse réel — re-différé étape 25
+
+Pré-requis non rempli : pas de Vercel preview / staging HTTPS en
+ligne. La consigne du prompt étape 24 est explicite (« Si pas de
+staging HTTPS : différer étape 25 »). Pas de régression côté `vite
+build` : bundle entry inchangé (47.34 kB / gzip 13.32 kB),
+TransparencePage inchangé (7.69 kB / gzip 3.11 kB). L'ajout
+`getPetitionSignatureCount` est tree-shakable (importé nulle part
+côté pages — call-sites différés en attendant le durcissement RLS).
+
+### E2E « happy path » réel — re-différé, alternative livrée
+
+Pas de projet Supabase de test seedé. La suite Playwright reste à
+29/29 verts (28 specs + axe-core a11y). Aucun test E2E ajouté à
+cette étape — le focus est exclusivement back-end (handler + DB).
+
+### Monitoring Sentry runtime — re-différé étape 25
+
+DSN absent en env preview (Sentry SaaS non provisionné). Aucun event
+runtime à observer. Re-différé.
+
+### Monitoring Supabase — re-différé étape 25
+
+Pas de trafic réel sur `maintenant-staging`. Re-différé.
+
+### Retours utilisateur·rices — sans objet (pas de trafic)
+
+Aucun compte créé réel, aucun signalement modération, aucun bug
+remonté.
+
+### M3-rob — `processed_at` marqué sur validation 4xx ✅
+
+La dette `M3-rob` (medium / medium) listée à l'étape 19 portait sur
+les trois branches de validation 4xx du handler stripe-webhook
+(`missing_user_or_subscription`, `missing_subscription_id`,
+`missing_user_metadata`) qui renvoyaient un 400 sans marquer la
+ligne `stripe_events`. Conséquence : audit / futur job de
+réconciliation ne pouvait pas distinguer « validation refusée par
+le handler » de « jamais traité, peut-être perdu ».
+
+**Refacto côté `web/src/lib/stripeWebhookHandler.ts`** :
+
+```ts
+async function respondValidationFailure(
+  deps: StripeWebhookDeps,
+  eventId: string,
+  message: string,
+): Promise<Response> {
+  try {
+    await deps.recordEventProcessed(eventId);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : 'unknown';
+    console.warn(
+      `stripe-webhook: recordEventProcessed (validation ${message}) failed:`,
+      detail,
+    );
+  }
+  return new Response(message, { status: 400 });
+}
+```
+
+**Propriétés** :
+
+- Échec du marquage non escaladé en 500 (log warn) : la cohérence
+  `stripe_events` est best-effort, le status code 4xx prime — Stripe
+  ne retentera pas un 400 de toute façon, le statu quo (ligne sans
+  `processed_at`) reste le pire scénario.
+- Idempotence préservée : la ligne ayant déjà été insérée par
+  `recordEventStart`, le 400 suivant côté Stripe ne déclenchera
+  jamais de double traitement (court-circuit `recordEventStart` →
+  200 idempotent).
+- Aucun changement de signature exposée : le bootstrap Deno
+  (`supabase/functions/stripe-webhook/index.ts`) consomme la même
+  `handle(req, deps)` qu'avant.
+- Log message identique au schema existant (le `default:` branche
+  utilise déjà le même pattern `console.warn` avec `err.message`
+  uniquement, pour ne pas fuiter de payload PostgREST côté logs
+  Edge — défense en profondeur).
+
+**Tests** : `stripeWebhookHandler.test.ts` passe de 13 à 17 tests :
+
+- Existing test « renvoie 400 si user_id est manquant » étendu :
+  asserte désormais que `recordEventProcessed` est appelé avec
+  `event.id`.
+- Nouveau describe `M3-rob` : 4 tests couvrant les 3 branches
+  (`missing_user_or_subscription` sur checkout, `missing_subscription_id`
+  sur `subscription.deleted` ET `subscription.updated`,
+  best-effort en cas d'échec `recordEventProcessed`).
+
+**Dette M3-rob → clôturée**.
+
+### M2-sec — RPC `signatures_count_for_petition()` (additive) ✅ ; policy hardening différée
+
+La dette `M2-sec` (medium / high) listée à l'étape 19 portait sur
+le fait que `signatures_select_public for select using (true)`
+autorise tout anonyme à lister les `user_id` des signataires d'une
+pétition. Risque RGPD : signature politique = opinion =
+catégorie sensible Art. 9, et la corrélation « qui a signé X ET Y »
+suffit à profiler des opinions politiques même sans email.
+
+**Migration DB additive** ajoutée à `db/schema.sql` §22 (listée
+explicitement dans le prompt étape 24 → autorisée par CLAUDE.md
+§ Politique de PR) :
+
+```sql
+create or replace function public.signatures_count_for_petition(
+  p_petition uuid
+)
+  returns integer
+  language sql
+  stable
+  security definer
+  set search_path = public
+as $$
+  select count(*)::integer
+  from public.signatures s
+  where s.petition_id = p_petition;
+$$;
+
+revoke all on function public.signatures_count_for_petition(uuid) from public;
+grant execute on function public.signatures_count_for_petition(uuid) to anon, authenticated;
+grant execute on function public.signatures_count_for_petition(uuid) to service_role;
+```
+
+**Propriétés** :
+
+- `security definer` → fonction immune au futur durcissement de
+  `signatures_select_public`.
+- Scalaire `integer` → aucune projection des `user_id`. La sortie
+  est strictement « combien » sans rien révéler sur « qui ».
+- Cohérent avec `petitions.signature_count` (dénormalisé maintenu
+  par triggers `signatures_count_inc` / `signatures_count_dec` —
+  cf. `db/schema.sql` §4.b) ; les deux peuvent diverger d'un delta
+  microscopique pendant une INSERT/DELETE simultanée, mais à
+  l'échelle d'une page le `count(*)` reste cohérent.
+- RGPD : aucune PII supplémentaire ne quitte la DB.
+
+**Helper côté client** (`web/src/lib/petitions.ts`) :
+
+```ts
+export async function getPetitionSignatureCount(
+  petitionId: string,
+): Promise<{ count: number | null; error: PostgrestError | null }> {
+  const { data, error } = await supabase.rpc('signatures_count_for_petition', {
+    p_petition: petitionId,
+  });
+  if (error) return { count: null, error };
+  const count = typeof data === 'number' && Number.isFinite(data) ? data : 0;
+  return { count, error: null };
+}
+```
+
+Type `Database.public.Functions.signatures_count_for_petition`
+ajouté à `web/src/types/database.ts` :
+
+```ts
+signatures_count_for_petition: {
+  Args: { p_petition: string };
+  Returns: number;
+};
+```
+
+**Helper isolé pour l'instant** : aucune page n'appelle encore
+`getPetitionSignatureCount`. Stratégie volontaire : on livre la
+RPC + le helper en additif (zéro risque de régression sur les
+flows existants qui consomment `petitions.signature_count`), puis
+on migrera les call-sites au moment du durcissement de la policy
+(étape dédiée future). Les nouveaux call-sites devront converger
+sur cette RPC.
+
+**Policy hardening différé pour validation explicite** : le prompt
+étape 24 demande explicitement de **demander confirmation** avant
+de durcir une policy existante (`signatures_select_public for
+select using (true)` → restreindre la projection des `user_id`).
+Conformément à CLAUDE.md § Conditions d'arrêt malgré l'autorisation
+permanente (« changement RLS visible côté client »), cette
+modification est reportée en dette M2-sec-policy (étape RLS
+hardening dédiée, qui devra aussi traiter H3-sec sur `users.email`).
+
+**Tests** : `petitions.test.ts` passe de 23 à 27 tests. Nouveau
+describe `getPetitionSignatureCount (M2-sec — RPC scalar)` : 4 tests
+(appel RPC + args, propagation erreur Postgrest, défaut à 0 sur
+data null, défaut à 0 défensif sur data non numérique). Le mock
+existant `vi.mock('@/lib/supabase')` étend `supabase.rpc(...)` →
+`mocks.rpc(...)` (additif, zéro régression sur les tests existants).
+
+**Dette M2-sec → partiellement clôturée** : RPC livrée, policy
+hardening différée (cf. dette consolidée ci-dessous).
+
+### H4-deploy — test d'intégrité du re-export Deno ✅
+
+La dette `H4-deploy` (medium / high) a été ajoutée par le janitor
+post-step 23. Le bootstrap Deno
+`supabase/functions/stripe-webhook/index.ts` importe `./handler.ts`,
+qui re-exporte `export * from '../../../web/src/lib/stripeWebhookHandler.ts'`.
+Si quelqu'un déplace / renomme / supprime le handler canonique côté
+`web/`, vitest reste vert (import intra-package) mais `supabase
+functions deploy` casse silencieusement.
+
+Le prompt étape 24 offrait deux pistes :
+(a) ajouter un job CI `supabase functions deploy --dry-run` ;
+(b) revenir à une duplication temporaire du handler.
+
+**Choix : (a) version minimaliste, sans nouvelle dépendance CI**.
+La piste (b) annulerait la clôture H2-arch (étape 23). La piste
+(a) full (vraie commande Supabase CLI) nécessiterait des secrets CI
++ accès réseau pendant le test ; trop lourd pour le bénéfice. On
+livre une version intermédiaire : un test vitest qui couvre la
+régression la plus probable.
+
+**Nouveau test** `web/src/lib/stripeWebhookDeploy.test.ts` (4
+tests) :
+
+1. `supabase/functions/stripe-webhook/handler.ts` existe.
+2. Contient bien un `export * from '...'` (pas de duplication
+   accidentelle).
+3. Le chemin relatif extrait résout sur
+   `web/src/lib/stripeWebhookHandler.ts` (path stricte, pas une
+   sous-string).
+4. Le handler canonique exporte toujours `async function handle(`
+   (contrat public consommé par le bootstrap Deno).
+
+**Propriétés** :
+
+- Zéro nouvelle dépendance npm / CI.
+- Tourne en < 50 ms (4 lectures fs synchrones petites).
+- Couvre le risque #1 (déplacement / suppression / rename du
+  handler canonique).
+- Ne couvre PAS le risque #2 (régression Deno-only, ex : un
+  import top-level qui marche en TS mais que Deno refuse à
+  cause d'un `esm.sh` indisponible). Ce risque reste sur dette
+  H4-deploy-deno (low / low — à traiter si on a un vrai
+  pipeline CI Supabase plus tard).
+
+**Dette H4-deploy → clôturée pour la régression #1**. La régression
+#2 (Deno bundler) reste en dette low priority H4-deploy-deno.
+
+### Cumul T99CP émises publique — re-différé étape 25
+
+Pas de validation produit reçue à cette étape. Re-différé.
+
+### Job de réconciliation Stripe — re-différé étape 25
+
+Critère prompt §9 inchangé : pas d'erreur Sentry observable,
+idempotence DB suffit.
+
+### Dette technique différée — étape 25 ou plus tard
+
+Récap consolidé (étapes 19-24 + janitor post-step 22-23) :
+
+| ID | Sévérité | Risque rég. | Description courte | Étape cible |
+| --- | --- | --- | --- | --- |
+| H3-sec | high | high | `users.email` exposé via `users_select_public for select using (true)` | étape RLS hardening dédiée |
+| ~~H2-rob~~ | ~~high~~ | ~~medium~~ | ~~grant `service_role` sur `credit_t99cp(uuid,integer,text,text)`~~ | **clôturée étape 22** |
+| ~~H2-arch~~ | ~~high~~ | ~~medium~~ | ~~`stripeWebhook.test.ts` cross-package import~~ | **clôturée étape 23** |
+| ~~H1-rob~~ | ~~high~~ | ~~medium~~ | ~~`fetchMonthlySignups` sans `range()/limit()` → biais > 1000 lignes~~ | **clôturée étape 23** |
+| ~~H4-deploy~~ | ~~medium~~ | ~~high~~ | ~~re-export Deno `stripe-webhook/handler.ts` non couvert en CI~~ | **clôturée étape 24** (test d'intégrité) |
+| M2-sec-policy | medium | high | durcir `signatures_select_public` pour ne plus exposer `user_id` aux anonymes — demande confirmation explicite produit / DPO | étape RLS hardening |
+| ~~M2-sec-rpc~~ | ~~medium~~ | ~~high~~ | ~~RPC `signatures_count_for_petition()` (fondation hardening)~~ | **clôturée étape 24** |
+| M5-rob | medium | low | `count: 'exact'` sur `signatures` au-delà ~100k lignes | étape stats matérialisées |
+| ~~M3-rob~~ | ~~medium~~ | ~~medium~~ | ~~`processed_at` non marqué sur validation 4xx~~ | **clôturée étape 24** |
+| M1-RGPD | medium | medium | purge auto `stripe_events.payload` (TTL 90j ou scrub avant insert) | décision RGPD + migration |
+| L1-a11y | medium | high | color-contrast `--mn-text-3` (~195 usages) | étape design dédiée |
+| L3-arch | low | low | extraire hook `useFetchOnMount` pour dédoublonner `cancelled` pattern | nice-to-have |
+| L4-sec | low | low | CSP `script-src https://js.stripe.com` (Stripe Elements) | quand Stripe Elements activé |
+| L5-arch | low | medium | inline `CSSProperties` dupliqués entre pages légales | étape design dédiée |
+| L1-rob | low | low | tests `vi.fn<typeof deps.upsertAdhesion>` pattern inconsistant | passe test hygiene |
+| H4-deploy-deno | low | low | régression Deno bundler (esm.sh, etc.) non couverte | quand pipeline CI Supabase réel |
+
+### Bundle après ajout
+
+| Avant étape 24 (fin janitor 23) | Après étape 24 |
+| --- | --- |
+| `index.js` 47.34 kB / gzip 13.32 kB | `index.js` 47.34 kB / gzip 13.32 kB |
+| `TransparencePage.js` 7.69 kB / gzip 3.11 kB | `TransparencePage.js` 7.69 kB / gzip 3.11 kB |
+
+Aucun nouveau chunk : `getPetitionSignatureCount` reste dans
+`petitions.ts` qui était déjà bundlé. Aucun call-site appelle
+encore la fonction côté UI (importée nulle part, tree-shaking
+théorique). Le test d'intégrité Deno (`stripeWebhookDeploy.test.ts`)
+est dans `*.test.ts`, donc exclu du build production. Aucune
+nouvelle dépendance npm.
+
+### Tests
+
+- **872 tests vitest verts** (128 fichiers, durée ~76 s). Compte
+  **+12** vs étape 23 (860 → 872) :
+  - `stripeWebhookHandler.test.ts` 13 → 17 (+4 nouveaux M3-rob).
+  - `petitions.test.ts` 23 → 27 (+4 nouveaux M2-sec).
+  - `stripeWebhookDeploy.test.ts` 0 → 4 (nouveau fichier H4-deploy).
+- E2E Playwright : 29/29 verts (inchangé — pas de nouveau test E2E
+  cette étape).
+- 4 checks locaux verts (typecheck, lint, vitest, build).
+
+### Hygiène
+
+- Pas de modification du prototype (`app/Maintenant.html`,
+  `Theme.jsx`).
+- Pas d'emojis dans les fichiers TS / commits / PR.
+- Tokens `T.*` (CSS vars `--mn-*`) **intacts**.
+- Pas de clé service_role dans le bundle front.
+- Pas de nouvelle dépendance npm.
+- Migration DB : **additive uniquement** (RPC
+  `signatures_count_for_petition` + grants execute). Aucune
+  suppression / rename / DROP. Aucun durcissement de policy
+  existante. Listée explicitement dans le prompt étape 24 →
+  autorisée par CLAUDE.md.
+- Pas de breaking change visible utilisateur (aucune page ne
+  consomme encore `getPetitionSignatureCount` — il est livré en
+  fondation pour la future étape de durcissement RLS).
+- Le handler stripe-webhook reste isofonctionnel sur le happy path
+  (les branches 4xx changent leur effet de bord côté DB en marquant
+  `processed_at`, mais Stripe voit toujours le même 400). Pas
+  d'impact côté tests d'intégration externes.
+- Aucune `console.error` ajoutée ; un `console.warn` ajouté
+  (validation 4xx + échec `recordEventProcessed`) en cohérence
+  avec le pattern existant du `default:` branche.
+
+### Checks finaux
+
+```
+> npm run typecheck && npm run lint && npx vitest run && npm run build
+
+✓ typecheck   (tsc -b + e2e/tsconfig.json)
+✓ lint        (eslint .)
+✓ vitest      (128 files, 872 tests passed, ~76s)
+✓ build       (entry 47.34 kB / gzip 13.32 kB ; TransparencePage 7.69 kB / gzip 3.11 kB lazy ; sentry 436.2 kB / gzip 143.08 kB lazy)
+```
+
+### Migration DB
+
+**Additive uniquement** (cf. `db/schema.sql` §22) :
+
+```sql
+create or replace function public.signatures_count_for_petition(
+  p_petition uuid
+)
+  returns integer
+  ...
+  security definer
+  ...
+
+revoke all on function public.signatures_count_for_petition(uuid) from public;
+grant execute on function public.signatures_count_for_petition(uuid) to anon, authenticated;
+grant execute on function public.signatures_count_for_petition(uuid) to service_role;
+```
+
+Procédure d'application en staging avant l'étape 25
+(cf. `docs/PROD-RUNBOOK.md` §1.2, sanity checks 3 + 4) :
+
+1. `pg_dump` du projet `maintenant-staging` vers bucket privé.
+2. `psql < db/schema.sql` — idempotent (CREATE OR REPLACE).
+3. Validation côté admin : `select
+   public.signatures_count_for_petition('<UUID>'::uuid);` →
+   doit retourner un integer (0 ou plus), jamais NULL.
+4. Validation côté anon via curl (cf. PROD-RUNBOOK §1.2 sanity
+   check 4) — doit renvoyer un body JSON contenant un nombre,
+   jamais 401/403.
+
+### Décisions
+
+- **RPC `signatures_count_for_petition` SECURITY DEFINER livrée
+  isolée (no call-site)** : on prépare l'infrastructure du
+  durcissement RLS sans le déclencher, conformément à la consigne
+  du prompt qui demande confirmation explicite avant tout
+  durcissement de policy existante. La RPC est tree-shakable
+  jusqu'à ce qu'un appelant l'importe ; aucun impact bundle.
+- **Pas de modification de `signatures_select_public`** : la
+  consigne du prompt est explicite (« Si durcissement de policy
+  existante touché → demander confirmation explicite »). Le
+  durcissement nécessite une décision produit / DPO + une étape
+  RLS hardening dédiée qui traiterait simultanément H3-sec
+  (`users.email`).
+- **H4-deploy version minimaliste** : `supabase functions deploy
+  --dry-run` aurait demandé Supabase CLI + secrets CI + accès
+  réseau pendant le test. La version vitest livre la couverture
+  utile (régression #1 = déplacement / suppression du handler
+  canonique) sans nouvelle infra. La régression #2 (Deno bundler)
+  reste en dette low priority H4-deploy-deno.
+- **M3-rob : log warn plutôt qu'escalade 500** : la cohérence
+  `stripe_events.processed_at` est best-effort. Stripe ne retentera
+  pas un 400 — même un échec de marquage laisse la ligne en
+  `processed_at=null` (status quo pré-étape 24), pas pire qu'avant.
+  Escalader en 500 inciterait Stripe à retenter, ce qui n'a aucun
+  sens pour une validation refusée.
+- **Helpers `Number.isFinite` guard sur `getPetitionSignatureCount`** :
+  défense en profondeur si PostgREST renvoie un body inattendu
+  (string, NaN). Même logique que les guards des étapes 22-23 sur
+  `fetchMonthlySignups`. Coût zéro, pas de surface de bug si un
+  jour la sérialisation PostgREST change.
+- **Cumul T99CP, monitoring Sentry/Supabase, Lighthouse, retours
+  utilisateur·rices** re-différés en bloc étape 25 : conditions
+  externes inchangées vs étape 23.
+
+### Prochaines étapes (étape 25)
+
+- Lighthouse mesuré dès qu'un Vercel preview HTTPS sera en ligne
+  (priorité 1 si oui).
+- Monitoring Sentry canary + 7 j observations.
+- Décision produit cumul T99CP émises → RPC
+  `transparency_t99cp_total()` si OK.
+- Décision produit / DPO sur le durcissement
+  `signatures_select_public` (M2-sec-policy). Si OK → migrer
+  call-sites vers `getPetitionSignatureCount`, puis
+  remplacer la policy par une version qui ne projette plus
+  `user_id` aux anonymes.
+- Si Sentry remonte des erreurs `stripe-webhook` récurrentes →
+  prioriser le job de réconciliation Edge Function.
+
+---
+
+## Prompt pour la session N+19 (étape 25)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD, Lighthouse
+>    ≥ 95, axe-core ≥ 95, `prefers-reduced-motion`). Note la section
+>    « Politique de PR » qui t'autorise à enchaîner ouverture + merge
+>    des PR sans confirmation **jusqu'à la session 50 incluse**. Note
+>    aussi la section « Recopie systématique du prompt de la session
+>    suivante » : **à la clôture de cette étape, recopier le prompt
+>    étape 26 à la fois dans `HANDOFF-PROGRESS.md` ET dans la réponse de
+>    chat finale**. Et enfin la section « Audit récurrent vibe janitor
+>    de fin d'étape » : **après le merge de la PR principale de
+>    l'étape 25, tu dois enchaîner une PR janitor séparée
+>    `chore(janitor): post-step 25 — …` et inclure cette même
+>    instruction janitor dans le prompt étape 26**.
+> 2. `HANDOFF.md` §11 (Points d'attention) + §12 (Suivi) + §13 (Sécurité).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 24 ✅ — étape 25 à faire).
+> 4. `docs/PROD-RUNBOOK.md` — runbook de provisionnement (§1.2 mis à
+>    jour étape 24 avec sanity checks 3+4 pour
+>    `signatures_count_for_petition`).
+> 5. `docs/MODERATION.md` — procédure modération.
+> 6. `docs/USER-GUIDE.md` — FAQ utilisateur·rice.
+>
+> **État actuel à la fin de l'étape 24 + janitor post-step 24** :
+>
+> - **M3-rob clôturée** : `respondValidationFailure(deps, eventId, message)`
+>   centralisé dans `web/src/lib/stripeWebhookHandler.ts`. Les 3
+>   branches 4xx (`missing_user_or_subscription`,
+>   `missing_subscription_id`, `missing_user_metadata`) marquent
+>   désormais `processed_at` avant de renvoyer 400. Best-effort :
+>   échec du marquage logue `console.warn`, ne 500 pas. 17 tests
+>   vitest (vs 13 étape 23) — +4 nouveaux M3-rob.
+> - **M2-sec partiellement clôturée** : RPC scalaire
+>   `signatures_count_for_petition(p_petition uuid) returns integer`
+>   ajoutée à `db/schema.sql` §22 — SECURITY DEFINER, grant execute
+>   to anon + authenticated + service_role. Helper
+>   `getPetitionSignatureCount` ajouté à `web/src/lib/petitions.ts`
+>   (4 tests). **Aucun call-site UI** : le helper est livré en
+>   fondation pour le durcissement futur. **Policy
+>   `signatures_select_public` non touchée** — durcissement reporté
+>   en dette `M2-sec-policy` (étape RLS hardening dédiée,
+>   demande confirmation explicite produit / DPO).
+> - **H4-deploy clôturée pour la régression #1** :
+>   `web/src/lib/stripeWebhookDeploy.test.ts` (4 tests) vérifie que
+>   le re-export Deno `supabase/functions/stripe-webhook/handler.ts`
+>   résout toujours sur `web/src/lib/stripeWebhookHandler.ts`. La
+>   régression #2 (Deno bundler) reste en dette low
+>   `H4-deploy-deno`.
+> - 872 tests vitest verts (128 fichiers, durée ~76 s) — +12 vs
+>   étape 23.
+> - Build entry inchangé (47.34 kB / gzip 13.32 kB),
+>   TransparencePage inchangé (7.69 kB / gzip 3.11 kB).
+>   Aucune nouvelle dépendance npm.
+> - Audit Lighthouse réel + monitoring Sentry/Supabase runtime +
+>   retours utilisateur·rices + cumul T99CP public + job
+>   réconciliation Stripe : re-différés étape 25 (conditions
+>   externes inchangées).
+>
+> **Provisionnement externe — état au 2026-05-12 (inchangé depuis
+> étape 19)** :
+>
+> - ✅ Supabase staging provisionné (projet `maintenant-staging`,
+>   eu-west-3, Free). Schéma `db/schema.sql` étape 19 appliqué — les
+>   migrations étapes 20 + 22 + 23 + 24 (RPC
+>   `users_signups_monthly` + `signatures_count_for_petition`)
+>   restent à appliquer.
+> - 🔲 Vercel / Stripe live / Edge Functions / Sentry SaaS / PITR /
+>   projet `maintenant-test` (E2E happy path) restent à provisionner
+>   par l'équipe humaine (cf. `docs/PROD-RUNBOOK.md` §2 à §4).
+>
+> **CONTEXTE D'OUVERTURE — à exécuter avant toute autre action** :
+>
+> 1. Vérifier qu'on est bien dans un workspace contenant `web/`. Si
+>    non, `git fetch origin main && git merge --ff-only origin/main`.
+> 2. `cd web && npm ci` (fallback : `npm install --legacy-peer-deps`).
+> 3. `npm run typecheck && npm run lint && npx vitest run && npm run build`
+>    pour vérifier le compteur de tests au point de départ (≥ 872
+>    verts à incrémenter à chaque étape).
+> 4. Demander à l'équipe humaine :
+>    - Les migrations étape 20 + étape 22 + étape 23 + étape 24
+>      (`db/schema.sql` RPC `signatures_count_for_petition`)
+>      ont-elles été appliquées à Supabase staging ?
+>    - Le provisionnement Vercel / Stripe live / Sentry SaaS décrit
+>      dans `docs/PROD-RUNBOOK.md` est-il fait ?
+>    - Y a-t-il un projet Supabase de test seedé pour le test E2E
+>      « signature anonyme » ?
+>    - La décision produit sur le cumul T99CP émises publique a-t-elle
+>      tranché ? Si oui en faveur de l'affichage public → l'étape 25
+>      ajoutera la RPC `transparency_t99cp_total()` (migration DB
+>      additive, scalaire SECURITY DEFINER).
+>    - La décision produit / DPO sur le durcissement
+>      `signatures_select_public` a-t-elle tranché ? Si oui en faveur
+>      du durcissement → l'étape 25 migrera les call-sites
+>      `petitions.signature_count` UI les plus chauds vers
+>      `getPetitionSignatureCount`, puis remplacera la policy pour
+>      ne plus projeter `user_id` aux anonymes (CHANGEMENT RLS visible
+>      côté client → demande confirmation à chaque PR de cette
+>      transition).
+>
+> **PRÉREQUIS OPÉRATIONNEL BLOQUANT — gate avant tout redéploiement
+> front** :
+>
+> Identique étape 24 : si la migration étape 24 n'est pas appliquée
+> en prod, le helper `getPetitionSignatureCount` renvoie une erreur
+> `function not found` à la première invocation. Tant qu'aucun
+> call-site UI ne l'appelle (fin étape 24), aucun impact utilisateur ;
+> mais dès qu'un call-site sera ajouté (étape 25 si la décision
+> produit / DPO valide le durcissement), la migration devient
+> bloquante.
+>
+> Procédure (cf. PROD-RUNBOOK §1.2) :
+>
+> 1. `pg_dump` staging vers bucket privé.
+> 2. `psql < db/schema.sql` (idempotent CREATE OR REPLACE).
+> 3. Test SQL admin :
+>    `select public.signatures_count_for_petition('<UUID>'::uuid);`
+> 4. Sanity check anon via curl (cf. PROD-RUNBOOK §1.2 sanity check 4).
+> 5. Redéployer Vercel / front une fois la RPC en place.
+>
+> **ÉTAPE 25 à exécuter — Post-go-live (audit réel + monitoring +
+> dette M2-sec-policy si validée + cumul T99CP si validé +
+> H4-deploy-deno + M1-RGPD si validé)** :
+>
+> 1. **Audit Lighthouse réel** (priorité 1 si Vercel preview en
+>    ligne) : `npx unlighthouse --site <url>` ou DevTools manuel sur
+>    6 pages clés. Documenter les scores. Corriger les blocages
+>    < 95. Si pas de staging HTTPS : différer étape 26.
+> 2. **E2E « happy path » réel** (priorité 2 si projet Supabase de
+>    test prêt) : `web/e2e/happy-path.spec.ts` qui signe
+>    anonymement une pétition + vérifie le compteur. Sinon ajouter
+>    encore un test mock non-vide (réutiliser
+>    `installSupabaseStubs(page, { rest: ..., rpc: ... })`).
+> 3. **Monitoring Sentry runtime** (si DSN câblé) : test canary
+>    documenter taux d'erreur 7 j + top 5 issues. Si erreurs
+>    récurrentes `stripe-webhook` → prioriser job de
+>    réconciliation.
+> 4. **Monitoring Supabase** : quotas API / DB CPU / DB memory sur
+>    7 j, alertes Slack actives ?, top requêtes lentes.
+> 5. **M2-sec-policy** — durcissement
+>    `signatures_select_public` (SI validation produit / DPO
+>    reçue) : remplacer la policy actuelle (`for select using (true)`)
+>    par une policy qui n'expose `user_id` qu'à `auth.uid() =
+>    user_id OR public.is_admin(auth.uid())`. Migrer les call-sites
+>    UI qui dépendent encore de la projection `signatures.user_id`
+>    (chercher `from('signatures').select(`, normalement aucun en
+>    public). Migrer les call-sites « combien de signatures » vers
+>    `getPetitionSignatureCount`. **CHANGEMENT RLS visible côté
+>    client → demander confirmation à chaque PR de cette
+>    transition**. Si validation non reçue → différer étape 26 et
+>    documenter la raison.
+> 6. **Cumul T99CP émises publique** (différé étapes 21-24) : si
+>    validation produit reçue → RPC `transparency_t99cp_total()
+>    returns bigint security definer` + carte dédiée sur
+>    `TransparencePage`. Migration DB additive listée explicitement
+>    → autorisée. Sinon laisser en l'état.
+> 7. **H4-deploy-deno** (dette low low) : si pipeline CI Supabase
+>    réel disponible, ajouter `supabase functions deploy --dry-run`
+>    sur PR. Sinon différer.
+> 8. **M1-RGPD** (purge auto `stripe_events.payload` TTL 90j) : si
+>    décision RGPD reçue → migration DB additive
+>    (`stripe_events_payload_ttl_trigger` ou job Edge Function
+>    périodique). **Toucher à `stripe_events` = demande
+>    confirmation** (table critique du webhook). Sinon différer.
+> 9. **Retours utilisateur·rices** (si trafic réel) : compiler
+>    fixes prioritaires étape 26.
+> 10. **Job de réconciliation Stripe** (dette différée étape 20) :
+>     décider si on l'implémente. Critère : erreurs récurrentes
+>     Sentry sur `stripe-webhook`.
+> 11. **Tests** : suite vitest ≥ 872 + E2E Playwright 29/29 verts
+>     en CI.
+> 12. **HANDOFF-PROGRESS.md** : étape 25 ✅ détaillée.
+> 13. **Recopier le prompt étape 26 à la fois dans
+>     `HANDOFF-PROGRESS.md` ET dans la réponse de chat finale**
+>     (règle récursive). Inclure dans le prompt étape 26 la même
+>     instruction de recopie pour la session N+20, ET l'instruction
+>     d'audit vibe janitor pour N+20.
+>
+> **PHASE 1 — Clôture de l'étape principale (workflow auto-merge)** :
+>
+> Conformément à CLAUDE.md § « Politique de PR », autorisation
+> permanente d'enchaîner les étapes ci-dessous sans confirmation :
+>
+> 1. Vérifier les 4 checks locaux verts : `npm run typecheck && npm
+>    run lint && npx vitest run && npm run build`. Si échec →
+>    corriger, ne pas commit.
+> 2. **Commit** : `chore(prod): step 25 — post-go-live (lighthouse +
+>    e2e réel + monitoring + dette M2-sec-policy/H4-deploy-deno/M1-RGPD)`.
+>    Pas d'emojis.
+> 3. **Push** sur la branche imposée par l'harness (retry exponentiel
+>    2/4/8/16 s).
+> 4. **Ouvrir la PR** vers `main` via
+>    `mcp__github__create_pull_request` (titre = commit, body
+>    Summary + Décisions + Test plan).
+> 5. Attendre les checks GitHub Actions (les DEUX checks
+>    `Typecheck + Lint + Vitest + Build` ET `Playwright E2E + axe-core
+>    a11y` doivent être verts). Si rouges → autofix + re-push.
+> 6. **Merger la PR** via `mcp__github__merge_pull_request`.
+>
+> **PHASE 2 — Audit vibe janitor (après le merge de la PR principale)** :
+>
+> Conformément à CLAUDE.md § « Audit récurrent vibe janitor de fin
+> d'étape » :
+>
+> 1. Sync : `git checkout main && git pull --ff-only origin main`,
+>    puis `git checkout -b claude/janitor-post-step25`.
+> 2. Audit en parallèle via 2-3 subagents `general-purpose` :
+>    architecture / robustesse / sécurité. Chaque agent produit un
+>    rapport ; aucune modification.
+> 3. Synthétiser findings par sévérité + risque régression.
+> 4. Appliquer UNIQUEMENT les fixes safe-first (« primum non
+>    nocere ») : aucun fix qui casse un test, aucun nouveau
+>    problème, design system `T.*` intouchable, pas de migration DB,
+>    pas de breaking change, fixes risque medium/high reportés en
+>    dette.
+> 5. Vérifier les 4 checks locaux verts avant push.
+> 6. PR janitor séparée : titre `chore(janitor): post-step 25 —
+>    <résumé court>`. Body : Summary + Findings (sévérité + risque)
+>    + Fixes appliqués + Fixes déférés + Test plan.
+> 7. Merger la PR janitor (même workflow auto-merge).
+> 8. Documenter dans `HANDOFF-PROGRESS.md` § Audit vibe janitor
+>    étape 25 : findings totaux, fixes appliqués (chacun avec
+>    risque évalué), dette ajoutée, compteur de tests final.
+>
+> **Phase 3 — Recopie du prompt étape 26 (toujours obligatoire)** :
+>
+> Recopier le prompt étape 26 dans la réponse de chat finale, en
+> plus de l'avoir écrit dans `HANDOFF-PROGRESS.md`. Le prompt étape
+> 26 doit lui-même inclure les Phases 1, 2, 3 récursives pour la
+> session N+20.
+>
+> **Conditions d'arrêt malgré l'autorisation permanente** :
+>
+> - Migration DB risquée non listée. L'étape 25 LISTE explicitement :
+>   * Durcissement `signatures_select_public` (M2-sec-policy) SI
+>     validation produit / DPO reçue → autorisé MAIS demander
+>     confirmation à chaque PR car CHANGEMENT RLS visible côté
+>     client.
+>   * RPC `transparency_t99cp_total()` SI validation produit
+>     reçue (additif, autorisé).
+>   * Purge `stripe_events.payload` (M1-RGPD) SI décision RGPD
+>     reçue → demander confirmation car table critique.
+>   * Toute autre migration → demander confirmation.
+> - Changement RGPD non listé.
+> - Breaking change visible utilisateur.
+> - Erreur Vercel / Supabase impossible à debugger en < 3 tentatives.
+> - Review humaine ou commentaire GitHub avant le merge.
+> - En phase janitor : un fix touche au design system `T.*`, casse
+>   un test sans rollback possible, ou nécessite un bump majeur.
+>
+> **Contraintes générales** :
+>
+> - Ne pas toucher au prototype.
+> - TS strict + no `any`.
+> - Conserver les checks verts à chaque étape.
+> - Pas d'emojis dans le code TS ni dans les commits / PR.
+> - Tokens `T.*` intouchables sans validation designer.
+> - Sauvegarder la DB AVANT toute migration prod (`pg_dump` →
+>   bucket privé Supabase Storage).
 
 ---
 

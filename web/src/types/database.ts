@@ -1765,6 +1765,10 @@ export interface Database {
         Args: { p_months_back?: number };
         Returns: { month_iso: string; count: number }[];
       };
+      signatures_count_for_petition: {
+        Args: { p_petition: string };
+        Returns: number;
+      };
     };
     Enums: {
       adhesion_status: 'active' | 'cancelled' | 'expired' | 'pending';
