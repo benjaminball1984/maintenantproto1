@@ -1603,6 +1603,7 @@ export interface Database {
           reason: string;
           related_table: string | null;
           related_id: string | null;
+          source_event_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -1613,6 +1614,7 @@ export interface Database {
           reason: string;
           related_table?: string | null;
           related_id?: string | null;
+          source_event_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -1623,6 +1625,7 @@ export interface Database {
           reason?: string;
           related_table?: string | null;
           related_id?: string | null;
+          source_event_id?: string | null;
           created_at?: string;
         };
         Relationships: [
@@ -1742,7 +1745,12 @@ export interface Database {
         Returns: boolean;
       };
       credit_t99cp: {
-        Args: { p_user: string; p_amount: number; p_reason: string };
+        Args: {
+          p_user: string;
+          p_amount: number;
+          p_reason: string;
+          p_source_event_id?: string | null;
+        };
         Returns: void;
       };
       debit_t99cp: {

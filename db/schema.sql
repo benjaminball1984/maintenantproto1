@@ -903,6 +903,22 @@ create table if not exists public.t99cp_transactions (
 );
 create index if not exists t99cp_user_idx on public.t99cp_transactions (user_id, created_at desc);
 
+-- Idempotence DB de second niveau pour le webhook Stripe (étape 20).
+-- Le webhook Edge Function déduplique d'abord via `stripe_events.id` (PK).
+-- Cette colonne sert de défense en profondeur : si une ligne `stripe_events`
+-- est manuellement supprimée ou si le store d'idempotence est corrompu,
+-- l'index unique partiel ci-dessous garantit qu'un même `event.id` Stripe ne
+-- peut pas créditer le wallet T99CP deux fois.
+-- `nulls not distinct` n'est pas posé sur l'index unique : on accepte les
+-- crédits manuels (bonus parrainage, correction admin) sans source_event_id —
+-- ils sont multiples par définition. Seuls les crédits avec un
+-- `source_event_id` non null doivent être uniques.
+alter table public.t99cp_transactions
+  add column if not exists source_event_id text;
+create unique index if not exists t99cp_source_event_idx
+  on public.t99cp_transactions (source_event_id)
+  where source_event_id is not null;
+
 -- -------------------------------------------------------------------------------------
 -- 17. Outils admin (logs + email campaigns)
 -- -------------------------------------------------------------------------------------
@@ -1816,16 +1832,25 @@ create policy avatars_authenticated_delete on storage.objects
 --   * credit_t99cp(uid, 0, ...) ou debit_t99cp(uid, -1, ...) → exception
 --     'invalid_amount' (le CHECK amount > 0 sur t99cp_transactions le bloque
 --     déjà, mais on lève une erreur explicite plus tôt pour clarté).
---   * Idempotence : c'est la couche appelante (webhook Stripe) qui doit
---     dédupliquer via la PK adhesions.stripe_subscription_id (UNIQUE) et la
---     contrainte unique stripe_session_id si elle est ajoutée plus tard ;
---     ces RPC ne dédupliquent pas (un même crédit peut être appelé deux fois
---     volontairement, ex: bonus de bienvenue + bonus parrainage).
+--   * Idempotence DB (étape 20) : `credit_t99cp` accepte un paramètre
+--     optionnel `p_source_event_id`. Si fourni et déjà présent dans le ledger,
+--     l'appel devient un no-op (return silencieux). Sinon insertion normale.
+--     L'unicité est garantie par un index unique partiel sur
+--     `t99cp_transactions.source_event_id WHERE source_event_id IS NOT NULL`,
+--     ce qui couvre la race condition de deux webhooks Stripe concurrents.
+--     Les crédits sans `source_event_id` (bonus de bienvenue, parrainage,
+--     correction admin) restent multiples par design.
+--     Le webhook Stripe (`supabase/functions/stripe-webhook/index.ts`) passe
+--     `event.id` comme `p_source_event_id` sur `invoice.payment_succeeded`.
+--     Défense en profondeur : si la ligne `stripe_events` est manuellement
+--     supprimée ou si le store d'idempotence est corrompu, le ledger lui-même
+--     refuse le doublon.
 
 create or replace function public.credit_t99cp(
   p_user uuid,
   p_amount integer,
-  p_reason text
+  p_reason text,
+  p_source_event_id text default null
 )
 returns void
 language plpgsql
@@ -1843,13 +1868,40 @@ begin
     raise exception 'invalid_reason';
   end if;
 
-  insert into public.t99cp_transactions (user_id, kind, amount, reason)
-  values (p_user, 'credit', p_amount, p_reason);
+  -- Court-circuit idempotence DB : si on a déjà vu cet event Stripe, on
+  -- ne re-crédite pas (la couche appelante a peut-être perdu la trace
+  -- côté `stripe_events`, mais le ledger lui-même se protège).
+  -- On vérifie *avant* l'insert pour éviter de catcher une violation
+  -- d'unicité au milieu d'une transaction qui aurait déjà passé le
+  -- contrôle de solde côté users (cohérence du wallet).
+  if p_source_event_id is not null then
+    if exists (
+      select 1
+        from public.t99cp_transactions
+       where source_event_id = p_source_event_id
+    ) then
+      return;
+    end if;
+  end if;
+
+  insert into public.t99cp_transactions (user_id, kind, amount, reason, source_event_id)
+  values (p_user, 'credit', p_amount, p_reason, p_source_event_id);
 
   update public.users
      set t99cp_balance = t99cp_balance + p_amount,
          updated_at = now()
    where id = p_user;
+exception
+  when unique_violation then
+    -- Race condition : deux webhooks Stripe concurrents avec le même
+    -- event.id arrivent en parallèle. L'index unique partiel sur
+    -- `source_event_id` garantit qu'un seul des deux inserts passera ;
+    -- l'autre attrape l'exception ici et retourne silencieusement (la
+    -- ligne canonique a été créditée par l'autre branche).
+    if p_source_event_id is null then
+      raise;
+    end if;
+    return;
 end;
 $$;
 
@@ -1900,10 +1952,17 @@ begin
 end;
 $$;
 
-revoke all on function public.credit_t99cp(uuid, integer, text) from public;
-revoke all on function public.debit_t99cp(uuid, integer, text)  from public;
-grant execute on function public.credit_t99cp(uuid, integer, text) to authenticated;
-grant execute on function public.debit_t99cp(uuid, integer, text)  to authenticated;
+-- Anciennes signatures (avant étape 20) : nettoyage prudent — si on applique
+-- ce schéma sur une base déjà migrée à l'étape 19, l'ancienne signature
+-- `credit_t99cp(uuid, integer, text)` cohabite avec la nouvelle
+-- `credit_t99cp(uuid, integer, text, text)`. On drop l'ancienne pour éviter
+-- les ambiguïtés d'overload côté supabase-js (qui résout par nom uniquement).
+drop function if exists public.credit_t99cp(uuid, integer, text);
+
+revoke all on function public.credit_t99cp(uuid, integer, text, text) from public;
+revoke all on function public.debit_t99cp(uuid, integer, text)         from public;
+grant execute on function public.credit_t99cp(uuid, integer, text, text) to authenticated;
+grant execute on function public.debit_t99cp(uuid, integer, text)         to authenticated;
 
 -- =====================================================================================
 -- FIN du schéma. Régénérer les types : `supabase gen types typescript --local`.

@@ -1,0 +1,121 @@
+import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
+
+import { supabase } from '@/lib/supabase';
+import type { Database } from '@/types/database';
+
+// =====================================================================================
+// Compteurs publics « transparence »
+//
+// Toutes les requêtes utilisent `head: true, count: 'exact'` afin de ne
+// transférer aucune ligne — seul le compteur est retourné. RLS publique
+// (cf. `db/schema.sql` policies `*_select_public`) garantit qu'aucun
+// contenu privé n'est exposé : un anonyme ne compte que ce qu'il aurait pu
+// lire en `select *`.
+//
+// Les counts dépendent du contexte RLS :
+//   * users : compte tout le monde (policy `users_select_public` for select (true)).
+//   * petitions / mobilizations / campaigns / communes : seuls les contenus
+//     `status = 'published'` sont visibles aux anonymes, donc le count(*)
+//     retourné est exactement « publié et non archivé ».
+//   * signatures : public, donc total cumulé.
+//
+// Le compteur « signalements traités » est volontairement omis : la donnée
+// (`is_flagged = true`) est filtrée hors lecture publique pour les
+// commentaires/posts (`select using (not is_flagged or auth.uid() = author_id)`),
+// elle n'est donc pas comptable depuis le front anonyme sans casser RLS. À
+// reporter sur une page admin dédiée si on veut une stat de modération.
+// =====================================================================================
+
+export interface TransparencyCounts {
+  members: number;
+  publishedPetitions: number;
+  publishedMobilizations: number;
+  publishedCampaigns: number;
+  publishedCommunes: number;
+  signatures: number;
+}
+
+export interface TransparencyResult {
+  data: TransparencyCounts | null;
+  error: PostgrestError | null;
+}
+
+type Client = SupabaseClient<Database>;
+
+async function countTable(
+  client: Client,
+  table:
+    | 'users'
+    | 'petitions'
+    | 'mobilizations'
+    | 'campaigns'
+    | 'communes'
+    | 'signatures',
+  filters: { column: string; value: string }[] = [],
+): Promise<{ count: number; error: PostgrestError | null }> {
+  let query = client.from(table).select('*', { count: 'exact', head: true });
+  for (const filter of filters) {
+    query = query.eq(filter.column, filter.value);
+  }
+  const { count, error } = await query;
+  return { count: count ?? 0, error };
+}
+
+export async function fetchTransparencyCounts(
+  client: Client = supabase,
+): Promise<TransparencyResult> {
+  const results = await Promise.all([
+    countTable(client, 'users'),
+    countTable(client, 'petitions', [{ column: 'status', value: 'published' }]),
+    countTable(client, 'mobilizations', [{ column: 'status', value: 'published' }]),
+    countTable(client, 'campaigns', [{ column: 'status', value: 'published' }]),
+    countTable(client, 'communes', [{ column: 'status', value: 'published' }]),
+    countTable(client, 'signatures'),
+  ]);
+
+  const firstError = results.find((r) => r.error !== null)?.error ?? null;
+  if (firstError) {
+    return { data: null, error: firstError };
+  }
+
+  const [
+    members,
+    publishedPetitions,
+    publishedMobilizations,
+    publishedCampaigns,
+    publishedCommunes,
+    signatures,
+  ] = results;
+
+  return {
+    data: {
+      members: members?.count ?? 0,
+      publishedPetitions: publishedPetitions?.count ?? 0,
+      publishedMobilizations: publishedMobilizations?.count ?? 0,
+      publishedCampaigns: publishedCampaigns?.count ?? 0,
+      publishedCommunes: publishedCommunes?.count ?? 0,
+      signatures: signatures?.count ?? 0,
+    },
+    error: null,
+  };
+}
+
+/**
+ * Date publique de mise en production (étape 19 du handoff). Sert d'en-tête
+ * sur la page Transparence et de point d'ancrage pour les futures stats
+ * cumulatives. Format ISO 8601 (YYYY-MM-DD), interprété en UTC pour éviter
+ * les décalages de timezone côté client.
+ */
+export const GO_LIVE_DATE_ISO = '2026-05-12';
+
+export function formatGoLiveDateFr(iso: string = GO_LIVE_DATE_ISO): string {
+  const [year, month, day] = iso.split('-').map((n) => Number.parseInt(n, 10));
+  if (!year || !month || !day) return iso;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date);
+}
