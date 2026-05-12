@@ -177,6 +177,13 @@ export async function handle(req: Request, deps: StripeWebhookDeps): Promise<Res
     isNewEvent = await deps.recordEventStart(event);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'idempotency_store_error';
+    // Janitor post-step 24 (J24-R2) : log côté Edge Function pour
+    // l'observabilité — Stripe retentera le 500, sans cette ligne aucune
+    // trace ne reste côté application. Pattern symétrique des
+    // `console.warn` des branches `recordEventProcessed` plus bas. On
+    // logue uniquement `err.message` (et pas l'objet) — même précaution
+    // de non-fuite de payload PostgREST que dans les autres branches.
+    console.warn('stripe-webhook: recordEventStart failed:', message);
     return new Response(`idempotency_store_error: ${message}`, { status: 500 });
   }
   if (!isNewEvent) {
