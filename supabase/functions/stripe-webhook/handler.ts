@@ -25,6 +25,8 @@
 
 export interface AdhesionUpsert {
   userId: string;
+  // `'gratuit'` (cf. enum DB `public.adhesion_tier`) est volontairement
+  // exclu : il n'y a pas de subscription Stripe pour l'adhésion gratuite.
   tier: 'soutien' | 'engage';
   status: 'active' | 'cancelled' | 'expired' | 'pending';
   stripeSubscriptionId: string;
@@ -211,7 +213,11 @@ export async function handle(req: Request, deps: StripeWebhookDeps): Promise<Res
         try {
           await deps.recordEventProcessed(event.id);
         } catch (err) {
-          console.warn('stripe-webhook: recordEventProcessed (default case) failed', err);
+          // On log uniquement `err.message` (et pas l'objet brut) : la lib
+          // supabase-js peut embarquer `error.details` contenant un extrait
+          // de payload PostgREST — défense en profondeur côté logs Edge.
+          const message = err instanceof Error ? err.message : 'unknown';
+          console.warn('stripe-webhook: recordEventProcessed (default case) failed:', message);
         }
         return new Response(JSON.stringify({ received: true, ignored: event.type }), {
           status: 200,
@@ -228,7 +234,8 @@ export async function handle(req: Request, deps: StripeWebhookDeps): Promise<Res
   try {
     await deps.recordEventProcessed(event.id);
   } catch (err) {
-    console.warn('stripe-webhook: recordEventProcessed failed', err);
+    const message = err instanceof Error ? err.message : 'unknown';
+    console.warn('stripe-webhook: recordEventProcessed failed:', message);
   }
 
   return new Response(JSON.stringify({ received: true, id: event.id }), {

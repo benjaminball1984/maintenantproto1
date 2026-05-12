@@ -53,7 +53,9 @@ async function countTable(
     | 'signatures',
   filters: { column: string; value: string }[] = [],
 ): Promise<{ count: number; error: PostgrestError | null }> {
-  let query = client.from(table).select('*', { count: 'exact', head: true });
+  // `head: true` => aucune ligne n'est transférée, seul le `count` revient.
+  // On projette `id` (et pas `*`) par convention — cf. notifications.ts.
+  let query = client.from(table).select('id', { count: 'exact', head: true });
   for (const filter of filters) {
     query = query.eq(filter.column, filter.value);
   }

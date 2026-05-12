@@ -4409,9 +4409,94 @@ Coût net en entry : +0.03 kB gzip (négligeable). Le chunk
      fois** quand l'event est livré deux fois (idempotence
      applicative + DB).
 
----
+### Audit vibe janitor étape 20
 
-## Étape 19 — Sprint 6 / Mise en prod réelle ✅
+**Branche** : `claude/janitor-post-step20`.
+
+Audit en parallèle via 3 subagents `general-purpose` (architecture /
+robustesse / sécurité). Synthèse + application des fixes safe-first
+uniquement, conformément à `CLAUDE.md § Audit récurrent vibe janitor`.
+
+#### Findings totaux
+
+| Catégorie | Critical | High | Medium | Low |
+| --- | --- | --- | --- | --- |
+| Architecture | 0 | 2 | 3 | 6 |
+| Robustesse | 0 | 2 | 6 | 5 |
+| Sécurité / cohérence | 0 | 3 | 4 | 5 |
+| **Total** | **0** | **7** | **13** | **16** |
+
+#### Fixes appliqués (6)
+
+| Finding | Sévérité | Risque régression | Fichier |
+| --- | --- | --- | --- |
+| H1 architecture — `/transparence` non liée dans la nav (page découvrable seulement par URL directe) → lien ajouté au Footer | high | low | `web/src/components/Footer.tsx:50-53` + `Footer.test.tsx:31-50` |
+| H1 robustesse — commentaire trompeur sur « contrôle de solde » dans `credit_t99cp` (mention résiduelle d'une logique qui n'existe pas dans la RPC credit) | high | low | `db/schema.sql:1871-1878` |
+| H2 sécurité — prompt étape 21 ne gatait pas le redéploiement Edge Function sur l'application préalable de la migration DB (risque de `function does not exist` post-deploy) | high | low | `HANDOFF-PROGRESS.md` § Prérequis opérationnel bloquant (étape 21) |
+| L4 architecture — exclusion de `tier='gratuit'` dans `AdhesionUpsert.tier` non documentée | low | low | `supabase/functions/stripe-webhook/handler.ts:27-30` |
+| L1 sécurité — `console.warn('...', err)` brut côté Edge Function pourrait fuiter un payload PostgREST dans les logs admin → on log uniquement `err.message` (défense en profondeur) | low | low | `supabase/functions/stripe-webhook/handler.ts:217, 234` |
+| L5 architecture — `select('*', { count: 'exact', head: true })` remplacé par `select('id', ...)` pour aligner avec la convention `notifications.ts` | low | low | `web/src/lib/transparency.ts:56` |
+
+#### Fixes déférés (dette technique)
+
+| Finding | Sévérité | Risque régression | Pourquoi déféré |
+| --- | --- | --- | --- |
+| **H2 robustesse — grant `service_role` explicite sur `credit_t99cp` 4-args** | high | medium | Le `service_role` Supabase bypasse normalement les grants (superuser-equivalent) mais sur un projet hardened il faut un `grant execute ... to service_role;` explicite. À vérifier en staging avant le passage en live. Listé pour l'étape 21 (« Job de réconciliation »). |
+| **H3 sécurité — `users_select_public for select using (true)` expose `email` côté anon** | high | high | Pré-existant (pas introduit par l'étape 20), mais la page `/transparence` rend la lecture publique plus visible. Nécessite (a) split `users` en vue `users_public` sans email/postal_code, (b) GRANTs colonne par colonne révoquant `email` au rôle `anon`. Refactor RLS large — étape dédiée requise avec validation architecte. |
+| **H2 architecture — `stripeWebhook.test.ts` croise les frontières package (`../../../supabase/functions/...`)** | high | medium | Convention rompue (tous les `.test.ts` côté `web/src/lib/` ont un sibling source). Solutions : (a) déplacer dans `supabase/functions/stripe-webhook/handler.test.ts` + élargir vitest include, (b) renommer en `web/src/lib/__edge__/...`. À planifier en étape architecture dédiée. |
+| **M1 architecture — DI pattern `client = supabase` dans `transparency.ts` isolé** | medium | medium | Pattern souhaitable (testabilité sans `vi.mock`), mais propager à `notifications.ts`/`petitions.ts`/etc casserait chaque suite de tests. Pratique progressive : adopter sur les nouveaux libs uniquement (déjà documenté dans le header transparency.ts). |
+| **M2 architecture — inline `CSSProperties` dupliqués entre `TransparencePage`, `PrivacyPage`, `CookiesPage`, `LegalNoticePage`** | medium | medium | Extraction d'un `LegalPageLayout` ou `legalPageStyles.ts` shared. Touche au design system par déclinaison ; à valider designer. Reporté à l'étape design dédiée. |
+| **M3 architecture — `GO_LIVE_DATE_ISO` + `formatGoLiveDateFr` colocalisés avec la logique transparence** | medium | low | Si un second consumer apparaît (HomePage « online since … »), extraire dans `lib/dates.ts`. Pas de second consumer pour l'instant. |
+| **M2 robustesse — index unique partiel ne couvre pas les lignes legacy `source_event_id IS NULL`** | medium | low | Pas de risque concret tant qu'aucun paiement réel n'a transité (staging exclusivement). Si un événement Stripe est déjà associé à une ligne `credit` sans event_id, un rejeu post-deploy peut doubler. À couvrir par un backfill script si l'équipe humaine a déjà passé un test live avant la migration. |
+| **M3 robustesse — `processed_at` n'est pas marqué lors d'une validation 4xx (`missing_user_or_subscription`, etc.)** | medium | medium | La ligne `stripe_events` reste avec `processed_at = null`, mais le `recordEventStart` court-circuite les retries via la PK : l'event est silencieusement abandonné. À adresser par un statut explicite (colonne `validation_failure boolean` ou `processed_at + error_message`). Migration DB → hors scope janitor. |
+| **M4 robustesse — `fetchTransparencyCounts` coalesce `count: null, error: null` → 0** | medium | medium | Ambiguïté entre « table vide » et « RLS denied silencieusement ». Pour `/transparence` c'est acceptable (page lifetime). UI plus claire (`error | loading | count`) impacte les 6 tests existants — à différer. |
+| **M5 robustesse — `count: 'exact'` sur `signatures` au-delà de ~100k lignes** | medium | low | Optimisation pure : passer à `count: 'planned'` ou table de stats matérialisée nightly. Pas de problème tant que `signatures` reste faible (staging vide). À surveiller dans monitoring Supabase (étape 21). |
+| **M6 robustesse — `formatGoLiveDateFr` falsy-check `!year || !month || !day` rejette year=0** | low | low | Edge case improbable (Stripe n'envoie pas d'epoch 0). Polish stylistique. |
+| **M1 sécurité — clé TS `members` confond `users` et `members` (table dédiée)** | medium | low | Renommer en `accounts`/`signups` clarifie mais touche 1 test + 1 narrative ; le label utilisateur « Comptes créés » est déjà correct côté UI. Cosmétique — reporté. |
+| **M2 sécurité — `signatures_select_public for select (true)` permet enum signataires** | medium | high | Pré-existant. RGPD Art. 9 (opinion politique) : combiné à H3 = vecteur de réidentification. Refactor RLS broad ; nécessite (a) restreindre `signatures_select_public`, (b) RPC publique `signatures_count(petition_id)` pour conserver l'UX « 1234 signataires ». À planifier en étape RLS hardening dédiée. |
+| **L2 sécurité — RLS sur `t99cp_transactions` non re-confirmée dans le narrative étape 20** | low | low | Doc only — vérifié à l'œil que les policies `t99cp_select_self` / `t99cp_insert_admin` (db/schema.sql:1672-1681) sont inchangées. Doc-only, sera ajouté dans le compteur final ci-dessous. |
+| **L3 sécurité — `.env.example` racine + `web/.env.example` divergent (URL APP_URL)** | low | low | Pré-existant. Convention : `web/.env.example` est canonique (Vite reads from there). Le fichier racine sert de doc d'ensemble (Supabase + Stripe + Sentry pour l'équipe humaine). Reporté à un cleanup ENV dédié. |
+| **L5 sécurité — `TransparencePage` inline `style={{}}` (héritage CLAUDE.md « pas d'inline styles pour le nouveau code »)** | low | medium | Pattern hérité des pages légales (cf. PrivacyPage, CookiesPage). Migration CSS Modules / Tailwind = scope design system. Reporté. |
+| **L1 robustesse — `vi.fn<typeof deps.upsertAdhesion>` pattern de test inconsistant** | low | low | Cleanup test polish ; le `as unknown as never` cast est ugly mais fonctionne. À aligner lors d'une passe test hygiene future. |
+| **L4 robustesse — `Deno.serve` bootstrap sans `.catch`** | low | low | `denoBootstrap()` est `await import('https://esm.sh/...')` — un échec silencieux ne sert plus la fonction. Fenêtre de risque très faible (esm.sh up + serveur prod stable). À ajouter en defensive coding. |
+| **L5 robustesse — `epochToIso(seconds = 0)` retourne null au lieu de l'epoch 1970** | low | low | Stripe n'envoie jamais 0. Defensive coding. |
+| **L2 robustesse — test `unmount before fetch resolves` n'assert pas explicitement « pas de warning React »** | low | low | `vi.spyOn(console, 'error')` + assertion sur un warning React 18+ removed. Polish test, non bloquant. |
+
+#### Tests
+
+- **839 tests verts** (126 fichiers, durée ~59 s). **Inchangé** vs étape 20
+  car le janitor ne touche qu'à des commentaires / liens / projections —
+  pas de nouveau test ajouté (le scope janitor est anti-régression, pas
+  expansion de coverage).
+- 4 checks locaux verts (typecheck, lint, vitest, build).
+- Build : entry 47.27 kB / gzip 13.31 kB (inchangé — les modifs sont
+  internes au composant ou du commentaire DB / Edge Function).
+- Pas de changement design system `T.*`.
+- Pas de migration DB.
+- Pas de breaking change utilisateur.
+- Pas de bump majeur de dépendance.
+
+#### Décisions
+
+- **Pas de fix sur H3 sécurité (`users.email` exposé via RLS)** : la
+  policy `users_select_public for select using (true)` est en place
+  depuis l'étape 4 et son refactor (vue `users_public` ou GRANTs
+  colonne) touche TOUS les flows de profil (Reseau, Search, Profile).
+  Hors scope janitor — listé en dette critique pour une étape RLS
+  hardening dédiée. Compatibilité avec l'audit RGPD étape 13 (qui n'a
+  pas remonté ce point en bloquant) suggère un compromis fonctionnel
+  acceptable historiquement, mais à revoir avant le passage en live
+  public.
+- **Pas de fix sur H2 robustesse (grant `service_role`)** : le `service_role`
+  Supabase est superuser sur les projets non-hardened, donc les grants
+  ne sont normalement pas nécessaires. À tester en staging avec
+  `select credit_t99cp('...', 60, 'test', 'evt_test')` côté
+  service-role avant de pousser un fix.
+- **Lien Footer `/transparence` ajouté** plutôt que dans le header :
+  cohérent avec la convention « pages méta non-fonctionnelles » et
+  préserve la hiérarchie de la nav principale (Pétitions / Mobilisations
+  / etc).
+
 
 **Branche** : `claude/review-project-rules-pZtyS`
 
@@ -4817,6 +4902,24 @@ provisionnement réel des comptes externes décrits dans
 >      `docs/PROD-RUNBOOK.md` est-il fait ?
 >    - Y a-t-il un projet Supabase de test seedé pour le test E2E
 >      « signature anonyme » ?
+>
+> **PRÉREQUIS OPÉRATIONNEL BLOQUANT — gate avant tout redéploiement
+> Edge Function** :
+>
+> - L'Edge Function `stripe-webhook` (étape 20) appelle `credit_t99cp`
+>   avec **4 arguments** (`p_user, p_amount, p_reason,
+>   p_source_event_id`). La migration `db/schema.sql` étape 20 doit
+>   donc avoir été appliquée AVANT tout redéploiement de l'Edge
+>   Function via `npx supabase functions deploy`. Sinon : erreur
+>   PostgREST `function public.credit_t99cp(uuid, integer, text,
+>   text) does not exist` à chaque `invoice.payment_succeeded` →
+>   crédits T99CP non honorés (Stripe retentera pendant 3 jours).
+> - Procédure : (1) `pg_dump` staging vers bucket privé, (2)
+>   `psql < db/schema.sql` (idempotent — additif seulement + drop
+>   de la signature 3-args), (3) `supabase functions deploy
+>   stripe-webhook --no-verify-jwt`, (4) test canary
+>   `stripe trigger invoice.payment_succeeded`. **Si la migration
+>   n'a pas été appliquée : STOP, demander à l'équipe humaine.**
 >
 > **ÉTAPE 21 à exécuter — Post-go-live (audit réel + monitoring +
 > premiers retours + dette)** :
