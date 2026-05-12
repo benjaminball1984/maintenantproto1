@@ -78,4 +78,21 @@ export default defineConfig([
       '@typescript-eslint/naming-convention': 'off',
     },
   },
+  // Router : registre de routes avec beaucoup de React.lazy() — la règle
+  // react-refresh/only-export-components ne supporte pas ce pattern.
+  {
+    files: ['src/router.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  // Tests E2E Playwright : règles assouplies (naming-convention, any-cast)
+  {
+    files: ['e2e/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/naming-convention': 'off',
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ]);
