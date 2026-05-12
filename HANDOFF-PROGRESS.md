@@ -30,6 +30,7 @@
 | 19. Sprint 6 — Mise en prod réelle (webhook Stripe idempotent + Sentry + k6 + docs) |   ✅   |
 | 20. Post-go-live — Idempotence DB (source_event_id) + Page transparence |   ✅   |
 | 21. Post-go-live — Transparence v2 (graphique mensuel) + E2E + dette différée |   ✅   |
+| 22. Post-go-live — Grant `service_role` (clôture H2-rob) + E2E densifié + dette différée |   ✅   |
 
 ---
 
@@ -5190,6 +5191,574 @@ uniquement, conformément à `CLAUDE.md § Audit récurrent vibe janitor`.
 - **Aucune migration DB**, aucun fix design system, aucun
   breaking change, aucun bump majeur de dépendance — conditions
   d'arrêt CLAUDE.md respectées.
+
+---
+
+## Étape 22 — Post-go-live / Grant service_role + E2E densifié + dette différée ✅
+
+**Branche** : `claude/review-project-rules-7CZC1`
+
+Troisième étape post-go-live. Le provisionnement Vercel / Stripe live /
+Sentry SaaS / PITR / projet Supabase de test **n'a pas évolué** depuis
+les étapes 20-21 (côté équipe humaine — `docs/PROD-RUNBOOK.md`).
+Aucun trafic réel, aucune métrique Sentry runtime, aucune signature
+réelle à observer. L'étape se concentre sur ce qui peut être livré
+sans environnement externe : clôture de la dette H2-rob via grant
+explicite `service_role` (migration additive listée → autorisée),
+densification du spec E2E `transparence` avec scénarios non-nuls,
+décision documentée sur le cumul T99CP émises publique, et
+re-différement structuré des items qui exigent du runtime
+(Lighthouse, Sentry, Supabase monitoring, retours utilisateur·rices,
+job de réconciliation Stripe).
+
+### Audit Lighthouse réel — différé étape 23
+
+Pré-requis non rempli : pas de Vercel preview / staging.maintenant.org
+en ligne. La consigne du prompt étape 22 est explicite (« Si pas de
+staging HTTPS : différer étape 23 »). L'audit mesuré reste
+documenté dans `docs/PROD-RUNBOOK.md` §5, à exécuter par l'équipe
+humaine post-déploiement Vercel. Pas de régression côté
+`vite build` (entry 47.34 kB / gzip 13.32 kB ; chunk
+`TransparencePage` 8.10 kB / gzip 3.29 kB lazy — variation < 1 %
+vs étape 21).
+
+### E2E « happy path » réel — différé, alternative livrée
+
+Pas de projet Supabase de test seedé (cf. prompt § « Demander à
+l'équipe humaine »). Conformément à la consigne « Sinon densifier
+`transparence.spec.ts` avec des cas mock non-nuls » :
+
+`web/e2e/utils/mockSupabase.ts` accepte désormais un paramètre
+`overrides` optionnel (`SupabaseStubOverrides`) qui permet de
+fournir, table par table :
+
+- `count` : valeur utilisée pour le header `content-range: 0-N/<count>`
+  consommé par les requêtes `head: true, count: 'exact'` côté
+  client (`fetchTransparencyCounts`). Le body reste l'array `rows`
+  (qui sert quand la même route est appelée en GET non-head).
+- `rows` : array JSON renvoyé pour les requêtes GET (par ex.
+  `users.select('created_at').gte(...)` pour le chart mensuel).
+
+Comportement par défaut inchangé pour les autres specs : sans
+`overrides`, toutes les routes REST renvoient `[]` /
+`content-range: 0-0/0` comme avant — pas de régression sur
+`auth-flow.spec.ts`, `critical-flows.spec.ts`,
+`petition-signature.spec.ts`, `public-pages.spec.ts`.
+
+`web/e2e/transparence.spec.ts` — deux nouveaux tests sous le
+describe `compteurs et graphique non-nuls` :
+
+- **compteurs publics non-nuls** : seed `users.count=42`,
+  `petitions.count=7`, `signatures.count=128`, etc. → on vérifie
+  que les valeurs s'affichent dans la liste « Compteurs publics »
+  (labels et valeurs exactes). `expectNoCriticalAxeViolations`
+  re-passé pour confirmer qu'axe-core ne dégrade pas avec
+  contenu non-vide.
+- **chart SVG visible quand inscriptions > 0** : seed 5 rows
+  `users` avec `created_at` étalés (3 en mai 2026, 1 en mars
+  2026, 1 en novembre 2025) → on vérifie le SVG
+  `role="img"` + aria-label, 12 `<rect>` (12 buckets stables),
+  et disparition du message « Aucune inscription enregistrée ».
+
+Le « happy path réel » (signature anonyme + check du compteur)
+reste **listé dans PROD-RUNBOOK §6**, à exécuter une fois qu'un
+projet Supabase `maintenant-test` aura été provisionné par
+l'équipe humaine.
+
+### Monitoring Sentry runtime — différé étape 23
+
+DSN absent en env preview (Sentry SaaS non provisionné). Aucun
+event runtime à observer ; le test canary est repoussé. Pas de
+nouvelle information vs étape 21.
+
+### Monitoring Supabase — différé étape 23
+
+Pas de trafic réel sur le projet `maintenant-staging` (sandbox
+Claude ne peut pas appeler `*.supabase.co`). Pas de quota API
+/ DB CPU / DB memory à reporter. Le dashboard Supabase →
+Performance reste à consulter par l'équipe humaine quand des
+comptes seront créés depuis un Vercel preview réel.
+
+### Retours utilisateur·rices — sans objet (pas de trafic)
+
+Aucun compte créé réel, aucun signalement modération, aucun bug
+remonté en `tech@maintenant.org`. La liste de fixes prioritaires
+pour l'étape 23 vient donc exclusivement de la dette technique
+déjà documentée (étapes 19-21 + janitor post-step 21).
+
+### H2-rob — grant service_role explicite sur credit_t99cp 4-args ✅
+
+La dette `H2-rob` (high / medium) listée à l'étape 21 portait
+sur l'incertitude suivante : sur un projet Supabase « hardened »
+(rôles postgres locked-down via `alter role service_role
+nobypassrls`), le rôle `service_role` n'a PAS automatiquement
+`execute` sur `public.credit_t99cp(uuid, integer, text, text)`
+— alors que l'Edge Function `stripe-webhook` (étape 20) appelle
+cette RPC depuis un client supabase-js authentifié avec le
+service-role-key.
+
+Sans grant explicite, sur un projet hardened, l'appel renvoie
+`permission denied for function credit_t99cp` et le crédit T99CP
+de l'adhésion n'est jamais appliqué.
+
+**Le prompt étape 22 listait deux branches** :
+
+1. Tester en staging via
+   `select credit_t99cp('...', 60, 'test-22', 'evt_test_step22')`
+   côté service-role. Si permission denied → ajouter le grant.
+2. Sinon, clore la dette H2-rob.
+
+Le sandbox Claude n'a **pas** accès à un client `psql` distant
+sur le projet staging (le datacenter Cloudflare bloque les
+sorties vers `*.supabase.co` — déjà noté étape 19). Le test
+« live » est donc impossible depuis ici.
+
+**Choix défensif** : ajouter proactivement le grant dans
+`db/schema.sql` (cf. lignes 1971-1981 après modif). Migration
+additive listée explicitement dans le prompt étape 22 →
+autorisée par CLAUDE.md § Politique de PR. Coût zéro sur un
+projet non-hardened (`grant execute` est idempotent et le rôle
+`service_role` bypasse déjà), bénéfice net sur un projet
+hardened (déblocage des Edge Functions).
+
+```sql
+grant execute on function public.credit_t99cp(uuid, integer, text, text)
+  to service_role;
+grant execute on function public.debit_t99cp(uuid, integer, text)
+  to service_role;
+```
+
+`debit_t99cp` est inclus par symétrie : il n'est PAS appelé
+côté Edge Function aujourd'hui, mais une future Edge Function
+de remboursement (RGPD ou erreur de double-crédit) en aurait
+besoin. Coût zéro de l'ajouter dès maintenant.
+
+**Dette H2-rob → clôturée** dans le tableau dette consolidé
+ci-dessous. La validation finale (test SQL live côté service-role)
+reste à exécuter par l'équipe humaine au moment de
+l'application de la migration sur staging — procédure dans
+`docs/PROD-RUNBOOK.md` §3.
+
+### Cumul T99CP émises publique — différé, décision documentée
+
+Le prompt §6 propose la RPC `transparency_t99cp_total() returns
+bigint security definer` (somme `t99cp_transactions.amount where
+kind='credit'`) si validation produit reçue. **Sans validation
+produit** (pas d'équipe humaine sollicitée en synchrone), la
+consigne du prompt est : « Sinon documenter la décision dans
+`USER-GUIDE.md` ».
+
+Section « Combien de T99CP ont été distribués au total ? »
+ajoutée au `docs/USER-GUIDE.md` (sous « À quoi servent les
+T99CP ? »). Contenu :
+
+- Indique que le total cumulé n'est **pas affiché publiquement**
+  à ce stade, avec la raison technique (RLS self-only sur
+  `t99cp_transactions`).
+- Indique la solution propre (RPC scalaire SECURITY DEFINER)
+  et la raison du défer (décision produit non validée — un
+  total brut hors contexte d'usage n'aide pas la compréhension
+  de la circulation des points).
+- Liste les statistiques publiques déjà disponibles sur
+  `/transparence` (compteurs + chart mensuel).
+- Invite les retours utilisateur·rices à
+  `contact@maintenant.org` pour ré-évaluer la décision sur la
+  base d'un besoin exprimé.
+
+Aucune migration DB appliquée pour cette section : la RPC
+reste à créer le jour où la décision produit est prise. Le
+diff est documentation pure.
+
+### Job de réconciliation Stripe — différé (idempotence DB suffit)
+
+Critère prompt §8 : « erreurs récurrentes Sentry sur
+`stripe-webhook` ». Sentry n'étant pas câblé runtime, on ne
+peut pas constater de telles erreurs. **Décision** maintenue
+depuis étape 21 : s'appuyer sur la défense en profondeur
+(`stripe_events` upsert + index unique partiel
+`t99cp_transactions.source_event_id`). Le seul cas non couvert
+(`stripe_events` posé mais handler crashe AVANT le crédit, et
+Stripe ne retente plus après >3 j) reste improbable et
+détectable dès que Sentry sera actif.
+
+### Dette technique différée — étape 23 ou plus tard
+
+Récap consolidé (étapes 19-22 + janitor post-step 21) :
+
+| ID | Sévérité | Risque rég. | Description courte | Étape cible |
+| --- | --- | --- | --- | --- |
+| H3-sec | high | high | `users.email` exposé via `users_select_public for select using (true)` | étape RLS hardening dédiée |
+| ~~H2-rob~~ | ~~high~~ | ~~medium~~ | ~~grant `service_role` sur `credit_t99cp(uuid,integer,text,text)`~~ | **clôturée étape 22** (grant additif ajouté à `db/schema.sql`) |
+| H2-arch | high | medium | `stripeWebhook.test.ts` cross-package import | étape archi dédiée |
+| H1-rob | high | medium | `fetchMonthlySignups` sans `range()/limit()` → biais > 1000 lignes (PostgREST max-rows) | étape stats matérialisées (RPC `users_signups_monthly()` DB) |
+| M2-sec | medium | high | `signatures_select_public` permet enum signataires (RGPD Art. 9) | étape RLS hardening |
+| M5-rob | medium | low | `count: 'exact'` sur `signatures` au-delà ~100k lignes | étape stats matérialisées |
+| M3-rob | medium | medium | `processed_at` non marqué sur validation 4xx (event silencieusement abandonné) | étape 23 (migration DB) |
+| M1-RGPD | medium | medium | purge auto `stripe_events.payload` (TTL 90j ou scrub avant insert) | décision RGPD + migration |
+| L1-a11y | medium | high | color-contrast `--mn-text-3` (~195 usages) | étape design dédiée |
+| L3-arch | low | low | extraire hook `useFetchOnMount` pour dédoublonner `cancelled` pattern | nice-to-have |
+| L4-sec | low | low | CSP `script-src https://js.stripe.com` (Stripe Elements) | quand Stripe Elements activé |
+| L5-arch | low | medium | inline `CSSProperties` dupliqués entre pages légales | étape design dédiée |
+| L1-rob | low | low | tests `vi.fn<typeof deps.upsertAdhesion>` pattern inconsistant | passe test hygiene |
+
+### Bundle après ajout
+
+| Avant étape 22 (fin janitor 21) | Après étape 22 |
+| --- | --- |
+| `index.js` 47.34 kB / gzip 13.34 kB | `index.js` 47.34 kB / gzip 13.32 kB |
+| `TransparencePage.js` 8.06 kB / gzip 3.26 kB | `TransparencePage.js` 8.10 kB / gzip 3.29 kB |
+| (mockSupabase identique) | helpers `SupabaseStubOverrides` ajoutés (E2E only, pas de bundle) |
+
+Variation entry/gzip < 1 % (volatilité hash chunk). Aucune
+nouvelle dépendance npm. Aucune nouvelle entrée bundle main.
+
+### Tests
+
+- **859 tests vitest verts** (127 fichiers, durée ~58 s). Compte
+  **inchangé** vs janitor post-step 21 : l'étape 22 ne touche
+  pas la lib TS ni les composants — uniquement la doc, la
+  migration DB additive, et le mock E2E + spec Playwright. Pas
+  de nouveau code source TS à couvrir en vitest.
+- **+2 tests E2E Playwright** dans `web/e2e/transparence.spec.ts`
+  (5 tests au total) :
+  - compteurs publics non-nuls (42 membres, 7 pétitions,
+    128 signatures, etc.) + axe-core OK.
+  - chart SVG visible avec `<rect>` × 12 quand inscriptions > 0.
+- 4 checks locaux verts (typecheck, lint, vitest, build).
+
+### Hygiène
+
+- Pas de modification du prototype (`app/Maintenant.html`,
+  `Theme.jsx`).
+- Pas d'emojis dans les fichiers TS / commits / PR.
+- Tokens `T.*` (CSS vars `--mn-*`) **intacts**.
+- Pas de clé service_role dans le bundle front.
+- Pas de nouvelle dépendance npm.
+- Migration DB : **additive uniquement** (deux `grant execute`
+  idempotents). Aucune suppression / rename / DROP. Listée
+  explicitement dans le prompt étape 22 → autorisée par
+  CLAUDE.md.
+- Pas de breaking change visible utilisateur (la doc
+  `USER-GUIDE.md` ajoute une section informative ; l'E2E
+  mockSupabase reste rétro-compatible — `overrides` est
+  optionnel et `[]` reste le défaut).
+- Aucune `console.warn` / `console.error` ajoutée.
+
+### Checks finaux
+
+```
+> npm run typecheck && npm run lint && npx vitest run && npm run build
+
+✓ typecheck   (tsc -b + e2e/tsconfig.json)
+✓ lint        (eslint .)
+✓ vitest      (127 files, 859 tests passed, ~58s)
+✓ build       (entry 47.34 kB / gzip 13.32 kB ; TransparencePage 8.10 kB / gzip 3.29 kB lazy ; sentry 436.2 kB / gzip 143 kB lazy)
+```
+
+### Migration DB
+
+**Additive uniquement** (cf. `db/schema.sql` §20 lignes 1971-1981
+après modif) :
+
+```sql
+grant execute on function public.credit_t99cp(uuid, integer, text, text)
+  to service_role;
+grant execute on function public.debit_t99cp(uuid, integer, text)
+  to service_role;
+```
+
+Procédure d'application en staging avant l'étape 23
+(cf. `docs/PROD-RUNBOOK.md` §3) :
+
+1. `pg_dump` du projet `maintenant-staging` vers bucket privé.
+2. `psql < db/schema.sql` — idempotent, le grant est appliqué
+   sans erreur même si le rôle bypassait déjà.
+3. Validation : depuis psql en mode service-role,
+   `select credit_t99cp('11111111-1111-1111-1111-111111111111', 1, 'test-step22', 'evt_test_step22');`
+   ne doit pas renvoyer `permission denied` (return OK ou
+   `unknown_user` selon que l'UID existe).
+4. `supabase functions deploy stripe-webhook --no-verify-jwt`.
+5. Test canary `stripe trigger invoice.payment_succeeded`.
+
+### Décisions
+
+- **Grant service_role appliqué proactivement** plutôt qu'en
+  attente de test live : la migration est additive, idempotente,
+  no-op sur projet non-hardened. Le coût d'attendre la
+  validation humaine (semaines avant déploiement Vercel) >
+  coût de l'ajouter dès maintenant. Conditions CLAUDE.md
+  respectées (migration listée explicitement dans le prompt
+  étape 22).
+- **Cumul T99CP différé documenté plutôt qu'implémenté** :
+  la consigne « Sinon documenter dans USER-GUIDE.md » est
+  appliquée à la lettre. Pas d'auto-validation produit côté
+  Claude — la décision « est-ce que cette métrique aide les
+  adhérent·es ? » revient à l'équipe humaine. Le code RPC
+  reste prêt à être écrit en étape 23+ si la décision tombe.
+- **E2E densifié avec overrides plutôt qu'un projet
+  Supabase de test** : un projet de test seedé est plus
+  robuste à long terme (vrai end-to-end inclus RLS), mais
+  hors scope du sandbox actuel. L'API `overrides` est un
+  premier pas — réutilisable par d'autres specs (auth-flow,
+  petition-signature) le jour où elles auront besoin de
+  scénarios non-vides.
+- **`debit_t99cp` grant service_role ajouté par symétrie** :
+  pas d'appel actuel côté Edge Functions, mais coût zéro et
+  prévoit le cas remboursement RGPD futur.
+- **Lighthouse / Sentry / Supabase monitoring / retours**
+  re-différés en bloc étape 23 : conditions inchangées vs
+  étape 21 (provisionnement externe non avancé).
+
+### Prochaines étapes (étape 23)
+
+- Lighthouse mesuré dès qu'un Vercel preview HTTPS sera en
+  ligne (priorité 1 si oui).
+- Monitoring Sentry canary + 7 j observations.
+- Décision produit cumul T99CP émises → RPC SECURITY DEFINER
+  si OK.
+- Adresser H1-rob (RPC `users_signups_monthly()` côté DB pour
+  remplacer `fetchMonthlySignups` quand `users` > ~50k lignes).
+- Adresser H2-arch (`stripeWebhook.test.ts` cross-package
+  import).
+- Si Sentry remonte des erreurs `stripe-webhook` récurrentes →
+  prioriser le job de réconciliation Edge Function.
+
+---
+
+## Prompt pour la session N+17 (étape 23)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD, Lighthouse
+>    ≥ 95, axe-core ≥ 95, `prefers-reduced-motion`). Note la section
+>    « Politique de PR » qui t'autorise à enchaîner ouverture + merge
+>    des PR sans confirmation **jusqu'à la session 50 incluse**. Note
+>    aussi la section « Recopie systématique du prompt de la session
+>    suivante » : **à la clôture de cette étape, recopier le prompt
+>    étape 24 à la fois dans `HANDOFF-PROGRESS.md` ET dans la réponse de
+>    chat finale**. Et enfin la section « Audit récurrent vibe janitor
+>    de fin d'étape » : **après le merge de la PR principale de
+>    l'étape 23, tu dois enchaîner une PR janitor séparée
+>    `chore(janitor): post-step 23 — …` et inclure cette même
+>    instruction janitor dans le prompt étape 24.**
+> 2. `HANDOFF.md` §11 (Points d'attention) + §12 (Suivi) + §13
+>    (Sécurité).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 22 ✅ — étape 23 à faire).
+> 4. `docs/PROD-RUNBOOK.md` — runbook de provisionnement.
+> 5. `docs/MODERATION.md` — procédure modération.
+> 6. `docs/USER-GUIDE.md` — FAQ utilisateur·rice (section « Combien de
+>    T99CP ont été distribués au total ? » ajoutée à l'étape 22).
+>
+> **État actuel à la fin de l'étape 22 + janitor post-step 22** :
+>
+> - **Grant `service_role` explicite** sur `credit_t99cp(uuid, integer,
+>   text, text)` + `debit_t99cp(uuid, integer, text)` ajouté à
+>   `db/schema.sql` §20. Dette **H2-rob clôturée**. Migration additive
+>   idempotente (no-op sur projet non-hardened, déblocante sur projet
+>   hardened). À appliquer en staging avant tout redéploiement Edge
+>   Function — cf. `docs/PROD-RUNBOOK.md` §3.
+> - **E2E `transparence.spec.ts` densifié** : 5 tests (3 originaux +
+>   2 nouveaux avec compteurs publics non-nuls + chart SVG visible).
+>   `web/e2e/utils/mockSupabase.ts` accepte un paramètre `overrides`
+>   optionnel pour seeder count/rows par table. Rétro-compatible.
+> - **Cumul T99CP émises publique** : décision documentée dans
+>   `docs/USER-GUIDE.md` (section dédiée). La RPC
+>   `transparency_t99cp_total()` reste à créer le jour où la décision
+>   produit est validée.
+> - **859 tests vitest verts** (127 fichiers, durée ~58 s) — inchangé
+>   vs janitor post-step 21 (pas de nouveau code source TS, donc pas
+>   de nouvelle couverture vitest).
+> - Build entry `47.34 kB / gzip 13.32 kB` + chunk `TransparencePage`
+>   8.10 kB / gzip 3.29 kB lazy. Aucune nouvelle dépendance npm.
+> - Audit Lighthouse réel + monitoring Sentry/Supabase runtime +
+>   retours utilisateur·rices : **re-différés étape 23** (conditions
+>   externes inchangées).
+>
+> **Provisionnement externe — état au 2026-05-12 (inchangé depuis
+> étape 19)** :
+>
+> - ✅ Supabase **staging** provisionné (projet `maintenant-staging`,
+>   eu-west-3, Free). Schéma `db/schema.sql` étape 19 appliqué — les
+>   migrations étapes 20 + 22 (grant service_role) restent à
+>   appliquer.
+> - 🔲 Vercel / Stripe live / Edge Functions / Sentry SaaS / PITR /
+>   projet `maintenant-test` (E2E happy path) restent à provisionner
+>   par l'équipe humaine (cf. `docs/PROD-RUNBOOK.md` §2 à §4).
+>
+> **CONTEXTE D'OUVERTURE — à exécuter avant toute autre action** :
+>
+> 1. Vérifier qu'on est bien dans un workspace contenant `web/`. Si
+>    non, `git fetch origin main && git merge --ff-only origin/main`.
+> 2. `cd web && npm ci` (fallback : `npm install --legacy-peer-deps`).
+> 3. `npm run typecheck && npm run lint && npx vitest run && npm run build`
+>    pour vérifier le compteur de tests au point de départ (≥ 859
+>    verts à incrémenter à chaque étape).
+> 4. **Demander à l'équipe humaine** :
+>    - Les migrations étape 20 + étape 22 (`db/schema.sql`) ont-elles
+>      été appliquées à Supabase staging ?
+>    - Le provisionnement Vercel / Stripe live / Sentry SaaS décrit
+>      dans `docs/PROD-RUNBOOK.md` est-il fait ?
+>    - Y a-t-il un projet Supabase de test seedé pour le test E2E
+>      « signature anonyme » ?
+>    - La décision produit sur le **cumul T99CP émises publique** a-t-elle
+>      tranché ? Si oui en faveur de l'affichage public → l'étape 23
+>      ajoutera la RPC `transparency_t99cp_total()` (migration DB
+>      additive, scalaire SECURITY DEFINER).
+>
+> **PRÉREQUIS OPÉRATIONNEL BLOQUANT — gate avant tout redéploiement
+> Edge Function** :
+>
+> - L'Edge Function `stripe-webhook` (étape 20) appelle `credit_t99cp`
+>   avec **4 arguments**. Les migrations `db/schema.sql` étapes 20 +
+>   22 (grant `service_role`) doivent avoir été appliquées AVANT
+>   tout redéploiement de l'Edge Function.
+> - Procédure : (1) `pg_dump` staging vers bucket privé, (2)
+>   `psql < db/schema.sql` (idempotent), (3) test SQL côté
+>   service-role
+>   `select credit_t99cp('11111111-1111-1111-1111-111111111111', 1, 'test-23', 'evt_test_step23');`
+>   — doit retourner OK ou `unknown_user`, **jamais**
+>   `permission denied`. (4) `supabase functions deploy
+>   stripe-webhook --no-verify-jwt`. (5) test canary
+>   `stripe trigger invoice.payment_succeeded`. **Si une migration
+>   n'a pas été appliquée : STOP, demander à l'équipe humaine.**
+>
+> **ÉTAPE 23 à exécuter — Post-go-live (audit réel + monitoring +
+> dette H1-rob/H2-arch + cumul T99CP si validé)** :
+>
+> 1. **Audit Lighthouse réel** (priorité 1 si Vercel preview en
+>    ligne) : `npx unlighthouse --site <url>` ou DevTools manuel
+>    sur 6 pages clés. Documenter les scores. Corriger les
+>    blocages < 95. Si pas de staging HTTPS : différer étape 24.
+> 2. **E2E « happy path » réel** (priorité 2 si projet Supabase
+>    de test prêt) : `web/e2e/happy-path.spec.ts` qui signe
+>    anonymement une pétition + vérifie le compteur. Sinon
+>    rajouter encore un test mock non-vide à `transparence.spec.ts`
+>    ou à `petition-signature.spec.ts` (réutiliser
+>    `installSupabaseStubs(page, { rest: ... })`).
+> 3. **Monitoring Sentry runtime** (si DSN câblé) : test canary
+>    + documenter taux d'erreur 7 j + top 5 issues. Si erreurs
+>    récurrentes `stripe-webhook` → prioriser job de
+>    réconciliation.
+> 4. **Monitoring Supabase** : quotas API / DB CPU / DB memory
+>    sur 7 j, alertes Slack actives ?, top requêtes lentes.
+> 5. **H1-rob — RPC `users_signups_monthly()` côté DB** : si
+>    validation produit reçue OU staging `users` > 5k lignes →
+>    RPC `returns table(month_iso date, count int)` SECURITY
+>    DEFINER, lecture limitée à `auth.role() in ('anon',
+>    'authenticated')`, agrégation côté serveur. Remplacer
+>    `fetchMonthlySignups` côté client. Migration DB additive
+>    listée explicitement → autorisée. Sinon documenter le défer
+>    dans le tableau dette.
+> 6. **H2-arch — `stripeWebhook.test.ts` cross-package import** :
+>    refacto pour que les tests vitest des Edge Functions
+>    n'importent plus le code Deno via chemin relatif fragile.
+>    Soit (a) déplacer le handler-utility dans un shared lib
+>    `web/src/lib/stripe-webhook-shared.ts`, soit (b) mocker au
+>    niveau de l'interface. Pas de migration DB. Risque
+>    régression : moyen — vérifier tous les tests vitest
+>    concernés.
+> 7. **Cumul T99CP émises publique** (différé étape 21+22) : si
+>    validation produit reçue → RPC
+>    `transparency_t99cp_total() returns bigint security definer`
+>    + carte dédiée sur `TransparencePage`. **Migration DB
+>    additive listée explicitement → autorisée.** Sinon laisser
+>    en l'état (la doc `USER-GUIDE.md` couvre déjà la décision).
+> 8. **Retours utilisateur·rices** (si trafic réel) : premiers
+>    comptes créés, bounce rate `/auth/confirm`, signalements
+>    modération, bugs tech@. Compiler fixes prioritaires
+>    étape 24.
+> 9. **Job de réconciliation Stripe (dette différée étape 20)** :
+>    décider si on l'implémente (Edge Function qui scanne
+>    `stripe_events WHERE processed_at IS NULL AND received_at <
+>    now() - interval '15 min'`). Critère : erreurs récurrentes
+>    Sentry sur `stripe-webhook`.
+> 10. **Tests** : suite vitest ≥ 859 + e2e Playwright verts en CI.
+> 11. `HANDOFF-PROGRESS.md` : étape 23 ✅ détaillée.
+> 12. **Recopier le prompt étape 24** à la fois dans
+>     `HANDOFF-PROGRESS.md` ET dans la **réponse de chat finale**
+>     (règle récursive). **Inclure dans le prompt étape 24 la
+>     même instruction de recopie pour la session N+18, ET
+>     l'instruction d'audit vibe janitor pour N+18.**
+>
+> **PHASE 1 — Clôture de l'étape principale (workflow auto-merge)** :
+>
+> Conformément à CLAUDE.md § « Politique de PR », autorisation
+> permanente d'enchaîner les étapes ci-dessous sans confirmation :
+>
+> 1. Vérifier les 4 checks locaux verts : `npm run typecheck && npm
+>    run lint && npx vitest run && npm run build`. Si échec →
+>    corriger, ne pas commit.
+> 2. Commit : `chore(prod): step 23 — post-go-live (lighthouse +
+>    e2e réel + monitoring + dette H1-rob/H2-arch)`. Pas d'emojis.
+> 3. Push sur la branche imposée par l'harness (retry exponentiel
+>    2/4/8/16 s).
+> 4. Ouvrir la PR vers `main` via
+>    `mcp__github__create_pull_request` (titre = commit, body
+>    Summary + Décisions + Test plan).
+> 5. Attendre les checks GitHub Actions. Si rouges → autofix +
+>    re-push.
+> 6. Merger la PR via `mcp__github__merge_pull_request`.
+>
+> **PHASE 2 — Audit vibe janitor (après le merge de la PR principale)** :
+>
+> Conformément à CLAUDE.md § « Audit récurrent vibe janitor de fin
+> d'étape » :
+>
+> 1. Sync : `git checkout main && git pull --ff-only origin main`,
+>    puis `git checkout -b claude/janitor-post-step23`.
+> 2. Audit en parallèle via 2-3 subagents `general-purpose` :
+>    architecture / robustesse / sécurité. Chaque agent produit un
+>    rapport ; aucune modification.
+> 3. Synthétiser findings par sévérité + risque régression.
+> 4. Appliquer UNIQUEMENT les fixes safe-first (« primum non
+>    nocere ») : aucun fix qui casse un test, aucun nouveau
+>    problème, design system T.* intouchable, pas de migration DB,
+>    pas de breaking change, fixes risque medium/high reportés en
+>    dette.
+> 5. Vérifier les 4 checks locaux verts avant push.
+> 6. PR janitor séparée : titre `chore(janitor): post-step 23 —
+>    <résumé court>`. Body : Summary + Findings (sévérité +
+>    risque) + Fixes appliqués + Fixes déférés + Test plan.
+> 7. Merger la PR janitor (même workflow auto-merge).
+> 8. Documenter dans `HANDOFF-PROGRESS.md` § Audit vibe janitor
+>    étape 23 : findings totaux, fixes appliqués (chacun avec
+>    risque évalué), dette ajoutée, compteur de tests final.
+>
+> **Phase 3 — Recopie du prompt étape 24** (toujours obligatoire) :
+>
+> 1. Recopier le prompt étape 24 dans la **réponse de chat finale**,
+>    en plus de l'avoir écrit dans `HANDOFF-PROGRESS.md`. Le prompt
+>    étape 24 doit lui-même inclure les Phases 1, 2, 3 récursives
+>    pour la session N+18.
+>
+> **Conditions d'arrêt malgré l'autorisation permanente** :
+>
+> - Migration DB risquée non listée. L'étape 23 LISTE explicitement :
+>   - RPC `users_signups_monthly()` SI validation produit ou volume
+>     staging (additif, autorisé).
+>   - RPC `transparency_t99cp_total()` SI validation produit reçue
+>     (additif, autorisé).
+>   Toute autre migration → demander confirmation.
+> - Changement RGPD non listé.
+> - Breaking change visible utilisateur.
+> - Erreur Vercel / Supabase impossible à debugger en < 3 tentatives.
+> - Review humaine ou commentaire GitHub avant le merge.
+> - En phase janitor : un fix touche au design system `T.*`, casse
+>   un test sans rollback possible, ou nécessite un bump majeur.
+>
+> **Contraintes générales** :
+>
+> - Ne pas toucher au prototype.
+> - TS strict + no `any`.
+> - Conserver les checks verts à chaque étape.
+> - Pas d'emojis dans le code TS ni dans les commits / PR.
+> - Tokens `T.*` intouchables sans validation designer.
+> - Sauvegarder la DB AVANT toute migration prod (`pg_dump` →
+>   bucket privé Supabase Storage).
 
 ---
 

@@ -47,6 +47,43 @@ Tu en dépenses pour :
 Le solde est strictement positif (impossible d'aller dans le rouge). En
 cas de débit refusé, le message **« solde insuffisant »** s'affiche.
 
+### Combien de T99CP ont été distribués au total ?
+
+Le total cumulé de T99CP crédités depuis l'ouverture du mouvement
+n'est **pas affiché publiquement** sur la page
+[`/transparence`](#transparence-du-mouvement) à ce stade.
+
+**Pourquoi** : la table interne `t99cp_transactions` est protégée
+par une politique RLS « self-only » (chaque adhérent·e ne voit
+que ses propres lignes), ce qui empêche un·e visiteur·euse
+anonyme de sommer publiquement les crédits. Une fonction
+serveur dédiée (RPC `SECURITY DEFINER`) serait techniquement
+possible pour exposer un seul scalaire agrégé, mais cette
+décision produit n'a pas encore été validée (la valeur
+informationnelle de ce nombre brut, hors contexte d'usage, est
+discutable — un total de « 1,2 M T99CP émis » n'aide pas à
+comprendre comment ils circulent).
+
+**Ce qu'on affiche déjà** sur `/transparence` :
+
+- nombre de membres inscrits ;
+- pétitions / mobilisations / campagnes publiées ;
+- communes libres actives ;
+- total cumulé de signatures ;
+- évolution mensuelle des inscriptions sur 12 mois (graphique).
+
+Si tu trouves ce manque gênant ou pertinent pour ta confiance
+dans la transparence du mouvement, écris à
+`contact@maintenant.org` — la décision pourra être ré-évaluée
+sur la base des retours utilisateur·rices.
+
+### Transparence du mouvement
+
+Toutes les statistiques publiques agrégées sont visibles sur
+[`/transparence`](#transparence-du-mouvement). Cette page est
+mise à jour en temps réel à chaque chargement (compteurs SQL
+côté serveur, aucune mise en cache côté CDN).
+
 ### Comment je récupère mes données / supprime mon compte ?
 
 Va dans **Profil → Données personnelles** :
