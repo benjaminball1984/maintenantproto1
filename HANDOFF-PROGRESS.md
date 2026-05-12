@@ -7707,7 +7707,218 @@ Playwright validé par la CI (sandbox local : CDN
 
 ### Audit vibe janitor étape 27
 
-_À compléter par la session — cf. PR `chore(janitor): post-step 27 — …`._
+**Branche** : `claude/janitor-post-step27`
+
+Audit en parallèle via 3 subagents `general-purpose` après le merge
+de la PR principale #31 (commit `chore(prod): step 27 …`) :
+architecture / élégance, robustesse / edge cases, sécurité / RGPD
+/ cohérence handoff.
+
+#### Findings par sévérité
+
+| Axe | Total | critical | high | medium | low | Fixable safe-first | Déférés / non-findings |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Architecture | 9 | 0 | 0 | 0 | 9 | 0 | 9 (dont 6 non-findings explicites : A4-A9) |
+| Robustesse | 14 | 0 | 0 | 1 | 13 | 0 | 14 (dont 11 non-findings explicites + 3 déférés) |
+| Sécurité | 15 | 0 | 0 | 0 | 15 | 0 | 15 (tous non-findings explicites : S1-S15) |
+| **Total** | **38** | **0** | **0** | **1** | **37** | **0** | **38 (dont 32 non-findings)** |
+
+#### Fixes appliqués (safe-first)
+
+**Aucun**.
+
+Conformément au principe « primum non nocere » documenté dans
+`CLAUDE.md` § « Audit récurrent vibe janitor de fin d'étape »,
+aucun fix safe-first n'est applicable à ce stade :
+
+- Les 3 findings architecture `low` (J27-A1 duplication helper,
+  J27-A2 `stubUserId` distinct, J27-A3 scope describe) sont
+  **déjà couverts** par les dettes `L8-arch-authsession` et
+  `M7-e2e-storagekey` consolidées à l'étape 26. La règle YAGNI
+  s'applique encore : 2 call-sites quasi-identiques ne
+  justifient pas l'extraction immédiate d'un helper dont
+  l'API serait choisie sans visibilité sur le 3e call-site
+  (mobilization / poll / marketplace…). Reporter à une étape
+  pattern E2E auth dédiée est cohérent avec « Pas de fix qui
+  ouvre un risque B ».
+- Le finding robustesse `medium` (J27-R7 — sémantique mock `[]`
+  vs serveur réel `{}` ou 406 sur `.maybeSingle()`) est
+  **déféré** : le résultat final côté call-site est identique
+  (`data === null` dans les deux cas), seul le chemin de
+  parsing diffère. À documenter dans la future étape pattern
+  E2E auth (mutualisé avec L8 / M7).
+- Les 15 findings sécurité sont **tous non-findings explicites**
+  (statu quo conforme à `CLAUDE.md` + 16 dettes consolidées
+  inchangées).
+
+#### Fixes déférés (dette nouvelle ou existante)
+
+**J27-A1 / J27-A2 / J27-A3** (low / low-risk × 3) — couverts par
+`L8-arch-authsession` (helper `installAuthenticatedSession` +
+JSDoc consolidée) et `M7-e2e-storagekey` (couplage storage key
++ override `VITE_SUPABASE_URL` + filter méthode HTTP route
+signatures), consolidées à l'étape 26. Aucune nouvelle dette à
+tracer — les dettes existantes couvrent exactement ce périmètre.
+
+**J27-R7** (medium / low-risk) — sémantique du body retourné
+côté serveur (`{}` ou 406 sur `.maybeSingle()` avec singular
+row mode) diffère du mock E2E (`[]` array). Résultat final
+identique côté call-site (`data === null` → `signed = false`),
+mais le chemin de parsing testé n'est pas strictement celui de
+la prod. **Déféré** : à documenter dans la future étape pattern
+E2E auth dédiée (mutualisé avec L8 / M7). Pas de dette nouvelle
+à tracer — couvert par l'esprit de M7-e2e-storagekey
+(« fidelity E2E vs runtime »).
+
+**J27-R8** (low / low-risk — vigilance future) — si une future
+version de supabase-js décide de valider la session côté
+serveur via `/auth/v1/user` au boot, le test casserait
+silencieusement (le mock `installSupabaseStubs` renvoie
+`id='stub-user-id'` ≠ `id='stub-unsigned-user-id'` côté
+session injectée). Vérification actuelle : supabase-js v2
+n'émet pas ce hit pour `getSession()` (lecture directe
+storage). **Déféré** : couvert par la même future étape
+pattern E2E auth (à documenter en JSDoc du helper).
+
+#### Non-findings explicites (confirmation par 3 subagents)
+
+- **A4** : regex `/Signer cette pétition/i` + `getByRole('button')`
+  non-ambigu vu la source `PetitionDetailPage.tsx:313`. La
+  string « Connectez-vous pour signer cette pétition » (l.281)
+  est dans un `<div role="note">`, exclue.
+- **A5** : narrative HANDOFF étape 27 cohérente, ancrages
+  fichier corrects (`PetitionDetailPage.tsx:286-317`,
+  `petitions.ts:268`).
+- **A6** : `beforeEach` sans mock global `signatures` reste
+  cohérent post-janitor 26 (override local explicite uniquement
+  quand requis, 4 tests anonymes short-circuitent
+  `hasUserSigned` côté `usePetition.ts:55`).
+- **A7** : `page.addInitScript` vs `page.context().addInitScript`
+  équivalent en pratique (1 Page = 1 Context par test, config
+  Playwright par défaut).
+- **A8** : ancrage `petitions.ts:268` correct au moment du
+  commit.
+- **A9** : renvoi cross-référencé entre tests 6 et 7
+  (commentaire de l.191-203 pointant sur l.124-148) — pattern
+  propre, évite duplication intégrale du commentaire de 17
+  lignes.
+- **R1, R3, R4, R5, R6, R9, R10, R11, R12, R14** : 10
+  vérifications robustesse confirmées (race window neutre,
+  rendu React `aria-pressed`, marge auto-refresh 24h,
+  uniqueness sélecteur, TZ invariant, ordre Playwright init/route/goto,
+  timeout 10s ample, label busy initial OK, isolation localStorage
+  cross-test garantie par Playwright).
+- **R13** : couplage storage key — déjà tracé en
+  `M7-e2e-storagekey`.
+- **S1** : stub tokens (`stub-access-token`,
+  `stub-refresh-token`) pattern incompatible JWT / refresh
+  token Supabase, aucun scanner secret ne matche.
+- **S2** : email `curieux@example.org` réservé RFC 2606,
+  `display_name: 'Curieux Stub'` non identifiant.
+- **S3** : aucune référence `service_role` dans le diff
+  (vérifié `git diff bf5effc^ bf5effc -- web/src/lib/supabase.ts`
+  vide).
+- **S4** : CSP / headers inchangés (`web/index.html`,
+  `web/vercel.json` non modifiés).
+- **S5** : RLS / `db/schema.sql` inchangé. M2-sec-policy reste
+  ouvert comme prévu (gated DPO).
+- **S6** : `web/package.json` / `web/package-lock.json` non
+  modifiés — aucune nouvelle dépendance, aucun bump.
+- **S7** : storage key `sb-127-auth-token` côté E2E ne
+  contamine pas le runtime production (formule supabase-js v2
+  dérive depuis `VITE_SUPABASE_URL`, dossier `web/e2e/` exclu
+  du bundle `vite build`).
+- **S8** : `'stub-unsigned-user-id'` isolé par
+  BrowserContext + Page neufs par test (Playwright
+  `fullyParallel: true`).
+- **S9** : prototype intouché (`app/Maintenant.html`, `Theme.jsx`,
+  `Harmonize.css` non modifiés).
+- **S10** : dette consolidée 16 items inchangée vs fin janitor
+  étape 26 (cohérent avec narrative étape 27 lignes
+  7602-7607).
+- **S11** : table « État global » étendue (lignes 26 et 27
+  ajoutées), narrative étape 27 (lignes 7456-7711)
+  cohérente.
+- **S12** : prompt étape 28 (lignes 7714-7977) propage
+  correctement les deux clauses récursives (recopie prompt +
+  audit janitor) pour la session N+22.
+- **S13** : compteurs cohérents (872 vitest inchangé, 32 → 33
+  E2E Playwright, bundle entry 47.34 kB / gzip 13.32 kB
+  inchangé, TransparencePage 7.69 kB / gzip 3.11 kB inchangé,
+  Sentry 436.2 kB / gzip 143.08 kB inchangé).
+- **S14** : décisions externes (Lighthouse / monitoring /
+  produit-DPO-RGPD) non reçues → re-différement en bloc
+  conforme aux conditions explicites du prompt étape 27.
+- **S15** : pas de `service_role` re-livré accidentellement
+  (zéro chaîne `service_role` dans le diff).
+
+#### Hygiène (janitor étape 27)
+
+- Pas de modification du prototype.
+- Pas de modification du design system `T.*` (CSS vars
+  `--mn-*`).
+- Pas de migration DB.
+- Pas de breaking change visible utilisateur (pas de fix
+  appliqué).
+- Pas de nouvelle dépendance npm.
+- Pas de bump majeur.
+- TS strict + no `any`.
+- Aucun fix qui casse un test existant (zéro fix appliqué).
+- Aucun fix qui ouvre un risque B.
+- Aucun nouveau `console.error` / `console.warn`.
+
+#### Checks finaux (janitor étape 27)
+
+```
+> npm run typecheck && npm run lint && npx vitest run && npm run build
+
+✓ typecheck   (tsc -b + e2e/tsconfig.json)
+✓ lint        (eslint .)
+✓ vitest      (128 files, 872 tests passed, ~62s)
+✓ build       (entry 47.34 kB / gzip 13.32 kB ; TransparencePage 7.69 kB / gzip 3.11 kB lazy ; sentry 436.2 kB / gzip 143.08 kB lazy)
+```
+
+Compteur de tests **inchangé** (872 vitest + 33 E2E Playwright
+en CI) : la PR janitor est documentation-only, aucun fichier
+runtime modifié.
+
+#### Dette technique consolidée — inchangée
+
+Aucune nouvelle dette ajoutée. Les 16 items existants (H3-sec,
+M2-sec-policy, M5-rob, M1-RGPD, M6-rob, M7-e2e-storagekey,
+L1-a11y, L3-arch, L4-sec, L5-arch, L6-arch-progress,
+L7-arch-loginhref, L1-rob, H4-deploy-deno, L-sec-webhook-body,
+L8-arch-authsession) restent ouverts, à traiter dans des étapes
+dédiées (RLS hardening, design dédié, décision RGPD, robustesse
+hooks, pattern E2E auth).
+
+#### Décisions janitor
+
+- **0 fix safe-first appliqué** sur 38 findings. Justification
+  intégralement documentée ci-dessus : les 3 findings
+  architecture `low` consomment des dettes déjà tracées
+  (L8 + M7), le finding robustesse `medium` est déférable
+  (chemin de parsing alternatif sans impact résultat), et les
+  15 findings sécurité sont tous non-findings (statu quo
+  conforme). Aucune dette nouvelle.
+- **PR janitor documentation-only** : la PR
+  `chore(janitor): post-step 27 — …` n'introduit qu'un patch
+  sur `HANDOFF-PROGRESS.md` (cette section + 0 changement
+  code). Pattern explicitement autorisé par `CLAUDE.md`
+  § « Audit récurrent vibe janitor de fin d'étape »
+  (« primum non nocere » : si aucun fix ne se présente, on
+  ne fixe rien et on consigne).
+- **3 subagents en parallèle → 38 findings** (9 architecture +
+  14 robustesse + 15 sécurité) → un signal explicite de
+  maturité du périmètre : le test étape 27 est isolé,
+  symétrique au précédent, et ne déclenche aucune surface
+  inédite. La duplication consciente avec étape 26 est le
+  prix à payer pour la cohérence stylistique (argument
+  validé par les 3 subagents).
+- **Toutes les dettes high (H3-sec) + medium-high
+  (M2-sec-policy, M5-rob, M1-RGPD, L1-a11y, M6-rob,
+  M7-e2e-storagekey)** restent ouvertes, à traiter dans des
+  étapes dédiées.
 
 ---
 
