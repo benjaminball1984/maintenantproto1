@@ -2051,5 +2051,49 @@ grant execute on function public.users_signups_monthly(integer) to anon, authent
 grant execute on function public.users_signups_monthly(integer) to service_role;
 
 -- =====================================================================================
+-- 22 · Signatures — RPC publique signatures_count_for_petition() (étape 24)
+-- =====================================================================================
+-- Dette M2-sec (étape 19+) : la policy `signatures_select_public for select
+-- using (true)` autorise tout anonyme à lister les signataires (user_id) d'une
+-- pétition. C'est suffisant pour faire de la corrélation (« qui a signé X
+-- ET Y ») même sans email. Côté RGPD (signature politique → opinion
+-- = catégorie sensible Art. 9), c'est un risque.
+--
+-- Cette RPC SECURITY DEFINER renvoie uniquement un scalaire (count(*)),
+-- sans projection des user_id. Une fois en place côté client, on pourra
+-- durcir `signatures_select_public` (étape RLS hardening dédiée, qui
+-- demande validation explicite car c'est un changement de policy
+-- existante — cf. CLAUDE.md § Politique de PR / Conditions d'arrêt) sans
+-- casser l'affichage du compteur public.
+--
+-- Note : `petitions.signature_count` (compteur dénormalisé maintenu par
+-- triggers, cf. §4.b) reste exposé via la table `petitions` — la valeur
+-- est cohérente avec cette RPC (les triggers `signatures_count_inc`
+-- garantissent l'égalité). Cette RPC est utilisée par les futurs flows
+-- qui veulent un comptage frais directement depuis `signatures` sans
+-- passer par la dénormalisation.
+create or replace function public.signatures_count_for_petition(
+  p_petition uuid
+)
+  returns integer
+  language sql
+  stable
+  security definer
+  set search_path = public
+as $$
+  select count(*)::integer
+  from public.signatures s
+  where s.petition_id = p_petition;
+$$;
+
+revoke all on function public.signatures_count_for_petition(uuid) from public;
+grant execute on function public.signatures_count_for_petition(uuid) to anon, authenticated;
+-- service_role grant par cohérence avec credit_t99cp / debit_t99cp /
+-- users_signups_monthly — no-op sur projet non-hardened, débloquant si
+-- un futur outil interne (audit, reconciliation) appelle la RPC en
+-- service-role.
+grant execute on function public.signatures_count_for_petition(uuid) to service_role;
+
+-- =====================================================================================
 -- FIN du schéma. Régénérer les types : `supabase gen types typescript --local`.
 -- =====================================================================================

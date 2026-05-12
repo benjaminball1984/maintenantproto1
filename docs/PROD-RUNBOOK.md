@@ -90,6 +90,24 @@ select * from public.users_signups_monthly() limit 3;
 -- $SUPABASE_URL = https://<project-id>.supabase.co
 --   curl -s -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY" \
 --        "$SUPABASE_URL/rest/v1/rpc/users_signups_monthly"
+
+-- Étape 24 : RPC publique de comptage signatures par pétition
+-- (security definer, scalaire integer, grant execute to anon +
+-- authenticated, base de la dette M2-sec). Ne projette aucun user_id.
+\df+ public.signatures_count_for_petition
+
+-- Sanity check 3 — admin (psql superuser) : la fonction renvoie un int.
+-- Remplacer `<PETITION_UUID>` par un id réel ; si la table signatures
+-- est vide, la fonction renvoie 0 (jamais NULL).
+select public.signatures_count_for_petition('<PETITION_UUID>'::uuid);
+
+-- Sanity check 4 — anon (PostgREST + anon JWT) : grants execute OK.
+-- Doit renvoyer un body JSON contenant un nombre, jamais 401/403.
+--   curl -s -X POST \
+--        -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY" \
+--        -H "Content-Type: application/json" \
+--        -d '{"p_petition":"<PETITION_UUID>"}' \
+--        "$SUPABASE_URL/rest/v1/rpc/signatures_count_for_petition"
 ```
 
 ### 1.3 Régénération des types TypeScript

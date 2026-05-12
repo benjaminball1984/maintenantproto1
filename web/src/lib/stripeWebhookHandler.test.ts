@@ -105,22 +105,26 @@ describe('stripe-webhook handle() — invoice.payment_succeeded', () => {
     );
   });
 
-  it('renvoie 400 si user_id est manquant', async () => {
+  it('renvoie 400 + marque processed_at (M3-rob) si user_id est manquant', async () => {
     const event: StripeEvent = {
       id: 'evt_inv_003',
       type: 'invoice.payment_succeeded',
       data: { object: { metadata: {} } },
     };
     const creditT99cp = vi.fn<(input: CreditInput) => Promise<void>>(async () => undefined);
+    const recordEventProcessed = vi.fn<(eventId: string) => Promise<void>>(async () => undefined);
     const deps = buildDeps({
       verifyEvent: vi.fn(async () => event),
       creditT99cp,
+      recordEventProcessed,
     });
 
     const res = await handle(buildRequest(), deps);
 
     expect(res.status).toBe(400);
+    expect(await res.text()).toBe('missing_user_metadata');
     expect(creditT99cp).not.toHaveBeenCalled();
+    expect(recordEventProcessed).toHaveBeenCalledWith('evt_inv_003');
   });
 
   it('idempotence applicative : 2 livraisons du même event.id → un seul crédit', async () => {
@@ -149,6 +153,98 @@ describe('stripe-webhook handle() — invoice.payment_succeeded', () => {
     const body2 = (await res2.json()) as { idempotent?: boolean };
     expect(body2.idempotent).toBe(true);
     expect(creditT99cp).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('stripe-webhook handle() — M3-rob (mark processed_at sur 4xx validation)', () => {
+  it('checkout.session.completed sans user_id / subscription → 400 + processed_at', async () => {
+    const event: StripeEvent = {
+      id: 'evt_chk_400',
+      type: 'checkout.session.completed',
+      data: { object: { metadata: {} } },
+    };
+    const upsertAdhesion = vi.fn<(input: never) => Promise<void>>(async () => undefined);
+    const recordEventProcessed = vi.fn<(eventId: string) => Promise<void>>(async () => undefined);
+    const deps = buildDeps({
+      verifyEvent: vi.fn(async () => event),
+      upsertAdhesion: upsertAdhesion as unknown as StripeWebhookDeps['upsertAdhesion'],
+      recordEventProcessed,
+    });
+
+    const res = await handle(buildRequest(), deps);
+
+    expect(res.status).toBe(400);
+    expect(await res.text()).toBe('missing_user_or_subscription');
+    expect(upsertAdhesion).not.toHaveBeenCalled();
+    expect(recordEventProcessed).toHaveBeenCalledWith('evt_chk_400');
+  });
+
+  it('customer.subscription.deleted sans id → 400 + processed_at', async () => {
+    const event: StripeEvent = {
+      id: 'evt_del_400',
+      type: 'customer.subscription.deleted',
+      data: { object: {} },
+    };
+    const updateAdhesionStatus = vi.fn<(input: never) => Promise<void>>(async () => undefined);
+    const recordEventProcessed = vi.fn<(eventId: string) => Promise<void>>(async () => undefined);
+    const deps = buildDeps({
+      verifyEvent: vi.fn(async () => event),
+      updateAdhesionStatus:
+        updateAdhesionStatus as unknown as StripeWebhookDeps['updateAdhesionStatus'],
+      recordEventProcessed,
+    });
+
+    const res = await handle(buildRequest(), deps);
+
+    expect(res.status).toBe(400);
+    expect(await res.text()).toBe('missing_subscription_id');
+    expect(updateAdhesionStatus).not.toHaveBeenCalled();
+    expect(recordEventProcessed).toHaveBeenCalledWith('evt_del_400');
+  });
+
+  it('customer.subscription.updated sans id → 400 + processed_at', async () => {
+    const event: StripeEvent = {
+      id: 'evt_upd_400',
+      type: 'customer.subscription.updated',
+      data: { object: {} },
+    };
+    const updateAdhesionStatus = vi.fn<(input: never) => Promise<void>>(async () => undefined);
+    const recordEventProcessed = vi.fn<(eventId: string) => Promise<void>>(async () => undefined);
+    const deps = buildDeps({
+      verifyEvent: vi.fn(async () => event),
+      updateAdhesionStatus:
+        updateAdhesionStatus as unknown as StripeWebhookDeps['updateAdhesionStatus'],
+      recordEventProcessed,
+    });
+
+    const res = await handle(buildRequest(), deps);
+
+    expect(res.status).toBe(400);
+    expect(await res.text()).toBe('missing_subscription_id');
+    expect(updateAdhesionStatus).not.toHaveBeenCalled();
+    expect(recordEventProcessed).toHaveBeenCalledWith('evt_upd_400');
+  });
+
+  it('renvoie quand même 400 si recordEventProcessed throw sur validation (best-effort)', async () => {
+    const event: StripeEvent = {
+      id: 'evt_inv_400_warn',
+      type: 'invoice.payment_succeeded',
+      data: { object: { metadata: {} } },
+    };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const deps = buildDeps({
+      verifyEvent: vi.fn(async () => event),
+      recordEventProcessed: vi.fn(async () => {
+        throw new Error('flag_update_failed');
+      }),
+    });
+
+    const res = await handle(buildRequest(), deps);
+
+    expect(res.status).toBe(400);
+    expect(await res.text()).toBe('missing_user_metadata');
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
 

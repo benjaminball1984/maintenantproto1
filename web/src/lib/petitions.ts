@@ -281,3 +281,30 @@ export async function listPetitionSignatures(
     .limit(limit);
   return { data: data ?? [], error };
 }
+
+/**
+ * Renvoie le compteur de signatures pour une pétition via la RPC publique
+ * `signatures_count_for_petition` (étape 24 — dette M2-sec, scalar SECURITY
+ * DEFINER). Cette RPC ne projette **aucun** `user_id`, contrairement à
+ * `select * from signatures where petition_id = ...`. Elle est destinée à
+ * remplacer les lectures de `signatures` côté anonymes une fois la policy
+ * `signatures_select_public` durcie (étape RLS hardening dédiée — demande
+ * validation explicite côté produit / DPO car c'est un changement de
+ * policy existante visible côté client).
+ *
+ * En attendant le durcissement, la RPC est livrée en additif (sans
+ * impact sur les flows existants) pour que les nouveaux call-sites
+ * convergent dessus.
+ */
+export async function getPetitionSignatureCount(
+  petitionId: string,
+): Promise<{ count: number | null; error: PostgrestError | null }> {
+  const { data, error } = await supabase.rpc('signatures_count_for_petition', {
+    p_petition: petitionId,
+  });
+  if (error) return { count: null, error };
+  // La RPC renvoie un scalar `integer`. PostgREST sérialise les scalaires de
+  // RPC comme une primitive — `data` est donc directement un `number`.
+  const count = typeof data === 'number' && Number.isFinite(data) ? data : 0;
+  return { count, error: null };
+}
