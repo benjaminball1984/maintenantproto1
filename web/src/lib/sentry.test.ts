@@ -194,4 +194,41 @@ describe('sentry.loadAndInitSentry', () => {
 
     vi.doUnmock('@sentry/browser');
   });
+
+  it('renvoie false silencieusement si @sentry/browser plante au load', async () => {
+    // Simule un chunk introuvable (404) / erreur d'import dynamique.
+    vi.doMock('@sentry/browser', () => {
+      throw new Error('chunk_load_failed');
+    });
+
+    const fresh = await import('./sentry');
+    fresh.resetSentryForTests();
+    const ok = await fresh.loadAndInitSentry({
+      dsn: 'https://abc@sentry.io/1',
+      environment: 'production',
+    });
+    expect(ok).toBe(false);
+
+    vi.doUnmock('@sentry/browser');
+  });
+
+  it('renvoie false si Sentry.init throw — pas marqué initialisé', async () => {
+    const initSpy = vi.fn(() => {
+      throw new Error('boot fail');
+    });
+    vi.doMock('@sentry/browser', () => ({ init: initSpy }));
+
+    const fresh = await import('./sentry');
+    fresh.resetSentryForTests();
+    const ok = await fresh.loadAndInitSentry({
+      dsn: 'https://abc@sentry.io/1',
+      environment: 'production',
+    });
+    // L'init Sentry throw → la garde transactionnelle dans `initSentry`
+    // (try/catch autour de onReady) renvoie false.
+    expect(ok).toBe(false);
+    expect(initSpy).toHaveBeenCalledTimes(1);
+
+    vi.doUnmock('@sentry/browser');
+  });
 });
