@@ -50,8 +50,8 @@ cas de débit refusé, le message **« solde insuffisant »** s'affiche.
 ### Combien de T99CP ont été distribués au total ?
 
 Le total cumulé de T99CP crédités depuis l'ouverture du mouvement
-n'est **pas affiché publiquement** sur la page
-[`/transparence`](#transparence-du-mouvement) à ce stade.
+n'est **pas affiché publiquement** sur la page `/transparence` à
+ce stade.
 
 **Pourquoi** : la table interne `t99cp_transactions` est protégée
 par une politique RLS « self-only » (chaque adhérent·e ne voit
@@ -79,10 +79,14 @@ sur la base des retours utilisateur·rices.
 
 ### Transparence du mouvement
 
-Toutes les statistiques publiques agrégées sont visibles sur
-[`/transparence`](#transparence-du-mouvement). Cette page est
-mise à jour en temps réel à chaque chargement (compteurs SQL
-côté serveur, aucune mise en cache côté CDN).
+Toutes les statistiques publiques agrégées sont visibles sur la
+page `/transparence`. Elle est mise à jour en temps réel à chaque
+chargement (compteurs SQL côté serveur, aucune mise en cache côté
+CDN). Les buckets mensuels du graphique d'inscriptions sont
+calculés en **UTC** — un compte créé le 31 mai à 23 h 30 (Europe/
+Paris, soit 21 h 30 UTC) apparaît dans le bucket de mai ; créé à
+01 h 30 le 1er juin (Europe/Paris, soit 23 h 30 UTC le 31 mai) il
+apparaît également dans le bucket de mai.
 
 ### Comment je récupère mes données / supprime mon compte ?
 

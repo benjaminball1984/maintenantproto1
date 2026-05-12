@@ -1966,16 +1966,25 @@ revoke all on function public.debit_t99cp(uuid, integer, text)         from publ
 grant execute on function public.credit_t99cp(uuid, integer, text, text) to authenticated;
 grant execute on function public.debit_t99cp(uuid, integer, text)         to authenticated;
 -- Grant explicite service_role (étape 22 — dette H2-rob clôturée).
--- Sur un projet Supabase standard, `service_role` est superuser-equivalent
--- et bypasse les grants. Sur un projet "hardened" (postgres roles
--- locked-down via `alter role service_role nobypassrls`), il faut un grant
--- execute explicite, sinon l'Edge Function `stripe-webhook` (qui
--- s'authentifie en service_role pour appeler `credit_t99cp(uuid, integer,
--- text, text)`) renvoie `permission denied for function credit_t99cp`.
+-- Sur un projet Supabase managed standard, `service_role` hérite via
+-- Supabase des privilèges `execute on all functions in schema public`
+-- par défaut (le rôle est `bypassrls` + grants larges, mais n'est PAS
+-- superuser au sens Postgres strict). Sur un projet "hardened"
+-- (postgres roles locked-down, grants larges révoqués), il faut un
+-- grant execute explicite, sinon l'Edge Function `stripe-webhook`
+-- (qui s'authentifie en service_role pour appeler `credit_t99cp(uuid,
+-- integer, text, text)`) renvoie `permission denied for function
+-- credit_t99cp`.
 -- Le grant est idempotent : sans hardening, c'est un no-op ; avec
 -- hardening, il garantit l'exécution. Conserver les deux signatures
 -- explicitement pour rester safe vis-à-vis d'un audit RLS futur qui
 -- révoquerait `execute on all functions to service_role`.
+-- IMPORTANT : si quelqu'un re-crée ces fonctions hors de ce schéma
+-- (par ex. `drop function credit_t99cp ... cascade ; create function
+-- ...` manuellement en console), les grants devront être ré-exécutés.
+-- Ce fichier `schema.sql` est idempotent end-to-end et garantit le
+-- grant à chaque application. Privilégier toujours `psql < schema.sql`
+-- aux modifications manuelles.
 grant execute on function public.credit_t99cp(uuid, integer, text, text) to service_role;
 grant execute on function public.debit_t99cp(uuid, integer, text)         to service_role;
 

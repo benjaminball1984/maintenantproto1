@@ -7,11 +7,28 @@ import type { Page, Route } from '@playwright/test';
  * aux autres tables.
  *
  * - `count` : pour les requêtes `head: true, count: 'exact'`, valeur
- *   utilisée pour fabriquer le header `content-range: 0-0/<count>`.
+ *   utilisée pour fabriquer le header `content-range: 0-N/<count>`.
  * - `rows` : pour les requêtes non-`head`, body JSON renvoyé.
  *
  * Les clés correspondent au nom de la table PostgREST (segment juste
  * après `/rest/v1/`, avant `?`).
+ *
+ * **Limites volontaires** (E2E only, pas un vrai PostgREST) :
+ * - Si la même table reçoit DEUX requêtes différentes (ex. `users` :
+ *   un `head: true, count` pour le compteur + un `select('created_at')`
+ *   pour le graphique mensuel), la même override est servie aux deux.
+ *   Le client supabase-js lit `count` depuis le header sur la requête
+ *   head (body ignoré) et `rows` depuis le body sur la requête non-head
+ *   (header content-range non utilisé). Heureux hasard fonctionnel :
+ *   pour le test transparence c'est exactement ce qu'on veut.
+ * - Le mock ne couvre QUE les tables PostgREST (`/rest/v1/<table>`),
+ *   pas les RPC (`/rest/v1/rpc/<fn>`). Si un futur test stub une RPC,
+ *   ajouter une clé `rpc` à `SupabaseStubOverrides`.
+ * - Le mock n'applique PAS les filtres PostgREST (`.eq()`, `.gte()`,
+ *   `.order()`, `.limit()`, `.range()`). `rows` est renvoyé tel quel
+ *   au client, qui filtre/agrège côté JS si nécessaire. Pour les
+ *   tests qui dépendent du filtrage SQL réel, utiliser un projet
+ *   Supabase de test seedé (cf. PROD-RUNBOOK §6).
  */
 export interface SupabaseStubOverrides {
   rest?: Record<string, { count?: number; rows?: unknown[] }>;
@@ -77,7 +94,11 @@ export async function installSupabaseStubs(
   await page.route('**/rest/v1/**', async (route: Route) => {
     const restOverrides = overrides.rest ?? {};
     const url = route.request().url();
-    // Extrait la table PostgREST : `/rest/v1/<table>?...`
+    // Extrait la table PostgREST : `/rest/v1/<table>?...`. Si la regex
+    // ne matche pas (URL malformée — ne devrait jamais arriver vu le
+    // wildcard `**/rest/v1/**` qui filtre déjà), `table` reste `''`,
+    // aucune override ne matche et on retombe sur la réponse par défaut
+    // `[]` / `content-range: 0-0/0`.
     const match = /\/rest\/v1\/([^/?]+)/.exec(url);
     const table = match?.[1] ?? '';
     const override = restOverrides[table];

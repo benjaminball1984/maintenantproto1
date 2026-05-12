@@ -5523,6 +5523,74 @@ Procédure d'application en staging avant l'étape 23
 - Si Sentry remonte des erreurs `stripe-webhook` récurrentes →
   prioriser le job de réconciliation Edge Function.
 
+### Audit vibe janitor étape 22
+
+**Branche** : `claude/janitor-post-step22`.
+
+Audit en parallèle via 3 subagents `general-purpose` (architecture /
+élégance, robustesse / edge cases, sécurité / cohérence handoff) sur
+le scope PR #21 / commit `56c9b6c`. Synthèse + application des fixes
+safe-first uniquement, conformément à `CLAUDE.md § Audit récurrent
+vibe janitor`.
+
+#### Findings totaux
+
+| Catégorie | Critical | High | Medium | Low |
+| --- | --- | --- | --- | --- |
+| Architecture | 0 | 0 | 2 | 9 |
+| Robustesse | 0 | 0 | 3 | 7 |
+| Sécurité / cohérence | 0 | 0 | 0 | 3 (informationnels) |
+| **Total** | **0** | **0** | **5** | **19** |
+
+#### Fixes appliqués (4)
+
+| Finding | Sévérité | Risque régression | Fichier |
+| --- | --- | --- | --- |
+| A1 + R4 architecture/robustesse — JSDoc enrichi sur `SupabaseStubOverrides` (sémantique count/rows partagée, mock ne filtre pas, RPC non couvertes) | low | low | `web/e2e/utils/mockSupabase.ts:16-45` |
+| R1 robustesse — commentaire bloc sur la garde `match?.[1] ?? ''` (fallback explicite vers la réponse par défaut) | low | low | `web/e2e/utils/mockSupabase.ts:88-92` |
+| A6 architecture — suppression de 2 liens auto-référents `#transparence-du-mouvement` dans `USER-GUIDE.md` (remplacés par `/transparence` en texte plain ou liens supprimés) | low | low | `docs/USER-GUIDE.md:53-54, 82-87` |
+| R9 + R10 robustesse + S2 sécurité — reformulation du commentaire SQL `service_role` (clarification du modèle Supabase managed) + précision UTC dans `USER-GUIDE.md` § Transparence | low | low | `db/schema.sql:1968-1990`, `docs/USER-GUIDE.md:82-87` |
+
+#### Fixes déférés (dette technique)
+
+| Finding | Sévérité | Risque régression | Pourquoi déféré |
+| --- | --- | --- | --- |
+| **A2 architecture — renommer `rest` en `tables`/`restByTable`** | low | medium | Touche un type public exporté par `mockSupabase.ts` ; les 4 callers actuels (`auth-flow`, `critical-flows`, `petition-signature`, `public-pages`) ne l'utilisent pas mais le futur sera affecté. Reporté en passe de refactor E2E dédiée. |
+| **A3 architecture — `content-range` format PostgREST exact** (`*/${count}` quand pas de rows) | low | medium | Aligner sur le protocole exact pourrait casser des asserts existants (supabase-js lit le `/N` total uniquement, mais robustesse comportementale du mock à ne pas modifier sans tests dédiés). |
+| **A5 architecture + R5 robustesse — sélecteurs `getByText('42', exact)` et `rect` global** | medium | medium | Refactor des assertions Playwright avec `data-testid` ou structure DOM dédiée touche le composant `MonthlySignupsChart` (design system T.* potentiellement impacté). Hors scope janitor. |
+| **A7 architecture — section USER-GUIDE.md « Transparence du mouvement » placée sous `## Compte et adhésion`** | low | low | Restructuration éditoriale à valider avec l'équipe produit. |
+| **R2 robustesse — validation `count` négatif/non-entier** | medium | low | Ajouter un type guard et tests unitaires sur le mock = nouvelle surface code/tests. Reporté en passe de durcissement helpers E2E. |
+| **R3 robustesse — incohérence `content-range` head vs non-head** | medium | medium | Cf. A3. Demande détection de méthode HTTP + refonte. Risque medium de casser specs existants. |
+| **R6 robustesse — `getByText` non-scopé** | low | medium | Cf. A5. |
+| **R7 robustesse — waiter implicite sur fetch** | low | medium | `waitForResponse` introduit potentiellement des deadlocks (race avec le fetch déjà résolu). Sans flake observé, pas urgent. |
+| **R8 robustesse — try/catch sur `route.fulfill`** | low | medium | Masquer les erreurs `route` peut cacher des bugs CI réels. À évaluer si flake observé. |
+| **S1 sécurité — `debit_t99cp` grant service_role pré-emptif** | low | low | Aucun appel actuel côté Edge Functions. Conservé pour défense en profondeur (cas remboursement RGPD futur). Re-évaluer après étape 23 si toujours pas d'appelant. |
+
+#### Tests
+
+- **859 tests vitest verts** (127 fichiers, durée ~57 s). Compte
+  **inchangé** vs étape 22 — l'audit janitor ne touche que doc et
+  commentaires, pas de logique TS testable.
+- 4 checks locaux verts (typecheck, lint, vitest, build).
+- Build : entry `47.34 kB / gzip 13.32 kB` (inchangé).
+- Pas de changement design system `T.*`.
+- Pas de migration DB.
+- Pas de breaking change utilisateur.
+- Pas de bump majeur de dépendance.
+
+#### Décisions
+
+- **Fixes safe-first uniquement** appliqués (doc / commentaires
+  / texte JSDoc). Aucun fix qui change de comportement runtime.
+- **A6 + reformulation S2** : 2 fixes complémentaires sur la
+  doc (USER-GUIDE.md + db/schema.sql). Pas de changement
+  comportemental, juste clarification éditoriale.
+- **Aucune migration DB**, aucun fix design system, aucun
+  breaking change, aucun bump majeur de dépendance — conditions
+  d'arrêt CLAUDE.md respectées.
+- Audit globalement très propre : **0 finding critical/high**,
+  scope diff étape 22 majoritairement additif + documentaire.
+
 ---
 
 ## Prompt pour la session N+17 (étape 23)
