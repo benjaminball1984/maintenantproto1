@@ -2,8 +2,11 @@ import { describe, it, expect, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import {
+  buildMonthsRange,
+  fetchMonthlySignups,
   fetchTransparencyCounts,
   formatGoLiveDateFr,
+  formatMonthShortFr,
   GO_LIVE_DATE_ISO,
 } from './transparency';
 import type { Database } from '@/types/database';
@@ -138,5 +141,138 @@ describe('fetchTransparencyCounts', () => {
     for (const [, value] of statusFilters) {
       expect(value).toBe('published');
     }
+  });
+});
+
+describe('buildMonthsRange', () => {
+  it('retourne 12 mois croissants se terminant par le mois de la référence', () => {
+    const ref = new Date(Date.UTC(2026, 4, 12)); // mai 2026
+    const buckets = buildMonthsRange(ref, 12);
+    expect(buckets).toHaveLength(12);
+    expect(buckets[0]?.monthIso).toBe('2025-06-01');
+    expect(buckets[buckets.length - 1]?.monthIso).toBe('2026-05-01');
+    for (const b of buckets) expect(b.count).toBe(0);
+  });
+
+  it('gère le franchissement de l\'année (décembre → janvier)', () => {
+    const ref = new Date(Date.UTC(2026, 0, 15)); // janvier 2026
+    const buckets = buildMonthsRange(ref, 3);
+    expect(buckets.map((b) => b.monthIso)).toEqual([
+      '2025-11-01',
+      '2025-12-01',
+      '2026-01-01',
+    ]);
+  });
+
+  it('renvoie [] quand monthsBack = 0', () => {
+    const ref = new Date(Date.UTC(2026, 4, 12));
+    expect(buildMonthsRange(ref, 0)).toEqual([]);
+  });
+});
+
+describe('formatMonthShortFr', () => {
+  it('formate « mai 26 » pour 2026-05-01', () => {
+    expect(formatMonthShortFr('2026-05-01')).toBe('mai 26');
+  });
+
+  it('formate « janv. 25 » pour 2025-01-01', () => {
+    expect(formatMonthShortFr('2025-01-01')).toBe('janv. 25');
+  });
+
+  it('renvoie la chaîne brute en cas de format invalide', () => {
+    expect(formatMonthShortFr('not-a-month')).toBe('not-a-month');
+    expect(formatMonthShortFr('2026-13-01')).toBe('2026-13-01');
+  });
+});
+
+interface SignupRow {
+  created_at: string;
+}
+
+interface SignupsResult {
+  data: SignupRow[] | null;
+  error: { message: string } | null;
+}
+
+function buildSignupsClient(result: SignupsResult): SupabaseClient<Database> {
+  const fromMock = vi.fn((_table: string) => {
+    const chain = {
+      select: vi.fn(() => chain),
+      gte: vi.fn(() => chain),
+      then: vi.fn((onFulfilled: (v: SignupsResult) => unknown) =>
+        Promise.resolve(onFulfilled(result)),
+      ),
+    };
+    return chain;
+  });
+  return { from: fromMock } as unknown as SupabaseClient<Database>;
+}
+
+describe('fetchMonthlySignups', () => {
+  const NOW = new Date(Date.UTC(2026, 4, 12, 10, 0, 0)); // 2026-05-12
+
+  it('agrège les inscriptions par mois UTC', async () => {
+    const client = buildSignupsClient({
+      data: [
+        { created_at: '2026-05-01T00:00:00Z' },
+        { created_at: '2026-05-31T23:59:59Z' },
+        { created_at: '2026-04-15T12:00:00Z' },
+        { created_at: '2025-06-02T00:00:00Z' },
+      ],
+      error: null,
+    });
+    const { data, error } = await fetchMonthlySignups(client, 12, NOW);
+    expect(error).toBeNull();
+    expect(data).toHaveLength(12);
+    const may = data?.find((b) => b.monthIso === '2026-05-01');
+    expect(may?.count).toBe(2);
+    const april = data?.find((b) => b.monthIso === '2026-04-01');
+    expect(april?.count).toBe(1);
+    const june25 = data?.find((b) => b.monthIso === '2025-06-01');
+    expect(june25?.count).toBe(1);
+  });
+
+  it('renvoie tous les mois à zéro quand aucune inscription', async () => {
+    const client = buildSignupsClient({ data: [], error: null });
+    const { data, error } = await fetchMonthlySignups(client, 6, NOW);
+    expect(error).toBeNull();
+    expect(data).toHaveLength(6);
+    expect(data?.every((b) => b.count === 0)).toBe(true);
+  });
+
+  it('propage une erreur PostgREST', async () => {
+    const client = buildSignupsClient({
+      data: null,
+      error: { message: 'rls_denied' },
+    });
+    const { data, error } = await fetchMonthlySignups(client, 12, NOW);
+    expect(data).toBeNull();
+    expect(error?.message).toBe('rls_denied');
+  });
+
+  it('ignore les created_at hors fenêtre (antérieurs au premier mois)', async () => {
+    const client = buildSignupsClient({
+      data: [
+        { created_at: '2024-01-01T00:00:00Z' }, // hors fenêtre
+        { created_at: '2026-05-01T00:00:00Z' },
+      ],
+      error: null,
+    });
+    const { data } = await fetchMonthlySignups(client, 12, NOW);
+    const total = (data ?? []).reduce((s, b) => s + b.count, 0);
+    expect(total).toBe(1);
+  });
+
+  it('ignore les valeurs created_at non-string', async () => {
+    const client = buildSignupsClient({
+      data: [
+        { created_at: null as unknown as string },
+        { created_at: '2026-05-01T00:00:00Z' },
+      ],
+      error: null,
+    });
+    const { data } = await fetchMonthlySignups(client, 12, NOW);
+    const total = (data ?? []).reduce((s, b) => s + b.count, 0);
+    expect(total).toBe(1);
   });
 });

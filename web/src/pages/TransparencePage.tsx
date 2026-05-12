@@ -1,10 +1,13 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
+import MonthlySignupsChart from '@/components/MonthlySignupsChart';
 import {
   GO_LIVE_DATE_ISO,
+  fetchMonthlySignups,
   fetchTransparencyCounts,
   formatGoLiveDateFr,
+  type MonthlySignupBucket,
   type TransparencyCounts,
 } from '@/lib/transparency';
 
@@ -97,8 +100,14 @@ type FetchState =
   | { kind: 'success'; counts: TransparencyCounts }
   | { kind: 'error'; message: string };
 
+type ChartState =
+  | { kind: 'loading' }
+  | { kind: 'success'; buckets: MonthlySignupBucket[] }
+  | { kind: 'error' };
+
 export default function TransparencePage() {
   const [state, setState] = useState<FetchState>({ kind: 'loading' });
+  const [chartState, setChartState] = useState<ChartState>({ kind: 'loading' });
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +129,26 @@ export default function TransparencePage() {
           kind: 'error',
           message: err instanceof Error ? err.message : 'Erreur inconnue',
         });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchMonthlySignups()
+      .then((result) => {
+        if (cancelled) return;
+        if (result.error || !result.data) {
+          setChartState({ kind: 'error' });
+        } else {
+          setChartState({ kind: 'success', buckets: result.data });
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setChartState({ kind: 'error' });
       });
     return () => {
       cancelled = true;
@@ -158,6 +187,26 @@ export default function TransparencePage() {
             </li>
           ))}
         </ul>
+      )}
+
+      <h2 style={h2Style}>Inscriptions par mois (12 derniers mois)</h2>
+      <p style={{ color: 'var(--mn-text-2)', fontSize: 14, margin: '0 0 0.5rem' }}>
+        Évolution agrégée du nombre de comptes créés. Les données sont
+        anonymisées (seule la date de création est utilisée).
+      </p>
+
+      {chartState.kind === 'loading' && (
+        <div style={errorStyle} role="status" aria-live="polite">
+          Chargement du graphique…
+        </div>
+      )}
+      {chartState.kind === 'error' && (
+        <div style={errorStyle} role="alert">
+          Graphique indisponible pour le moment.
+        </div>
+      )}
+      {chartState.kind === 'success' && (
+        <MonthlySignupsChart buckets={chartState.buckets} />
       )}
 
       <h2 style={h2Style}>Ce que vous ne verrez pas ici</h2>

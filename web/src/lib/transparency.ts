@@ -121,3 +121,130 @@ export function formatGoLiveDateFr(iso: string = GO_LIVE_DATE_ISO): string {
     timeZone: 'UTC',
   }).format(date);
 }
+
+// =====================================================================================
+// Stats publiques agrégées — inscriptions par mois (12 derniers).
+//
+// Lecture côté anon via la policy `users_select_public for select using (true)`
+// (cf. schema.sql §3). On ne projette QUE `created_at` pour ne transférer
+// aucune colonne potentiellement sensible (email, display_name, etc.) côté
+// front public. RGPD : `created_at` est un timestamp non-identifiant en
+// agrégé.
+//
+// Limite pratique : la projection retourne toutes les lignes <= now() AND
+// >= since. Tant que `users` reste < ~50k lignes, le transfert est
+// négligeable (~8 octets ISO × N). Au-delà : matérialiser une vue
+// `users_signups_monthly` côté DB (RPC publique stable) — listé en dette
+// `M5 robustesse — count: 'exact' sur signatures` étape 20 jusqu'à
+// remplacement.
+// =====================================================================================
+
+export interface MonthlySignupBucket {
+  /** Premier jour du mois en ISO 8601 (`YYYY-MM-01`, UTC). */
+  monthIso: string;
+  /** Nombre de comptes créés ce mois-ci. */
+  count: number;
+}
+
+export interface MonthlySignupsResult {
+  data: MonthlySignupBucket[] | null;
+  error: PostgrestError | null;
+}
+
+/**
+ * Retourne la liste des mois (premier jour UTC) `monthsBack` mois en arrière
+ * jusqu'à `reference` inclus, dans l'ordre chronologique croissant.
+ */
+export function buildMonthsRange(
+  reference: Date,
+  monthsBack: number,
+): MonthlySignupBucket[] {
+  const buckets: MonthlySignupBucket[] = [];
+  const startYear = reference.getUTCFullYear();
+  const startMonth = reference.getUTCMonth();
+  for (let i = monthsBack - 1; i >= 0; i -= 1) {
+    const month = new Date(Date.UTC(startYear, startMonth - i, 1));
+    const iso = month.toISOString().slice(0, 10);
+    buckets.push({ monthIso: iso, count: 0 });
+  }
+  return buckets;
+}
+
+/**
+ * Charge les `created_at` des `monthsBack` derniers mois et les agrège en
+ * buckets mensuels UTC. Les mois sans inscription apparaissent à 0 pour
+ * conserver une échelle stable côté UI.
+ *
+ * @param client Supabase client (injectable pour tests).
+ * @param monthsBack Nombre de mois à fenêtrer (défaut 12).
+ * @param now Référence temporelle (défaut `new Date()`). Injectable pour
+ *            les tests.
+ */
+export async function fetchMonthlySignups(
+  client: Client = supabase,
+  monthsBack = 12,
+  now: Date = new Date(),
+): Promise<MonthlySignupsResult> {
+  const buckets = buildMonthsRange(now, monthsBack);
+  const since = buckets[0]?.monthIso;
+  if (!since) {
+    return { data: [], error: null };
+  }
+  const { data, error } = await client
+    .from('users')
+    .select('created_at')
+    .gte('created_at', since);
+  if (error) {
+    return { data: null, error };
+  }
+  const indexByMonth = new Map<string, number>();
+  buckets.forEach((bucket, idx) => indexByMonth.set(bucket.monthIso, idx));
+  for (const row of data ?? []) {
+    const createdAt = row.created_at;
+    if (typeof createdAt !== 'string') continue;
+    const monthKey = monthKeyFromIso(createdAt);
+    const idx = monthKey ? indexByMonth.get(monthKey) : undefined;
+    if (idx === undefined) continue;
+    const bucket = buckets[idx];
+    if (bucket) bucket.count += 1;
+  }
+  return { data: buckets, error: null };
+}
+
+function monthKeyFromIso(iso: string): string | null {
+  // `2026-05-12T13:42:00Z` → `2026-05-01`. Pas de `new Date()` ici pour
+  // éviter les décalages de timezone : on prend littéralement les 7
+  // premiers caractères et on ajoute `-01`.
+  if (iso.length < 7) return null;
+  const yyyyMm = iso.slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(yyyyMm)) return null;
+  return `${yyyyMm}-01`;
+}
+
+const MONTH_LABELS_FR = [
+  'janv.',
+  'févr.',
+  'mars',
+  'avr.',
+  'mai',
+  'juin',
+  'juil.',
+  'août',
+  'sept.',
+  'oct.',
+  'nov.',
+  'déc.',
+] as const;
+
+/**
+ * « 2026-05-01 » → « mai 26 ». Format court, idéal pour les axes de
+ * graphique où la place est comptée.
+ */
+export function formatMonthShortFr(monthIso: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(monthIso)) return monthIso;
+  const year = Number.parseInt(monthIso.slice(0, 4), 10);
+  const month = Number.parseInt(monthIso.slice(5, 7), 10);
+  if (!year || month < 1 || month > 12) return monthIso;
+  const label = MONTH_LABELS_FR[month - 1] ?? '';
+  return `${label} ${String(year).slice(-2)}`;
+}
