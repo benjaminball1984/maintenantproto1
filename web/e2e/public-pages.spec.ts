@@ -3,6 +3,9 @@ import { test, expect } from '@playwright/test';
 import { expectNoCriticalAxeViolations } from './utils/axe';
 import { installSupabaseStubs } from './utils/mockSupabase';
 
+// La page `/transparence` n'est intentionnellement PAS dans cette liste —
+// elle est couverte par son spec dédié `transparence.spec.ts` qui ajoute
+// des assertions spécifiques (graphique, lien footer, état vide).
 const PUBLIC_ROUTES: { path: string; heading: RegExp }[] = [
   { path: '/', heading: /Maintenant !/i },
   { path: '/petitions', heading: /Pétitions/i },

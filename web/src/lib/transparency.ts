@@ -159,6 +159,11 @@ export function buildMonthsRange(
   reference: Date,
   monthsBack: number,
 ): MonthlySignupBucket[] {
+  // Garde défensive : `new Date('invalid')` retourne un Date dont
+  // `getTime() === NaN`, ce qui propagerait des `NaN-NaN-01` dans les
+  // buckets. Tous les appelants actuels passent `new Date()` ou
+  // `new Date(Date.UTC(...))`, mais on protège l'API publique.
+  if (Number.isNaN(reference.getTime())) return [];
   const buckets: MonthlySignupBucket[] = [];
   const startYear = reference.getUTCFullYear();
   const startMonth = reference.getUTCMonth();
@@ -215,6 +220,13 @@ function monthKeyFromIso(iso: string): string | null {
   // `2026-05-12T13:42:00Z` → `2026-05-01`. Pas de `new Date()` ici pour
   // éviter les décalages de timezone : on prend littéralement les 7
   // premiers caractères et on ajoute `-01`.
+  //
+  // INVARIANT IMPORTANT : repose sur le fait que PostgREST sérialise les
+  // colonnes `timestamptz` en UTC par défaut (suffixe `Z` ou offset
+  // `+00:00`). Si le projet Supabase change `pgrst.db_tz` ou applique
+  // un offset local côté PostgREST, ce slice retournera un mois local
+  // — l'agrégation côté chart deviendrait silencieusement biaisée.
+  // À ré-évaluer si la config DB change.
   if (iso.length < 7) return null;
   const yyyyMm = iso.slice(0, 7);
   if (!/^\d{4}-\d{2}$/.test(yyyyMm)) return null;

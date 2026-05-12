@@ -5115,6 +5115,82 @@ qui existe déjà depuis l'étape 4. La RLS publique
 - Si Sentry remonte des erreurs `stripe-webhook` récurrentes →
   prioriser le job de réconciliation Edge Function.
 
+### Audit vibe janitor étape 21
+
+**Branche** : `claude/janitor-post-step21`.
+
+Audit en parallèle via 3 subagents `general-purpose` (architecture /
+élégance, robustesse / edge cases, sécurité / cohérence handoff) sur
+le scope PR #19. Synthèse + application des fixes safe-first
+uniquement, conformément à `CLAUDE.md § Audit récurrent vibe janitor`.
+
+#### Findings totaux
+
+| Catégorie | Critical | High | Medium | Low |
+| --- | --- | --- | --- | --- |
+| Architecture | 0 | 0 | 2 | 10 |
+| Robustesse | 0 | 2 | 3 | 4 |
+| Sécurité / cohérence | 0 | 0 (1 pré-existant) | 0 | 3 |
+| **Total** | **0** | **2** | **5** | **17** |
+
+#### Fixes appliqués (4)
+
+| Finding | Sévérité | Risque régression | Fichier |
+| --- | --- | --- | --- |
+| H2 robustesse — test « cleanup useEffect » manquant pour le 2nd fetch (`fetchMonthlySignups`) → ajout d'un test symétrique au 1er | high | low | `web/src/pages/TransparencePage.test.tsx` (+1 test « annule proprement le setState du graphique ») |
+| L2 robustesse — `buildMonthsRange(new Date('invalid'), 12)` produisait 12 `NaN-NaN-01` buckets → guard `Number.isNaN(reference.getTime())` retournant `[]` | low | low | `web/src/lib/transparency.ts:158-164` + `web/src/lib/transparency.test.ts` (+1 test) |
+| L1 robustesse — commentaire de tête dans `public-pages.spec.ts` clarifiant que `/transparence` est intentionnellement couverte par son spec dédié (anti-régression doc-only) | low | low | `web/e2e/public-pages.spec.ts:6-8` |
+| M3 robustesse — invariant PostgREST UTC documenté dans `monthKeyFromIso` (rappel : si `pgrst.db_tz` change, le slice retournera un mois local et l'agrégation biaisera silencieusement) | medium | low | `web/src/lib/transparency.ts:228-236` (commentaire-only) |
+
+#### Fixes déférés (dette technique)
+
+| Finding | Sévérité | Risque régression | Pourquoi déféré |
+| --- | --- | --- | --- |
+| **H1 robustesse — `fetchMonthlySignups` sans `range()/limit()` → biais silencieux > 1000 lignes (PostgREST max-rows)** | high | medium | Fix immédiat (pagination boucle) = logique async non triviale + tests dédiés. Solution propre = RPC `users_signups_monthly()` côté DB = migration DB hors scope janitor. **Déjà partiellement listé** dans la dette `M5-rob` étape 20 (« count: exact > 100k »). |
+| **M1 robustesse — `aria-label` sur `&lt;svg&gt;` + `&lt;title&gt;` enfant : pattern W3C recommandé est `aria-labelledby`** | medium | medium | Le test `toHaveAttribute('aria-label', …)` casserait. Modifier le contrat d'a11y testé mérite validation explicite designer/a11y, hors scope janitor. axe-core passe sur le pattern actuel — pas de bloquant utilisateur. |
+| **M2 robustesse — `formatMonthShortFr` accepte year &gt; 9999** | medium | low | Edge improbable (Postgres `timestamptz` ne génère pas ça avant l'an 10000). Polish stylistique. |
+| **M1 architecture — duplication pattern `cancelled` entre les 2 useEffect** | medium | medium | Extraction d'un hook `useFetchOnMount` touche 7 fichiers (AuthCallbackPage, MessagingConversationPage, ArticleDetailPage, CampaignCreatePage, useIsAdmin, etc.) + casse potentielle de plusieurs suites de tests. À planifier étape dédiée — déjà tracé `L3-arch` dans le tableau dette étape 21. |
+| **M2 architecture — `CSSProperties` inline dupliqués entre pages légales et `TransparencePage`** | medium | medium | `LegalPageLayout` partagé éliminerait ~150 lignes mais touche 5 pages + casse possible des sélecteurs Playwright/RTL. Design system T.* intouchable sans validation designer (CLAUDE.md). Déjà tracé `L5-arch` dans le tableau dette étape 21. |
+| **H-1 sécurité (pré-existant, déjà tracé H3-sec) — `users_select_public for select using (true)` permet `select=*`** | high | high | Refactor RLS large (vue `users_public` + GRANTs colonne révoquant `email/postal_code` au rôle `anon`). Hors scope janitor — étape RLS hardening dédiée. Le chart `/transparence` n'aggrave pas le risque, il rend l'endpoint `/users` plus découvrable. |
+| **L-1 sécurité — pas de `clearMocks: true` global dans `vite.config.ts`** | low | medium | Risque latent (les tests scope étape 21 compensent localement avec `mockReset()` dans `beforeEach`). Un `clearMocks` global peut casser des tests qui dépendent de `mockReturnValue` partagé entre `it`. À traiter en passe test-hygiene dédiée. |
+| **L1-arch — `monthKeyFromIso` renommage en `firstOfMonthFromIso`** | low | low | Polish, le nom actuel est clair via le commentaire. Non bloquant. |
+| **L5-arch — mix `vi.fn` typé vs `as never`** | low | low | Cohérent avec le reste de la suite (cf. `RequireAuth.test.tsx`, `useIsAdmin.test.tsx`). Pas un vrai problème. |
+| **L4-arch — DI partielle (lib injectable mais consumer pas)** | low | low | Pattern intentionnel (90% des consumers utilisent `vi.mock` du module). Propager casserait toutes les suites. |
+
+#### Tests
+
+- **859 tests vitest verts** (127 fichiers, durée ~66 s). +2 vs
+  étape 21 (857) — un test cleanup symétrique + un test guard NaN.
+- 4 checks locaux verts (typecheck, lint, vitest, build).
+- Build : entry `47.34 kB / gzip 13.34 kB` (inchangé — les
+  modifs sont du commentaire / guard côté lib + tests).
+- Pas de changement design system `T.*`.
+- Pas de migration DB.
+- Pas de breaking change utilisateur.
+- Pas de bump majeur de dépendance.
+
+#### Décisions
+
+- **H1 robustesse non corrigé en janitor** : le risque concret
+  (biais > 1000 inscriptions sur 12 mois) ne se matérialise pas
+  tant que la table `users` est en dessous de ce volume. Sur
+  Supabase staging actuel : 0 inscription. Sur prod future : à
+  surveiller via le monitoring Supabase (étape 22). Solution
+  propre = RPC SQL — listé pour étape 22 si validation produit
+  + l'occasion d'une migration DB additive.
+- **M1 robustesse (aria-labelledby) non corrigé** : axe-core ne
+  remonte pas de violation sur le pattern actuel (`aria-label`
+  sur svg + `<title>` enfant). Le test e2e passe. Modifier le
+  pattern changerait 2 assertions test (`toHaveAttribute('aria-label',
+  …)`) — non bloquant mais pollue le diff janitor. À traiter en
+  passe a11y dédiée si NVDA/JAWS remontent un retour.
+- **Pattern `cancelled` duplication non corrigé** : extraire un
+  hook custom touche 7+ fichiers, dépasse largement le scope
+  janitor (« primum non nocere »). Réaffirmé en `L3-arch`.
+- **Aucune migration DB**, aucun fix design system, aucun
+  breaking change, aucun bump majeur de dépendance — conditions
+  d'arrêt CLAUDE.md respectées.
+
 ---
 
 ## Prompt pour la session N+16 (étape 22)

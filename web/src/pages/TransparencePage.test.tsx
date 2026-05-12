@@ -171,6 +171,27 @@ describe('TransparencePage', () => {
     });
   });
 
+  it('annule proprement le setState du graphique si démontage avant fetch', async () => {
+    fetchTransparencyCountsMock.mockResolvedValueOnce({ data: ZERO_COUNTS, error: null });
+    fetchMonthlySignupsMock.mockReset();
+    let resolveChart: (v: MonthlySignupsResult) => void = () => undefined;
+    fetchMonthlySignupsMock.mockReturnValueOnce(
+      new Promise((res) => {
+        resolveChart = res;
+      }),
+    );
+    const { unmount } = renderPage();
+    unmount();
+    // Résoudre après unmount : aucun warning React (« setState on unmounted »)
+    // ne doit s'échapper. Symétrique du test équivalent pour le fetch des
+    // compteurs (cf. supra).
+    resolveChart({
+      data: [{ monthIso: '2026-05-01', count: 1 }],
+      error: null,
+    });
+    await new Promise((r) => setTimeout(r, 0));
+  });
+
   it('affiche un message d\'erreur dédié quand le fetch du graphique échoue', async () => {
     fetchTransparencyCountsMock.mockResolvedValueOnce({ data: ZERO_COUNTS, error: null });
     fetchMonthlySignupsMock.mockReset();
