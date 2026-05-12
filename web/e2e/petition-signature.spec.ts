@@ -78,4 +78,47 @@ test.describe('Pétitions — flow consultation + signature stubée', () => {
     await expect(page.getByText(/^42$/)).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/\/\s*1\s?000\s*signatures/)).toBeVisible();
   });
+
+  test('affiche le pourcentage de progression vers l\'objectif', async ({ page }) => {
+    // Étape 25 — test mock supplémentaire : vérifie le rendu du ratio
+    // arrondi côté UI. signature_count = 42 / target_count = 1000 →
+    // ratio = round(42 / 1000 * 100) = 4 → "4% de l'objectif".
+    // L'apostrophe est rendue en HTML entity (&apos;) côté JSX, qui sort
+    // l'apostrophe typographique U+2019 dans le DOM. On matche large pour
+    // rester robuste aux variations.
+    await page.goto(`/petitions/${petitionFixture.slug}`);
+    await expect(page.getByText(/4\s*%\s*de\s+l['’]objectif/i)).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+
+  test('expose le CTA « Se connecter pour signer » pour un visiteur anonyme', async ({
+    page,
+  }) => {
+    // Étape 25 — test mock supplémentaire : couvre la branche
+    // `isAnonymous === true` de PetitionDetailPage. Le visiteur anonyme
+    // ne doit PAS voir le bouton « Signer cette pétition » (réservé
+    // aux comptes authentifiés via aria-pressed). À la place : un lien
+    // qui pointe vers `/?auth=login&next=<pathname>` pour ouvrir la
+    // modale d'authentification avec retour sur la fiche après login.
+    //
+    // installSupabaseStubs renvoie un body vide sur `/auth/v1/**` →
+    // la session reste null → useAuth().status passe à 'anonymous' une
+    // fois le `getSession()` résolu. C'est exactement l'état couvert ici.
+    await page.goto(`/petitions/${petitionFixture.slug}`);
+    const signupCta = page.getByRole('link', { name: /Se connecter pour signer/i });
+    await expect(signupCta).toBeVisible({ timeout: 10_000 });
+    // Le href doit contenir `auth=login` et un `next=` encodé pointant
+    // vers la fiche pétition courante (slug encodé URI-safe).
+    const expectedNext = encodeURIComponent(`/petitions/${petitionFixture.slug}`);
+    await expect(signupCta).toHaveAttribute(
+      'href',
+      new RegExp(`auth=login.*next=${expectedNext}`),
+    );
+    // Le bouton « Signer cette pétition » ne doit PAS être rendu en
+    // parallèle (sinon le CTA anonyme serait dupliqué côté UI).
+    await expect(
+      page.getByRole('button', { name: /Signer cette pétition/i }),
+    ).toHaveCount(0);
+  });
 });
