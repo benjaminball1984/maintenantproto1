@@ -55,6 +55,14 @@ export interface StripeWebhookDeps {
   creditT99cp: (input: CreditInput) => Promise<void>;
   /** Bonus mensuel en T99CP crédité à chaque paiement réussi. */
   monthlyT99cpBonus: () => number;
+  /**
+   * Insère l'évènement dans `stripe_events` (PK = id). Renvoie `false` si la
+   * PK est déjà présente (évènement déjà traité, on répond 200 idempotent).
+   * Renvoie `true` si la ligne vient d'être créée.
+   */
+  recordEventStart: (event: StripeEvent) => Promise<boolean>;
+  /** Marque la ligne stripe_events.processed_at = now() après exécution. */
+  recordEventProcessed: (eventId: string) => Promise<void>;
 }
 
 // Sous-ensemble minimal des types Stripe utilisé ici. On reste laxiste sur les
@@ -114,6 +122,23 @@ export async function handle(req: Request, deps: StripeWebhookDeps): Promise<Res
   } catch (err) {
     const message = err instanceof Error ? err.message : 'invalid_signature';
     return new Response(`invalid_signature: ${message}`, { status: 400 });
+  }
+
+  // Idempotence : Stripe garantit l'« at-least-once delivery ». La PK
+  // stripe_events.id (= event.id) garantit qu'on n'exécute le handler qu'une
+  // fois par évènement. Si la ligne existe déjà : retour 200 + idempotent.
+  let isNewEvent: boolean;
+  try {
+    isNewEvent = await deps.recordEventStart(event);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'idempotency_store_error';
+    return new Response(`idempotency_store_error: ${message}`, { status: 500 });
+  }
+  if (!isNewEvent) {
+    return new Response(JSON.stringify({ received: true, idempotent: true, id: event.id }), {
+      status: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+    });
   }
 
   try {
@@ -178,7 +203,10 @@ export async function handle(req: Request, deps: StripeWebhookDeps): Promise<Res
       }
       default:
         // Évènement non géré : on accuse réception (200) pour que Stripe ne
-        // retente pas indéfiniment. C'est explicite et documenté.
+        // retente pas indéfiniment. C'est explicite et documenté. On marque
+        // tout de même la ligne `processed_at` pour distinguer « non géré »
+        // de « jamais traité ».
+        await deps.recordEventProcessed(event.id);
         return new Response(JSON.stringify({ received: true, ignored: event.type }), {
           status: 200,
           headers: { 'content-type': 'application/json; charset=utf-8' },
@@ -186,10 +214,21 @@ export async function handle(req: Request, deps: StripeWebhookDeps): Promise<Res
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'handler_error';
+    // Note : on ne marque PAS processed_at en cas d'erreur. La ligne reste
+    // avec processed_at=null pour audit. Stripe retentera (jusqu'à 3 jours).
     return new Response(`handler_error: ${message}`, { status: 500 });
   }
 
-  return new Response(JSON.stringify({ received: true }), {
+  try {
+    await deps.recordEventProcessed(event.id);
+  } catch (err) {
+    // Échec du marquage final : on log mais on répond 200 (l'event a bien été
+    // traité côté métier — un retry Stripe ré-exécuterait inutilement les
+    // upserts, déjà idempotents par stripe_subscription_id de toute façon).
+    console.warn('stripe-webhook: recordEventProcessed failed', err);
+  }
+
+  return new Response(JSON.stringify({ received: true, id: event.id }), {
     status: 200,
     headers: { 'content-type': 'application/json; charset=utf-8' },
   });
@@ -253,6 +292,28 @@ async function denoBootstrap(): Promise<void> {
       if (error) throw new Error(error.message);
     },
     monthlyT99cpBonus: () => 60,
+    recordEventStart: async (event) => {
+      // Insert ON CONFLICT DO NOTHING + select : si rien n'est inséré, l'event
+      // a déjà été enregistré. On distingue via le retour `data` (null si
+      // conflit, l'objet inséré sinon). `ignoreDuplicates` côté supabase-js
+      // utilise ON CONFLICT DO NOTHING en arrière-plan.
+      const { data, error } = await admin
+        .from('stripe_events')
+        .upsert(
+          { id: event.id, type: event.type, payload: event as unknown as Record<string, unknown> },
+          { onConflict: 'id', ignoreDuplicates: true },
+        )
+        .select('id');
+      if (error) throw new Error(error.message);
+      return Array.isArray(data) && data.length > 0;
+    },
+    recordEventProcessed: async (eventId) => {
+      const { error } = await admin
+        .from('stripe_events')
+        .update({ processed_at: new Date().toISOString() })
+        .eq('id', eventId);
+      if (error) throw new Error(error.message);
+    },
   };
 
   // @ts-expect-error — Deno.serve runtime

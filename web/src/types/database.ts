@@ -1570,6 +1570,30 @@ export interface Database {
           },
         ];
       };
+      stripe_events: {
+        Row: {
+          id: string;
+          type: string;
+          payload: Json;
+          received_at: string;
+          processed_at: string | null;
+        };
+        Insert: {
+          id: string;
+          type: string;
+          payload?: Json;
+          received_at?: string;
+          processed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          type?: string;
+          payload?: Json;
+          received_at?: string;
+          processed_at?: string | null;
+        };
+        Relationships: [];
+      };
       t99cp_transactions: {
         Row: {
           id: string;

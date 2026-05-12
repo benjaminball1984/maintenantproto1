@@ -10,9 +10,13 @@ import { expect } from '@playwright/test';
  *   `--mn-text-3: #7a786f` sur `--mn-bg: #fafaf9`) tombent autour de 4.06,
  *   sous le seuil AA 4.5. Modifier les tokens est explicitement interdit
  *   par `CLAUDE.md § Conventions` (« Conserve le design system T.* »).
- *   Le durcissement des tokens est listé dans la dette technique pour
- *   l'étape 19 (mise en prod réelle) : soit en revoyant la palette
- *   tertiaire, soit en limitant `--mn-text-3` à des fonds plus sombres.
+ *   Décision étape 19 : le token est utilisé à ~195 endroits — un changement
+ *   sans validation designer présenterait un risque de régression visuelle
+ *   trop élevé. La dette est documentée dans `HANDOFF-PROGRESS.md` § Audit
+ *   Lighthouse (étape 19) et reportée à une étape design dédiée où un·e
+ *   designer valide la nouvelle palette ou un mapping `--mn-text-3-darker`
+ *   pour les fonds clairs. Tant que cette validation n'est pas faite,
+ *   `color-contrast` reste désactivé.
  */
 const DISABLED_RULES = ['color-contrast'] as const;
 

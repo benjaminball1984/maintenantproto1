@@ -101,9 +101,10 @@ let sentryInitialized = false;
  * Branche Sentry côté front si un DSN est configuré, no-op sinon.
  *
  * Le SDK `@sentry/browser` est volontairement chargé en `import()` dynamique
- * pour ne pas alourdir le bundle initial. Si la lib n'est pas installée
- * (cas par défaut tant qu'aucune décision produit), on retourne `false`
- * et on consigne l'absence de DSN dans les logs (sans PII).
+ * pour ne pas alourdir le bundle initial. Si aucun DSN n'est fourni, on
+ * retourne `false` immédiatement et la lib n'est pas téléchargée. Le chunk
+ * Sentry pèse ~60 kB gzip — coût payé uniquement en environnement où le DSN
+ * est configuré (preview / production).
  *
  * `beforeSend` est toujours connecté à `scrubEvent` pour garantir qu'aucun
  * email / ID utilisateur / cookie ne fuit vers Sentry.
@@ -127,6 +128,42 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
   }
   sentryInitialized = true;
   return true;
+}
+
+/**
+ * Helper de wiring complet : charge `@sentry/browser` en import dynamique et
+ * appelle `initSentry` avec un `onReady` qui exécute `Sentry.init` configuré
+ * avec `beforeSend: scrubEvent`. Utilisé depuis `main.tsx` pour ne pas
+ * embarquer la lib dans le chunk initial.
+ *
+ * Renvoie une promesse résolue `true` si Sentry est initialisé, `false` sinon
+ * (DSN absent, SDK indisponible, erreur de chargement). N'expose jamais
+ * l'erreur originale au caller — on logge en dev mais on ne casse pas le boot
+ * de l'app si Sentry échoue.
+ */
+export async function loadAndInitSentry(options: InitSentryOptions): Promise<boolean> {
+  const dsn = options.dsn?.trim();
+  if (!dsn) return false;
+  try {
+    const Sentry = await import('@sentry/browser');
+    return initSentry({
+      ...options,
+      onReady: () => {
+        Sentry.init({
+          dsn,
+          ...(options.environment !== undefined ? { environment: options.environment } : {}),
+          ...(options.release !== undefined ? { release: options.release } : {}),
+          beforeSend: (event) =>
+            scrubEvent(event as unknown as SentryEvent) as unknown as typeof event,
+        });
+      },
+    });
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error('[loadAndInitSentry] failed to load @sentry/browser', error);
+    }
+    return false;
+  }
 }
 
 /** Réinitialise l'état d'`initSentry` — usage tests uniquement. */
