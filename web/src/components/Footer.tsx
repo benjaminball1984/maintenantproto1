@@ -50,6 +50,9 @@ export default function Footer() {
           <NavLink to="/legal/contact" style={linkStyle}>
             Contact
           </NavLink>
+          <NavLink to="/transparence" style={linkStyle}>
+            Transparence
+          </NavLink>
         </nav>
       </div>
     </footer>

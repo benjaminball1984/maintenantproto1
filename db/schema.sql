@@ -1871,9 +1871,11 @@ begin
   -- Court-circuit idempotence DB : si on a déjà vu cet event Stripe, on
   -- ne re-crédite pas (la couche appelante a peut-être perdu la trace
   -- côté `stripe_events`, mais le ledger lui-même se protège).
-  -- On vérifie *avant* l'insert pour éviter de catcher une violation
-  -- d'unicité au milieu d'une transaction qui aurait déjà passé le
-  -- contrôle de solde côté users (cohérence du wallet).
+  -- On vérifie *avant* l'insert principalement pour le cas le plus
+  -- fréquent (rejeu Stripe sans concurrence) — c'est purement
+  -- défensif et lisible : le bloc `exception when unique_violation`
+  -- en bas attrape de toute façon la course concurrente où deux
+  -- webhooks parallèles passent ce `if exists` simultanément.
   if p_source_event_id is not null then
     if exists (
       select 1

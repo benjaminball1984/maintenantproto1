@@ -24,7 +24,7 @@ describe('Footer', () => {
     expect(screen.getByText(new RegExp(`Maintenant\\s*!.*${year}`))).toBeInTheDocument();
   });
 
-  it('expose les 4 liens légaux requis', () => {
+  it('expose les liens légaux + transparence requis', () => {
     renderFooter();
     const legalNav = screen.getByRole('navigation', { name: /Liens légaux/i });
     expect(within(legalNav).getByRole('link', { name: /Confidentialité/i })).toHaveAttribute(
@@ -43,6 +43,10 @@ describe('Footer', () => {
       'href',
       '/legal/contact',
     );
+    expect(within(legalNav).getByRole('link', { name: /Transparence/i })).toHaveAttribute(
+      'href',
+      '/transparence',
+    );
   });
 
   it('ne contient pas de tracking externe (lien externe vers analytics)', () => {
@@ -50,7 +54,11 @@ describe('Footer', () => {
     const links = screen.getAllByRole('link');
     for (const link of links) {
       const href = link.getAttribute('href') ?? '';
-      expect(href.startsWith('/legal/')).toBe(true);
+      // Tous les liens du footer sont internes (chemins relatifs commençant par /).
+      // Aucun lien externe vers un service de tracking / analytics.
+      expect(href.startsWith('/')).toBe(true);
+      expect(href.startsWith('//')).toBe(false);
+      expect(/^https?:\/\//.test(href)).toBe(false);
     }
   });
 });
