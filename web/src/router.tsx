@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router-dom';
+import RequireAdmin from './components/RequireAdmin';
 import RequireAuth from './components/RequireAuth';
 import RootLayout from './layouts/RootLayout';
 import HomePage from './pages/HomePage';
@@ -48,6 +49,9 @@ import NotificationsPage from './pages/NotificationsPage';
 import AdminPage from './pages/AdminPage';
 import JoinPage from './pages/JoinPage';
 import CommunesPage from './pages/CommunesPage';
+import CommuneDetailPage from './pages/CommuneDetailPage';
+import CommuneCreatePage from './pages/CommuneCreatePage';
+import ContactPage from './pages/ContactPage';
 import ProfilePage from './pages/ProfilePage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
@@ -229,9 +233,29 @@ export const router = createBrowserRouter([
           </RequireAuth>
         ),
       },
-      { path: 'admin', element: <AdminPage /> },
+      {
+        path: 'admin',
+        element: (
+          <RequireAuth>
+            <RequireAdmin>
+              <AdminPage />
+            </RequireAdmin>
+          </RequireAuth>
+        ),
+      },
       { path: 'join', element: <JoinPage /> },
       { path: 'communes', element: <CommunesPage /> },
+      {
+        path: 'communes/new',
+        element: (
+          <RequireAuth>
+            <RequireAdmin>
+              <CommuneCreatePage />
+            </RequireAdmin>
+          </RequireAuth>
+        ),
+      },
+      { path: 'communes/:slug', element: <CommuneDetailPage /> },
       {
         path: 'profile',
         element: (
@@ -248,6 +272,7 @@ export const router = createBrowserRouter([
           { path: 'privacy', element: <PrivacyPage /> },
           { path: 'notice', element: <LegalNoticePage /> },
           { path: 'cookies', element: <CookiesPage /> },
+          { path: 'contact', element: <ContactPage /> },
         ],
       },
       { path: '*', element: <NotFoundPage /> },

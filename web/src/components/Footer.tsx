@@ -47,6 +47,9 @@ export default function Footer() {
           <NavLink to="/legal/cookies" style={linkStyle}>
             Cookies
           </NavLink>
+          <NavLink to="/legal/contact" style={linkStyle}>
+            Contact
+          </NavLink>
         </nav>
       </div>
     </footer>
