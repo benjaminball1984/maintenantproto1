@@ -25,7 +25,8 @@
 | 14. Sprint 3 — Hébergement + Covoiturage CRUD côté front |   ✅   |
 | 15. Sprint 3 — Lending + Marketplace + Jardins + SEL + Crowdfunding |   ✅   |
 | 16. Sprint 4 — Réseau social + Messagerie + Notifications + Média |   ✅   |
-| 17. Sprint 5 — Admin + Communes libres + Pages légales restantes |   ⬜   |
+| 17. Sprint 5 — Admin + Communes libres + Pages légales restantes |   ✅   |
+| 18. Sprint 6 — Optim Lighthouse + E2E Playwright + audit a11y axe-core + prod |   ⬜   |
 
 ---
 
@@ -3633,6 +3634,175 @@ introduite ici, déjà observé aux étapes 13 et 14).
 
 ---
 
+## Étape 17 — Sprint 5 / Admin + Communes libres + Contact ✅
+
+**Branche** : `claude/review-project-rules-aenB3`
+
+Fin du Sprint 5 : panel admin opérationnel (modération + gestion communes
++ console campagnes email), pages publiques communes libres (listing
++ fiche avec rejoindre/quitter), formulaire de contact RGPD avec
+fallback `mailto:`. Pas de migration DB — on s'appuie sur le schéma
+existant (`communes`, `commune_members`, `admin_logs`, `email_campaigns`,
+RPC `public.is_admin`).
+
+### Modules `web/src/lib/`
+
+- **`communes.ts`** — `communes(name, slug, city, description, treasurer_id)`
+  + `commune_members(commune_id, user_id, role)`. Listing public (policy
+  `communes_select_public`), création par admin (`communes_write_admin`),
+  join/leave self (`commune_members_join_self` / `commune_members_leave_self`),
+  update de rôle par admin global ou trésorier
+  (`commune_members_update_admin`). Slug unique avec retry 23505 (pattern
+  `articles` / `campaigns`).
+- **`admin.ts`** — helpers panel admin :
+  - `checkIsAdmin(uid)` : appel RPC `public.is_admin(uid)` (security
+    definer côté DB) avec fallback `false` en cas d'erreur (mode strict).
+  - `listFlaggedArticles` / `listFlaggedPosts` / `listFlaggedPostComments`
+    / `listFlaggedComments` : agrégation de la file de modération
+    (articles `status='flagged'`, autres tables `is_flagged=true`).
+  - `unflagItem(kind, id)` : repasse `articles` en `status='published'`
+    ou flip `is_flagged=false` sur les autres. RLS exige
+    `public.is_admin(auth.uid())`.
+  - `deleteFlaggedItem(kind, id)` : suppression définitive admin only.
+  - `logAdminAction({ actorId, action, targetTable, targetId, payload })`
+    : insert dans `admin_logs`. Appelé systématiquement après toute action
+    admin sensible (création commune, modération, campagne email).
+  - `listAdminLogs` / `listEmailCampaigns` / `createEmailCampaign` /
+    `updateEmailCampaignStatus` : gestion des campagnes email (draft →
+    queued → sent/failed, `sent_at` automatiquement renseigné lors du
+    passage en `sent`).
+
+### Hooks `web/src/hooks/`
+
+- `useCommunes(params)` — listing public avec filtres `search` / `city`.
+- `useCommune(slug)` — fiche + membres, statuses idle/loading/ready/
+  notfound/error.
+- `useIsAdmin()` — appel RPC `is_admin`. Pattern « set state during
+  render » pour synchroniser avec `(authStatus, userId)` sans muter
+  dans un effet (cf. règle `react-hooks/set-state-in-effect`). Fallback
+  strict `false` quand anonymous ou RPC en erreur.
+- `useAdminFlagged(enabled)` — agrégation Promise.all des 4 sources de
+  flagged, tri `createdAt DESC`. `enabled` permet de différer la requête
+  tant qu'on n'est pas certain que l'utilisateur est admin (la RLS
+  filtrerait de toute façon, mais on évite le round-trip côté UX).
+- `useEmailCampaigns(enabled)` — listing campagnes email, même pattern
+  `enabled`.
+
+### Composant `web/src/components/RequireAdmin.tsx`
+
+Wrapper équivalent à `RequireAuth`, mais qui en plus vérifie via
+`useIsAdmin()` que le user est admin. Trois statuts :
+
+- `loading` (auth ou admin check en cours) → spinner.
+- `anonymous` → `Navigate /?auth=login` (ouvre la modale dans `RootLayout`).
+- `authenticated` non-admin → `Navigate /` (par défaut).
+- `authenticated` admin → rend les `children`.
+
+### Pages `web/src/pages/`
+
+- **`CommunesPage`** (`/communes`, lecture publique) — listing avec
+  recherche + carte par commune (ville, nom, description tronquée).
+  CTA « Créer une commune » visible uniquement si `useIsAdmin()`.
+- **`CommuneDetailPage`** (`/communes/:slug`) — fiche avec ville,
+  description, bouton « Rejoindre » / « Quitter » selon
+  `commune_members.user_id`, liste des membres avec leur rôle. Pour les
+  anonymes : CTA « Se connecter pour rejoindre » vers `/?auth=login`.
+- **`CommuneCreatePage`** (`/communes/new`, RequireAuth + RequireAdmin)
+  — formulaire nom/ville/description. Sur succès : `logAdminAction`
+  avec `action: 'commune.create'`, puis redirect vers `/communes/:slug`.
+- **`AdminPage`** (`/admin`, RequireAuth + RequireAdmin) — vue
+  d'ensemble en 3 onglets :
+  1. **Modération** : file `useAdminFlagged`, actions « Lever le flag »
+     (→ `unflagItem` + `logAdminAction moderate.unflag`) et « Supprimer »
+     (→ `deleteFlaggedItem` + `logAdminAction moderate.delete`). Lien
+     « Voir l'article » pour les articles flagged.
+  2. **Communes** : raccourcis vers `/communes/new` et `/communes`.
+  3. **Email** : formulaire de création de campagne (draft par défaut)
+     + listing des campagnes existantes.
+- **`ContactPage`** (`/legal/contact`) — formulaire connecté à la
+  messagerie interne :
+  - Si `VITE_SUPPORT_USER_ID` est configuré ET l'utilisateur est
+    authentifié, `findOrCreateConversation(user.id, supportUserId)`
+    puis `sendMessage` vers le compte support.
+  - Sinon, fallback `mailto:` vers `VITE_SUPPORT_EMAIL`
+    (défaut `contact@maintenant.org`).
+
+### Router & navigation
+
+- `/admin`, `/communes/new` montées avec `RequireAuth + RequireAdmin`.
+- `/communes/:slug` ajoutée (lecture publique).
+- `/legal/contact` ajoutée sous le groupe `legal`.
+- `RootLayout` : le lien « Admin » dans la nav principale n'apparaît que
+  pour les utilisateurs admin (`useIsAdmin().isAdmin === true`). Côté
+  DB la RLS reste la référence — le masquage front est UX-only.
+- `Footer` : lien « Contact » ajouté à côté des autres liens légaux.
+
+### Tests
+
+- **Lib** : communes 30 / admin 36 = 66 tests.
+- **Hooks** : useCommunes 3 / useCommune 4 / useIsAdmin 3 /
+  useAdminFlagged 3 / useEmailCampaigns 3 = 16 tests.
+- **Composant** : RequireAdmin 3 tests (anonymous / authenticated non-admin
+  / admin).
+- **Pages** : CommunesPage 5 / CommuneDetailPage 6 / CommuneCreatePage 4
+  / AdminPage 6 / ContactPage 5 = 26 tests.
+
+Total nouveau : **117 tests**.
+
+Fin d'étape 16 : 654 tests verts. Fin d'étape 17 :
+**771 tests verts** (119 fichiers, durée ~58 s). Build : 295 kB (tronqué
+faute de `VITE_SUPABASE_*` en CI — pas une régression).
+
+### Décisions
+
+- **Pas de nouvelle table de rôles admin** — on s'appuie strictement
+  sur `users.is_admin` + la RPC SQL `public.is_admin(uid)` existante
+  (cf. `db/schema.sql` §1). RLS sur `admin_logs`, `email_campaigns`,
+  `communes_write_admin` toutes scope `public.is_admin(auth.uid())`.
+  Aucun bypass côté front : le panel masque les actions, la DB refuse
+  les écritures non-admin.
+- **`checkIsAdmin` fallback strict `false`** — toute erreur RPC (réseau,
+  404, RLS) doit renvoyer non-admin par défaut pour ne jamais exposer
+  d'action admin par erreur. Le panel reste masqué côté UI ET la DB
+  rejette les écritures, donc défense en profondeur.
+- **`useIsAdmin` en mode « set state during render »** — l'eslint rule
+  `react-hooks/set-state-in-effect` interdit `setState` dans un effet
+  qui synchronise un état dérivé. La resync `(authStatus, userId) → status`
+  passe maintenant par un `useState(previousKey)` comparé en render
+  (pattern déjà utilisé par `RootLayout` pour la modale auth).
+- **`enabled` flag dans les hooks admin** — `useAdminFlagged` /
+  `useEmailCampaigns` acceptent un `enabled: boolean` pour différer le
+  fetch tant qu'on n'a pas validé `isAdmin === true`. Évite des
+  requêtes RLS-refused inutiles pour les visiteurs qui ouvriraient
+  `/admin` directement (RequireAdmin les redirige, mais le hook démarre
+  avant la redirection sur le premier render).
+- **`logAdminAction` après chaque écriture admin** — pour préserver
+  l'audit trail (cf. `admin_logs_admin` policy), toutes les actions
+  sensibles sont historisées avec `actor_id`, `action` (namespace
+  `moderate.*`, `commune.*`, `email_campaign.*`), `target_table`,
+  `target_id`, et un `payload` JSON facultatif.
+- **ContactPage : fallback `mailto:` quand pas de compte support** —
+  tant que `VITE_SUPPORT_USER_ID` n'est pas renseigné, le formulaire
+  bascule sur un `<a href="mailto:...">` pour éviter de créer une
+  conversation orpheline (la `messages_insert_party` policy exige que
+  les deux user_id existent dans `public.users`). Le fallback respecte
+  les conventions RGPD : pas de collecte côté front, pas de tracking.
+- **Pas de masquage d'email utilisateur côté admin** — le panel
+  modération affiche `body` + `createdAt`, mais pas l'email auteur.
+  L'`author_id` (UUID) reste suffisant pour les actions modération
+  (suppression / unflag) et évite d'exposer des données perso au-delà
+  du nécessaire. Les requêtes `users.email` sont à éviter côté front,
+  ce qui rejoint la note RLS de l'étape 14 (créer une vue `public_users`
+  avant prod si on veut afficher des profils).
+- **Tests page : guard contre les emails partagés** — la `ContactPage`
+  affiche `contact@maintenant.org` à plusieurs endroits (lead + CTA +
+  footer du bloc) ; on bascule sur `getAllByRole('link')` pour éviter
+  un faux échec "multiple elements found".
+- **Build inchangé en taille (295 kB)** — bundle Vite tronqué à
+  `supabase.ts` faute d'env vars en CI ; pas une régression.
+
+---
+
 ## Étape 16 — Sprint 4 / Réseau social + Messagerie + Notifications + Média ✅
 
 **Branche** : `claude/review-project-rules-0nw8s`
@@ -3783,6 +3953,118 @@ faute de `VITE_SUPABASE_*` en CI — pas une régression introduite ici).
   + pagination.
 - **Build inchangé en taille (295 kB)** — bundle Vite tronqué à
   `supabase.ts` faute d'env vars en CI ; pas une régression.
+
+---
+
+## Prompt pour la session N+12 (étape 18)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD,
+>    Lighthouse ≥ 95, axe-core ≥ 95, prefers-reduced-motion). **Note
+>    la section « Politique de PR » qui t'autorise à enchaîner ouverture
+>    + merge des PR sans confirmation jusqu'à la session 50 incluse.**
+> 2. `HANDOFF.md` §10 Sprint 6 (Optim + tests E2E + mise en prod) et
+>    §11 (Performance) + §12 (Accessibilité) + §13 (Sécurité).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 17 ✅ — étape 18 à faire).
+> 4. `web/vite.config.ts` + `web/package.json` — outillage build /
+>    Playwright à ajouter.
+> 5. `web/src/router.tsx` — routes existantes (cibles des E2E).
+>
+> **État actuel à la fin de l'étape 17** :
+>
+> - Sprint 5 complet : admin + communes + contact.
+> - 771 tests verts, build 295 kB (tronqué CI).
+> - `RequireAdmin` opérationnel, hook `useIsAdmin` sécurisé (fallback
+>   strict `false`).
+> - Pas de migration DB depuis l'étape 16 (table `follows`).
+>
+> **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
+>
+> 1. Vérifier qu'on est bien dans un workspace contenant `web/`. Si non
+>    (rare — branche partie d'un main obsolète), `git fetch origin main &&
+>    git merge --ff-only origin/main`.
+> 2. `cd web && npm ci` (fallback : `npm install --legacy-peer-deps`).
+> 3. `npm run typecheck && npm run lint && npx vitest run && npm run build`
+>    pour vérifier le compteur de tests au point de départ (≥ 771 verts
+>    à la fin de l'étape 17).
+>
+> **ÉTAPE 18 à exécuter — Sprint 6 / Optim + E2E + a11y + prod** :
+>
+> 1. **Performance** : audit Lighthouse local sur les pages publiques
+>    clés (`/`, `/petitions`, `/petitions/:slug`, `/media`, `/communes`,
+>    `/services`). Mesurer LCP / CLS / TBT. Optimisations probables :
+>    code-splitting par route (`React.lazy` + `Suspense`), tree-shake
+>    icônes, vérifier que les vendor chunks sont séparés du bundle.
+>    Cible : Lighthouse perf ≥ 95.
+> 2. **Tests E2E Playwright** : installer `@playwright/test`, créer
+>    `web/e2e/` avec scénarios critiques :
+>    - Signup + login + signature pétition.
+>    - Création + signature mobilisation.
+>    - Création + vote sondage.
+>    - Création + paiement adhésion (stub Stripe).
+>    - Modération admin (login admin → unflag un item).
+>    Configurer le CI GitHub Actions pour rouler les E2E (avec
+>    `playwright install --with-deps`).
+> 3. **Audit accessibilité axe-core** : installer `@axe-core/playwright`
+>    et ajouter une assertion par page principale dans les E2E.
+>    Corriger les violations bloquantes (contrastes, labels manquants,
+>    skip-link). Cible : axe-core ≥ 95.
+> 4. **Sécurité prod** : passer la checklist `CLAUDE.md § Sécurité` :
+>    - CSP headers via Vercel `vercel.json`.
+>    - Vérifier qu'aucune clé `service_role` n'est dans le bundle front.
+>    - Configurer Sentry (DSN env var). Vérifier que les logs ne
+>      contiennent pas d'email/IP.
+>    - Vérifier la procédure RGPD (export + suppression compte) côté
+>      `ProfilePage`.
+> 5. **Tests** : E2E Playwright + couverture unitaire ≥ 70 %, 100 % sur
+>    les flows critiques. Cible totale ≥ 800 tests (771 + ≥ 30 nouveaux
+>    en unitaire / hooks + suite E2E).
+> 6. **HANDOFF-PROGRESS.md** : étape 18 ✅ + clôture du sprint 6 ou
+>    prompt étape 19 (mise en prod réelle).
+>
+> **CLÔTURE DE L'ÉTAPE — workflow auto-merge** :
+>
+> Conformément à `CLAUDE.md` § « Politique de PR », tu as autorisation
+> permanente d'enchaîner les étapes ci-dessous sans confirmation.
+> Procéder dans l'ordre, **sans s'arrêter entre les étapes** :
+>
+> 1. **Vérifier les 4 checks locaux verts** : `npm run typecheck &&
+>    npm run lint && npx vitest run && npm run build`. Si un check
+>    échoue → corriger, ne pas commit.
+> 2. **Commit** : `chore(prod): step 18 — sprint 6 (optim + e2e + a11y +
+>    prod)`. Pas d'emojis dans le message.
+> 3. **Push** sur la branche imposée par l'harness
+>    (`git push -u origin <branch>`, retry exponentiel 2/4/8/16 s).
+> 4. **Ouvrir la PR** vers `main` via
+>    `mcp__github__create_pull_request` (titre identique au commit,
+>    body Summary + Décisions + Test plan).
+> 5. **Attendre les checks GitHub Actions si présents**. S'ils sont
+>    rouges → autofix puis re-push.
+> 6. **Merger la PR** via `mcp__github__merge_pull_request` (`merge`
+>    ou `squash`).
+>
+> **Conditions d'arrêt malgré l'autorisation permanente** :
+>
+> - Migration DB risquée (ne devrait pas être nécessaire au sprint 6).
+> - Changement RGPD non listé.
+> - Breaking change visible utilisateur.
+> - Review humaine ou commentaire GitHub arrivé avant le merge.
+>
+> Dans tous ces cas : demander confirmation explicite avant de merger.
+>
+> **Contraintes générales** :
+>
+> - Ne pas toucher au prototype.
+> - TS strict + no `any`.
+> - Conserver les checks verts à chaque étape.
+> - Pas d'emojis dans le code TS ni dans les commits / PR.
+> - Vérifier qu'aucune mesure de performance ne provoque de régression
+>   visuelle (le design system `T.*` doit rester intact).
 
 ---
 

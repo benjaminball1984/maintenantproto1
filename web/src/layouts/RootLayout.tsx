@@ -5,6 +5,7 @@ import AuthModal from '@/components/AuthModal';
 import CookieBanner from '@/components/CookieBanner';
 import Footer from '@/components/Footer';
 import { IconLogout, IconUser } from '@/components/icons';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useAuth } from '@/lib/auth';
 
 const baseNavItems: { to: string; label: string }[] = [
@@ -97,6 +98,7 @@ function displayNameFromUser(user: { user_metadata?: { display_name?: string }; 
 
 export default function RootLayout() {
   const { status, user, signOut } = useAuth();
+  const { isAdmin } = useIsAdmin();
   const [authOpen, setAuthOpen] = useState(false);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -131,7 +133,11 @@ export default function RootLayout() {
 
   const navItems =
     status === 'authenticated'
-      ? [...baseNavItems, { to: '/profile', label: 'Profil' }]
+      ? [
+          ...baseNavItems,
+          { to: '/profile', label: 'Profil' },
+          ...(isAdmin ? [{ to: '/admin', label: 'Admin' }] : []),
+        ]
       : baseNavItems;
 
   return (

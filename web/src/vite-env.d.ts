@@ -11,6 +11,8 @@ interface ImportMetaEnv {
   readonly VITE_PLAUSIBLE_API?: string;
   readonly VITE_SENTRY_DSN?: string;
   readonly VITE_RECAPTCHA_SITE_KEY?: string;
+  readonly VITE_SUPPORT_EMAIL?: string;
+  readonly VITE_SUPPORT_USER_ID?: string;
 }
 
 interface ImportMeta {
