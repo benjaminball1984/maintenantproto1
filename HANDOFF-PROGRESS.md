@@ -6261,6 +6261,7 @@ Récap consolidé (étapes 19-24 + janitor post-step 22-23) :
 | L5-arch | low | medium | inline `CSSProperties` dupliqués entre pages légales | étape design dédiée |
 | L1-rob | low | low | tests `vi.fn<typeof deps.upsertAdhesion>` pattern inconsistant | passe test hygiene |
 | H4-deploy-deno | low | low | régression Deno bundler (esm.sh, etc.) non couverte | quand pipeline CI Supabase réel |
+| L-sec-webhook-body | low | medium | corps des réponses 4xx/5xx du webhook stripe interpolent `err.message` (échangé avec Stripe Dashboard logs — third party) | étape dédiée (casse 4+ assertions tests existantes) |
 
 ### Bundle après ajout
 
@@ -6401,6 +6402,129 @@ Procédure d'application en staging avant l'étape 25
   `user_id` aux anonymes.
 - Si Sentry remonte des erreurs `stripe-webhook` récurrentes →
   prioriser le job de réconciliation Edge Function.
+
+### Audit vibe janitor étape 24
+
+**Branche** : `claude/janitor-post-step24`
+
+Audit en parallèle via 3 subagents `general-purpose` après le merge
+de la PR principale #25 (commit `chore(prod): step 24 …`) :
+architecture / élégance, robustesse / edge cases, sécurité / RGPD
+/ cohérence handoff.
+
+#### Findings par sévérité
+
+| Axe | Total | critical | high | medium | low | Fixable safe-first | Déférés |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Architecture | 9 | 0 | 0 | 1 | 8 | 0 | 9 (déjà tracés) |
+| Robustesse | 7 | 0 | 0 | 3 | 4 | 1 | 6 |
+| Sécurité | 5 | 0 | 0 | 0 | 5 | 0 | 5 (1 nouvelle dette) |
+| **Total** | **21** | **0** | **0** | **4** | **17** | **1** | **20** |
+
+#### Fixes appliqués (safe-first)
+
+**J24-R2** (medium / low-risk) — observabilité côté Edge Function
+sur le throw de `recordEventStart` : ajout d'un `console.warn` dans
+le catch block ligne 178-188 de `web/src/lib/stripeWebhookHandler.ts`,
+symétrique du pattern existant pour les `recordEventProcessed`.
+Logue uniquement `err.message` (pas l'objet `err`) — même précaution
+de non-fuite de payload PostgREST que les branches existantes. Test
+existant `'renvoie 500 si recordEventStart throw'` étendu pour
+asserter le warn : 17 tests `stripeWebhookHandler.test.ts` (inchangé,
+on étend un test, on n'en ajoute pas).
+
+Aucun changement de comportement HTTP : la réponse 500 +
+`idempotency_store_error: <msg>` reste identique. Aucun impact côté
+Stripe (Stripe retentera comme avant). Aucun changement RLS, aucune
+migration DB.
+
+#### Fixes déférés (dette nouvelle ou existante)
+
+**J24-1 / nouvelle dette `L-sec-webhook-body`** (low / medium-risk) —
+les corps de réponse 4xx/5xx du webhook interpolent `err.message`
+verbatim (`invalid_signature: ${message}`,
+`idempotency_store_error: ${message}`, `handler_error: ${message}`).
+Ces messages parviennent à Stripe (Dashboard event log, third party).
+Risque marginal : un `error.details` PostgREST contenant un extrait
+de payload (connection string fragment) pourrait être persisté hors
+de notre infrastructure. Fix proposé : remplacer le body par un code
+opaque (`invalid_signature`, etc.) et logger le détail via
+`console.warn`. **Déféré** : casse 4+ assertions `expect(text)
+.toContain('invalid_signature: bad_sig')` (tests sécurité signature)
+— mérite une étape dédiée. **Ajouté à la dette consolidée
+`L-sec-webhook-body`** (cf. tableau ci-dessus).
+
+**J24-R1** (medium / medium-risk) — `getPetitionSignatureCount`
+masque silencieusement les drifts type PostgREST en retournant
+`count: 0`. Idéalement renverrait `error: synthetic PostgrestError`
+en cas de data non numérique. **Déféré** : changerait le contrat
+`{count: 0, error: null}` → `{count: null, error: ...}` et
+casserait le test défensif `'défaut à 0 si la RPC renvoie une
+valeur non numérique'`. Décision : conserver le comportement
+défensif livré étape 24 (cohérent avec `fetchMonthlySignups` qui
+applique le même bouclier).
+
+**J24-R3** (medium / high-risk) — cohérence `signatures.count(*)` vs
+`petitions.signature_count` sous concurrence INSERT/DELETE.
+**Déféré** : requiert migration DB, hors scope janitor.
+
+**J24-R5** (low / medium-risk) — type `message` de
+`respondValidationFailure` est `string` plutôt qu'une union
+litérale. **Déféré** : low value, l'union devrait évoluer en sync
+avec les nouveaux 4xx.
+
+**J24-R7** ↔ **L3-arch** (low / low) — pattern `cancelled` non
+généralisé via `useFetchOnMount`. Confirmé déjà dans dette
+consolidée.
+
+**B1-B9 (architecture)** — tous déférés, tous déjà tracés dans la
+dette consolidée (L1-arch, L3-arch, L4-arch, L5-arch test, L5-arch
+pages, L1-rob). Aucune nouvelle dette architecturale.
+
+**J24-2 (L4-sec)** + **J24-3** + **J24-4 (DEV-only log)** + **J24-5
+(deps healthy)** — tous déférés ou no-op.
+
+#### Hygiène (janitor étape 24)
+
+- Pas de modification du prototype.
+- Pas de modification du design system `T.*`.
+- Pas de migration DB.
+- Pas de breaking change visible utilisateur.
+- Pas de nouvelle dépendance npm.
+- Pas de bump majeur.
+- TS strict + no `any`.
+- **+1 `console.warn`** (J24-R2) : cohérent avec les autres
+  branches du handler stripe-webhook. Le log message ne contient
+  que `err.message` (pas l'objet brut).
+- Aucun fix qui casse un test existant.
+- Aucun fix qui ouvre un risque B.
+
+#### Checks finaux (janitor étape 24)
+
+```
+> npm run typecheck && npm run lint && npx vitest run && npm run build
+
+✓ typecheck   (tsc -b + e2e/tsconfig.json)
+✓ lint        (eslint .)
+✓ vitest      (128 files, 872 tests passed, ~76s)
+✓ build       (entry 47.34 kB / gzip 13.32 kB ; TransparencePage 7.69 kB / gzip 3.11 kB lazy ; sentry 436.2 kB / gzip 143.08 kB lazy)
+```
+
+Compte de tests **inchangé** : on étend un test existant (J24-R2)
+sans en ajouter — le `+log warn` est asserté dans le même `it()`
+que la propagation du 500.
+
+#### Décisions janitor
+
+- **1 seul fix safe-first appliqué** sur 21 findings (J24-R2,
+  observabilité `recordEventStart`). Tous les autres findings
+  carry medium/high régression risk ou cassent un test existant.
+- **+1 nouvelle dette** (`L-sec-webhook-body`) — corps des
+  réponses 4xx/5xx du webhook. Faible priorité, étape dédiée.
+- **Toutes les dettes high (H3-sec) + medium-high (M2-sec-policy,
+  M5-rob, M1-RGPD, L1-a11y)** restent ouvertes, à traiter dans
+  des étapes dédiées (RLS hardening, design dédié, décision
+  RGPD).
 
 ---
 

@@ -275,7 +275,8 @@ describe('stripe-webhook handle() — sécurité / signature', () => {
 });
 
 describe('stripe-webhook handle() — robustesse', () => {
-  it('renvoie 500 si recordEventStart throw (store idempotence indispo)', async () => {
+  it('renvoie 500 si recordEventStart throw (store idempotence indispo) + log warn (J24-R2)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const deps = buildDeps({
       recordEventStart: vi.fn(async () => {
         throw new Error('connection refused');
@@ -284,6 +285,11 @@ describe('stripe-webhook handle() — robustesse', () => {
     const res = await handle(buildRequest(), deps);
     expect(res.status).toBe(500);
     expect(await res.text()).toContain('idempotency_store_error');
+    expect(warn).toHaveBeenCalledWith(
+      'stripe-webhook: recordEventStart failed:',
+      'connection refused',
+    );
+    warn.mockRestore();
   });
 
   it('renvoie 500 si creditT99cp throw et ne marque pas processed_at', async () => {
