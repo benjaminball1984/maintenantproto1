@@ -247,7 +247,8 @@ export async function fetchT99cpTotal(
   client: Client = supabase,
 ): Promise<T99cpTotalResult> {
   // PostgREST renvoie un scalaire (bigint sérialisé en string OU number)
-  // sur un `returns bigint` SQL. On accepte les deux formes.
+  // sur un `returns bigint` SQL. `Number(...)` accepte les deux formes
+  // sans branchement explicite (Number('7777') === 7777).
   const { data, error } = await client.rpc('transparency_t99cp_total');
   if (error) {
     return { data: null, error };
@@ -255,7 +256,7 @@ export async function fetchT99cpTotal(
   if (data === null || data === undefined) {
     return { data: 0, error: null };
   }
-  const value = typeof data === 'string' ? Number(data) : Number(data);
+  const value = Number(data);
   if (!Number.isFinite(value) || value < 0) {
     return { data: 0, error: null };
   }
