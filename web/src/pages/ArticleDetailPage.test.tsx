@@ -148,10 +148,12 @@ describe('ArticleDetailPage', () => {
     // L'ajout du commentaire au DOM est une seconde mise à jour d'état
     // (setComments après l'await createComment) que `act` ne couvre pas :
     // le handler est async, donc tout ce qui suit le `await` se résout
-    // sur des microtasks ultérieurs. En CI sous charge parallèle, le
-    // flush React peut dépasser le timeout waitFor par défaut (1 s).
-    // findByText (timeout 5s par défaut côté @testing-library) couvre.
-    expect(await screen.findByText('Bravo !')).toBeInTheDocument();
+    // sur des microtasks ultérieurs. En CI sous charge parallèle (GitHub
+    // Actions free tier), le flush React peut dépasser plusieurs secondes.
+    // findByText timeout étendu à 10 s pour absorber les pics de latence.
+    expect(
+      await screen.findByText('Bravo !', undefined, { timeout: 10_000 }),
+    ).toBeInTheDocument();
   });
 
   it('redirige si article introuvable', async () => {
