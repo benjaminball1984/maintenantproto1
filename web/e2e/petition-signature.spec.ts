@@ -283,53 +283,50 @@ test.describe('Pétitions — flow consultation + signature stubée', () => {
     // Mock stateful pour `/rest/v1/signatures` :
     // - GET (hasUserSigned) : renvoie `[]` avant signature, `[{...}]` après.
     // - POST (signPetition `.insert(...).select('*').maybeSingle()`) :
-    //   renvoie 201 + ligne insérée, bascule le flag interne `signed`.
+    //   renvoie 201 + ligne insérée, bascule le flag interne
+    //   `hasSignedRow`.
     //
-    // L'ordre est garanti par `handleSign` côté PetitionDetailPage :
-    // `await signPetition(...)` → `await refresh()` → re-issue GET. Pas
-    // de race observable côté Playwright qui sérialise les handlers de
-    // route par requête.
-    let signed = false;
+    // **Séquencement applicatif, pas Playwright** : la non-race entre
+    // POST et GET subséquent vient de `handleSign` côté
+    // `PetitionDetailPage.tsx:214-237` qui chaîne `await signPetition(...)`
+    // PUIS `await refresh()` (lui-même fait `getPetition()` puis
+    // `hasUserSigned()`). Playwright sérialise les handlers de route par
+    // requête mais ne sérialise PAS plusieurs requêtes concurrentes ;
+    // c'est le `await` côté UI qui garantit que le GET arrive APRÈS le
+    // flip du flag. Sans ce séquencement, un GET en vol avant le POST
+    // pourrait lire `hasSignedRow=false`.
+    const newSignatureRow = {
+      id: 'sig-stub-new',
+      petition_id: petitionFixture.id,
+      user_id: stubUserId,
+      created_at: new Date().toISOString(),
+    };
+    let hasSignedRow = false;
     await page.route('**/rest/v1/signatures**', async (route: Route) => {
       const method = route.request().method();
       if (method === 'POST') {
-        signed = true;
+        hasSignedRow = true;
         return route.fulfill({
           status: 201,
           contentType: 'application/json',
-          body: JSON.stringify([
-            {
-              id: 'sig-stub-new',
-              petition_id: petitionFixture.id,
-              user_id: stubUserId,
-              created_at: new Date().toISOString(),
-            },
-          ]),
+          body: JSON.stringify([newSignatureRow]),
         });
       }
       // GET (`hasUserSigned`) — body vide ou non selon l'état du flag.
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(
-          signed
-            ? [
-                {
-                  id: 'sig-stub-new',
-                  petition_id: petitionFixture.id,
-                  user_id: stubUserId,
-                  created_at: new Date().toISOString(),
-                },
-              ]
-            : [],
-        ),
+        body: JSON.stringify(hasSignedRow ? [newSignatureRow] : []),
       });
     });
 
     await page.goto(`/petitions/${petitionFixture.slug}`);
 
     // État initial : « Signer cette pétition » visible, aria-pressed="false".
-    const signButton = page.getByRole('button', { name: /^Signer cette pétition$/i });
+    // Regex non ancré (cohérence avec étape 27) — le filtre `role: 'button'`
+    // exclut déjà la string « Connectez-vous pour signer cette pétition »
+    // qui vit dans un `<div role="note">` (PetitionDetailPage.tsx:281).
+    const signButton = page.getByRole('button', { name: /Signer cette pétition/i });
     await expect(signButton).toBeVisible({ timeout: 10_000 });
     await expect(signButton).toHaveAttribute('aria-pressed', 'false');
 
@@ -345,7 +342,7 @@ test.describe('Pétitions — flow consultation + signature stubée', () => {
     await expect(signedButton).toBeVisible({ timeout: 10_000 });
     await expect(signedButton).toHaveAttribute('aria-pressed', 'true');
     await expect(
-      page.getByRole('button', { name: /^Signer cette pétition$/i }),
+      page.getByRole('button', { name: /Signer cette pétition/i }),
     ).toHaveCount(0);
   });
 });
