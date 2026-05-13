@@ -143,7 +143,7 @@ chacune débloquant un chantier technique en attente depuis l'étape 24.
 
 | # | Goulot | Statut | Priorité reco |
 | --- | --- | :---: | --- |
-| 2 | Migrations Supabase staging (étapes 20 + 22 + 23 + 24 à appliquer) | 🔲 | basse (utile seulement APRÈS implémentation M2-sec / T99CP / M1-RGPD) |
+| 2 | Migrations Supabase staging (étapes 20 + 22 + 23 + 24 + **30** à appliquer) | 🔲 | basse pour étapes 20-24 (utile seulement APRÈS implémentation call-sites) — moyenne pour étape 30 (débloque la carte T99CP cumulée publique, sinon masquée silencieusement) |
 | 3 | Sentry SaaS (DSN + provisionnement) | 🔲 | moyenne (gratuit, 15 min) |
 | 5 | Projet Supabase de test (E2E happy path réel) | 🔲 | moyenne (gratuit, 15 min) |
 | 6 | Stripe live (Kbis + clés live + webhook live) | 🔲 | basse (à réserver quand prêts à encaisser) |
@@ -9346,8 +9346,255 @@ Suite E2E Playwright (CI uniquement) : **35 → 37 tests** (+2).
 
 ### Audit vibe janitor étape 30
 
-(à compléter par la session — cf. PR
-`chore(janitor): post-step 30 — …` séparée)
+**Branche** : `claude/janitor-post-step30`
+
+Audit en parallèle via 3 subagents `general-purpose` après le merge
+de la PR principale #41 (commit
+`chore(prod): step 30 …`) : architecture / élégance,
+robustesse / edge cases, sécurité / RGPD / cohérence handoff.
+
+#### Findings par sévérité
+
+| Axe | Total | critical | high | medium | low | Fixable safe-first | Déférés / non-findings |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Architecture | 10 | 0 | 0 | 3 (A1, A3, A6) | 7 | 1 retenu (A4) | 5 non-findings (A2, A7, A9, A10, A8 partiel) + 4 différés (A1, A3, A5, A6, A8) |
+| Robustesse | 10 | 0 | 0 | 1 (R6) | 3 | 0 retenus | 5 non-findings (R1, R2, R8, R9, R10) + 4 différés (R3, R4, R5 partiel, R6, R7) |
+| Sécurité / Handoff | 13 | 0 | 0 | 1 (H1) | 4 | 2 retenus (H1, H2) | 7 non-findings (S1, S2, CSP, LEAK, WEBHOOK, GITIGNORE, HANDOFF1, HANDOFF2, DETTES) + 2 différés (RGPD1, RGPD2) |
+| **Total** | **33** | **0** | **0** | **5** | **14** | **3 retenus** | **17 non-findings + 10 différés** |
+
+#### Fixes appliqués (safe-first, primum non nocere)
+
+**3 fixes appliqués** sur 33 findings (9%) — tous strictement isolés
+au scope janitor, zéro impact runtime.
+
+**J30-A4** (low / low-risk) — **Simplification ternaire dégénéré**.
+`web/src/lib/transparency.ts:258` contenait `typeof data === 'string'
+? Number(data) : Number(data)` — les deux branches identiques.
+Remplacé par `const value = Number(data)`. `Number('7777') === 7777`
+et `Number(7777) === 7777` : sémantique identique, commentaire mis à
+jour. Les 7 tests `fetchT99cpTotal` continuent de passer (Number('not-a-number')
+→ NaN → garde !Number.isFinite → 0 ; idem pour les négatifs et
+null/undefined). Diff : 3 lignes.
+
+**J30-H1** (medium / low-risk) — **`PROD-RUNBOOK §1.2` complété
+avec sanity checks 5 + 6 pour `transparency_t99cp_total`**.
+Édition doc pure : `\df+ public.transparency_t99cp_total`, exemple
+admin SQL (`select public.transparency_t99cp_total();` → 0 sur table
+vide), exemple curl anon (POST sans body sur `/rest/v1/rpc/...`).
+Met le runbook au niveau attendu pour la migration §23, à parité avec
+les blocs §21 (`users_signups_monthly`) et §22
+(`signatures_count_for_petition`). Zéro impact runtime.
+
+**J30-H2** (low / low-risk) — **Tableau goulots `HANDOFF-PROGRESS.md:146`
+complété avec « + **30** »**. La ligne 146 (« Migrations Supabase
+staging à appliquer ») ne listait que les étapes 20 + 22 + 23 + 24
+alors que l'étape 30 a ajouté la RPC §23. Priorité reco également
+mise à jour : moyenne pour la migration §23 (débloque la carte T99CP
+cumulée publique, alors que les migrations 20-24 restent basse
+priorité car non bloquantes pour les call-sites actuels).
+
+#### Fixes déférés (dette nouvelle ou existante)
+
+**J30-A1** (medium / medium-risk) — **Triplication useEffect/fetch/cancelled
+sur `TransparencePage.tsx`** (3 blocs quasi identiques pour counts +
+chart + t99cp, ~60 lignes redondantes ; triplication aussi des tests
+d'annulation). **Déféré** : un hook custom `useAsyncFetch<T>(fetcher)`
+serait propre mais touche 3 useEffect en série et 3 tests
+d'annulation. Risque medium d'introduire un edge case StrictMode /
+deps memo / double-fetch. Hors scope janitor « primum non nocere ».
+À traiter dans une étape de refacto dédiée si la matrice
+TransparencePage s'enrichit encore (étape 32+ ?).
+
+**J30-A3** (medium / medium-risk) — **`fetchT99cpTotal` casse
+l'invariant `data === null ⇔ error` des autres helpers**. Sur
+RPC retournant `null/undefined/NaN/négatif`, ce helper renvoie
+`{ data: 0, error: null }` (succès silencieux) alors que
+`fetchTransparencyCounts` et `fetchMonthlySignups` préservent
+`{ data: null, error }` strictement aligné. Impact runtime nul
+aujourd'hui (TransparencePage:174 traite `data === null` ET
+`error` comme erreur), mais contrat asymétrique invite à des
+régressions futures. **Déféré** : documenter ou aligner sur les
+autres helpers — choix à faire au niveau du contrat, hors scope
+janitor.
+
+**J30-A5** (low / low-risk) — **`formatNumber` redéfini par page**
+(`TransparencePage.tsx:95-97`). **Déféré** : candidat à
+`@/lib/format.ts` mais bénéfice marginal et blast radius non
+vérifié. Hors scope étape 30 (helper existait déjà avant).
+
+**J30-A6** (medium / medium-risk) — **Test E2E `t99cp-total-card` :
+double-route fragile** (LIFO Playwright). `installSupabaseStubs.rpc`
+retourne `JSON.stringify([rows])` alors que PostgREST renvoie le
+scalaire brut sur un `returns bigint`. **Déféré** : modifier
+`mockSupabase.ts` pour supporter `{ scalar: 3600 }` ou `{ raw: '3600' }`
+toucherait 6 autres specs E2E. Dette à traiter dans une refacto
+mock-helper future (à grouper avec `M7-e2e-storagekey` et
+`L8-arch-authsession`).
+
+**J30-A8** (low / low-risk) — **Dette `L-rpc-adhesions-count`** :
+chantier futur « Adhésions totales » (RPC séparée
+`transparency_paid_adhesions_count()` SECURITY DEFINER count sur
+`adhesions WHERE status='active'`). Si l'équipe souhaite afficher
+le nombre d'adhérent·es (plutôt que le cumul T99CP, qui est 60 ×
+nb adhésions hors bonus/parrainage/correction), une 2e RPC sera
+nécessaire. Documenté ici comme **dette explicite**.
+
+**J30-R4** (low / low-risk) — **Doublon de finding avec A4**.
+Le ternaire dégénéré `typeof string ? Number : Number` est aussi
+vu par l'auditeur robustesse — **clos par le fix A4 ci-dessus**.
+
+**J30-R6** (medium / medium-risk) — **Asymétrie garde-fous
+`getPetitionSignatureCount` (étape 24) vs `fetchT99cpTotal` (étape
+30)**. Le helper étape 24 (`petitions.ts:299-310`) n'accepte PAS
+la sérialisation string (test `typeof data === 'number'`
+uniquement) alors que `fetchT99cpTotal` accepte les deux.
+**Déféré** : harmoniser les deux helpers dans une étape de
+refacto dédiée (`L-rpc-helpers-robust`). Risque medium si on
+modifie `getPetitionSignatureCount` car tests existants assument
+le comportement actuel.
+
+**J30-R7** (low / medium-risk) — **`ArticleDetailPage.test`
+findByText timeout 10s** (introduit par cette PR pour fixer le
+flake CI). Le timeout 10s peut masquer un vrai problème async
+(createComment hors `act`). **Déféré** : investiguer
+`setComments` post-`createComment` dans `ArticleDetailPage`
+(wrap dans `act` ou refactor handler) pour réduire timeout à 5s.
+Risque medium si on rollback maintenant : le flake CI reviendrait.
+
+**J30-RGPD1** (low / medium-risk si fix) — **Réidentification à
+très faible cohorte** (cumul ÷ 60 ≈ nb adhésions). À 1-3
+adhérent·es, le cumul T99CP affiché (60 / 120 / 180) révèle
+exactement le nombre d'adhésions. **Cohérent avec la décision
+produit 2 (« pas de seuil masquant »)**. **Déféré** : à
+re-évaluer seulement si plainte CNIL ou DPO ; pas de fix sans
+nouvelle décision produit.
+
+**J30-RGPD2** (low / medium-risk si fix) — **Scope `kind='credit'`
+inclut tous les futurs reasons** (parrainage, bonus, correction
+admin). Le wording « T99CP émis (cumulé) » reste précis sur la
+masse monétaire émise, mais si l'équipe communique « cumul
+d'adhésions », un divisor `÷ 60` deviendrait faux dès le 1er
+`reason ≠ adhesion_renewal`. **Déféré** comme nouvelle dette
+**`L-rpc-t99cp-reason-scope`**. À transformer en RPC plus
+spécifique si un autre `reason` de credit est introduit.
+
+#### Non-findings explicites (confirmation par 3 subagents)
+
+Architecture (5) : A2 (`Args: Record<string, never>` pattern
+recommandé Supabase TS), A7 (commentaire localisation), A9 (naming
+T99cp casse mixte cohérent avec `monthlyT99cpBonus`), A10 (testid
+justifié par carte conditionnelle), A8 (partiel — couvert ici en
+dette explicite).
+
+Robustesse (5) : R1 (cleanup useEffect symétriques), R2 (ordre
+`page.route` LIFO correct, commenté), R8 (`mockResolvedValue` par
+défaut sans impact), R9 (pas de race condition — deps `[]` +
+cleanup), R10 (SQL `coalesce` + CHECK `amount > 0` robuste).
+
+Sécurité (7) + Handoff (4) : S1 (`service_role` grant cohérent),
+S2 (SECURITY DEFINER conforme moindre privilège : `set search_path`,
+`revoke all from public`, grants explicites, scalaire sans PII),
+J30-CSP (aucune update CSP/`netlify.toml` nécessaire), J30-LEAK
+(zéro secret dans le diff — vérifié `git diff d896ff8^ d896ff8`),
+J30-WEBHOOK (zéro modification Edge Functions), J30-GITIGNORE
+(`test-results`/`playwright-report` jamais commités historiquement
+— règle préventive), J30-HANDOFF1 (narrative étape 30 cohérente),
+J30-HANDOFF2 (prompt N+25 conforme aux règles récursives —
+Politique de PR + Recopie + janitor + dettes ouvertes), J30-DETTES
+(H4-deploy-deno, M2-sec-policy, M1-RGPD restent cohérentes).
+
+#### Hygiène (janitor étape 30)
+
+- Pas de modification du prototype.
+- Pas de modification du design system `T.*` (CSS vars `--mn-*`).
+- Pas de migration DB.
+- Pas de breaking change visible utilisateur (3 fixes : code
+  TS micro-simplification + 2 fixes doc pure).
+- Pas de nouvelle dépendance npm.
+- Pas de bump majeur.
+- TS strict + no `any` (vérifié sur le fix A4).
+- Aucun fix qui casse un test existant (7 tests `fetchT99cpTotal` +
+  883 tests vitest re-vérifiés verts).
+- Aucun fix qui ouvre un risque B.
+
+#### Checks finaux (janitor étape 30)
+
+```
+> npm run typecheck && npm run lint && npx vitest run && npm run build
+
+✓ typecheck   (tsc -b + e2e/tsconfig.json)
+✓ lint        (eslint .)
+✓ vitest      (128 files, 883 tests passed, ~58s)
+✓ build       (entry 47.34 kB / gzip 13.32 kB ; TransparencePage 8.34 kB / gzip 3.26 kB lazy)
+```
+
+Compteur de tests **inchangé** (883 vitest + 37 E2E Playwright
+attendus en CI) : aucun changement de test, le fix A4 préserve
+sémantique exacte des 7 tests `fetchT99cpTotal`.
+
+#### Dette technique consolidée — mise à jour
+
+**Nouvelles dettes ajoutées par le janitor étape 30** :
+
+- **`L-arch-useasyncfetch`** (J30-A1, medium / medium-risk) —
+  Triplication useEffect TransparencePage. Hook custom à extraire.
+- **`L-arch-helper-contract`** (J30-A3, medium / medium-risk) —
+  Asymétrie contrat `fetchT99cpTotal` vs autres helpers
+  transparency. Documenter ou aligner.
+- **`L-arch-format-number`** (J30-A5, low / low-risk) —
+  Extraction `formatNumber` vers `@/lib/format.ts`.
+- **`L-e2e-rpc-scalar`** (J30-A6, medium / medium-risk) —
+  `installSupabaseStubs.rpc` doit supporter scalaires. À grouper
+  avec `M7-e2e-storagekey` et `L8-arch-authsession`.
+- **`L-rpc-adhesions-count`** (J30-A8, low / low-risk) —
+  Future RPC `transparency_paid_adhesions_count()` séparée
+  pour afficher « Adhésions totales » exact.
+- **`L-rpc-helpers-robust`** (J30-R6, medium / medium-risk) —
+  Harmoniser `getPetitionSignatureCount` (étape 24) avec le
+  pattern `fetchT99cpTotal` (étape 30).
+- **`L-test-articledetail-act`** (J30-R7, low / medium-risk) —
+  Investiguer `setComments` post-`createComment` dans
+  `ArticleDetailPage` pour réduire timeout findByText à 5s.
+- **`L-rpc-t99cp-reason-scope`** (J30-RGPD2, low / medium-risk si
+  fix) — Si un autre `reason` de credit est introduit, scoper la
+  RPC `transparency_t99cp_total` ou créer une RPC dédiée.
+
+**Dettes existantes inchangées** : H3-sec, M2-sec-policy, M5-rob,
+M1-RGPD, M6-rob, M7-e2e-storagekey, L1-a11y, L3-arch, L4-sec,
+L5-arch, L6-arch-progress, L7-arch-loginhref, L1-rob,
+H4-deploy-deno, L-sec-webhook-body, L8-arch-authsession.
+
+#### Décisions janitor
+
+- **3 fixes safe-first appliqués** sur 33 findings (9%) — premier
+  janitor depuis l'étape 22 (post-step 22) à appliquer plus d'1 fix
+  hors code purement de test. Les 3 fixes touchent : 1 ligne TS
+  micro-cosmétique (A4), 1 section doc PROD-RUNBOOK (H1), 1 ligne
+  tableau goulots (H2). Zéro impact runtime.
+- **8 nouvelles dettes** consolidées (J30-A1, A3, A5, A6, A8, R6,
+  R7, RGPD2) — la PR étape 30 ayant livré un chantier substantiel
+  (vs +1 mock E2E des étapes 25-29), elle a ouvert plus de surface
+  d'audit qu'une PR mock. Toutes sont **safe-first non
+  applicables** (medium risque ou hors scope), à traiter dans des
+  étapes dédiées.
+- **17 non-findings explicites** confirment que la PR étape 30 est
+  fonctionnellement saine et conforme aux invariants
+  d'architecture / robustesse / sécurité / RGPD / cohérence
+  handoff. RPC SECURITY DEFINER conforme moindre privilège, aucune
+  PII exposée, graceful degradation testée 4× (success / 0 /
+  erreur RPC / unmount).
+- **Toutes les dettes high (H3-sec) + medium-high
+  (M2-sec-policy, M5-rob, M1-RGPD, L1-a11y, M6-rob,
+  M7-e2e-storagekey)** restent ouvertes, à traiter dans des
+  étapes dédiées.
+- **Conclusion** : l'étape 30 a livré le premier chantier
+  substantiel post-décisions du 2026-05-13. Les 8 nouvelles
+  dettes ouvertes sont des opportunités de refacto/durcissement
+  pour les étapes suivantes (32+), pas des bugs. L'étape 31
+  pourra soit traiter une dette externe encore disponible
+  (M2-sec-policy / M1-RGPD), soit refactorer le pattern E2E auth
+  via `L8-arch-authsession`, soit ouvrir une nouvelle matrice
+  (Lighthouse réel, poll-detail-page vote/unvote, etc.).
 
 ---
 

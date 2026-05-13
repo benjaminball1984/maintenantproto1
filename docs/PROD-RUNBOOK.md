@@ -108,6 +108,29 @@ select public.signatures_count_for_petition('<PETITION_UUID>'::uuid);
 --        -H "Content-Type: application/json" \
 --        -d '{"p_petition":"<PETITION_UUID>"}' \
 --        "$SUPABASE_URL/rest/v1/rpc/signatures_count_for_petition"
+
+-- Étape 30 : RPC publique de cumul T99CP émis (security definer,
+-- scalaire bigint, grant execute to anon + authenticated, alimente la
+-- carte « T99CP émis (cumulé) » sur /transparence). Aucune PII —
+-- coalesce(sum(amount), 0) sur t99cp_transactions where kind = 'credit'.
+-- Migration **non-bloquante côté UI** : si la RPC manque, la carte est
+-- silencieusement masquée côté front (cf. TransparencePage.tsx +
+-- test E2E « masque la carte T99CP en cas d'erreur RPC »).
+\df+ public.transparency_t99cp_total
+
+-- Sanity check 5 — admin (psql superuser) : la fonction renvoie un
+-- bigint. Sur projet sans crédit T99CP : 0. Sur projet avec adhésions
+-- payées : multiple de 60 (= monthlyT99cpBonus() par invoice Stripe).
+select public.transparency_t99cp_total();
+
+-- Sanity check 6 — anon (PostgREST + anon JWT) : grants execute OK.
+-- Doit renvoyer un body JSON contenant un nombre (ou la chaîne d'un
+-- bigint si > 2^53, cas hors scope humain), jamais 401/403/404.
+--   curl -s -X POST \
+--        -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY" \
+--        -H "Content-Type: application/json" \
+--        -d '{}' \
+--        "$SUPABASE_URL/rest/v1/rpc/transparency_t99cp_total"
 ```
 
 ### 1.3 Régénération des types TypeScript
