@@ -8751,8 +8751,195 @@ Playwright validé par la CI (sandbox local : CDN
 
 ### Audit vibe janitor étape 29
 
-À compléter — exécution déléguée à la phase 2 du présent prompt
-(post-merge PR principale).
+**Branche** : `claude/janitor-post-step29`
+
+Audit en parallèle via 3 subagents `general-purpose` après le
+merge de la PR principale #35 (commit
+`chore(prod): step 29 …`) : architecture / élégance,
+robustesse / edge cases, sécurité / RGPD / cohérence handoff.
+
+#### Findings par sévérité
+
+| Axe | Total | critical | high | medium | low | Fixable safe-first | Déférés / non-findings |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Architecture | 7 | 0 | 0 | 0 | 4 | 0 retenus | 3 non-findings (A2, A5, A7) + 4 différés (A1, A3, A4, A6) |
+| Robustesse | 7 | 0 | 0 | 0 | 2 + 5 non-findings | 0 retenus | 5 non-findings (R1, R2, R3, R4, R6) + 2 différés (R5, R7) |
+| Sécurité | 13 | 0 | 0 | 0 | 0 | 0 | 13 non-findings (S1-S8 + H1-H5) |
+| **Total** | **27** | **0** | **0** | **0** | **6 + 21 non-findings** | **0 retenus** | **27 (0 actionnables)** |
+
+#### Fixes appliqués (safe-first, primum non nocere)
+
+**Aucun fix appliqué.** 0/6 findings low retenus comme safe-first.
+Conforme à la doctrine « primum non nocere » : toutes les
+opportunités de refactor identifiées toucheraient soit des fichiers
+déjà mergés hors scope étape 29 (A1, A4 — extraction de constantes
+regex / commentaires partagés entre tests étapes 26/27/28/29),
+soit briseraient un effet miroir voulu avec le test étape 28
+(A3 — renommage `hasSignedRow` qui maintient la symétrie d'init
+inversée vs étape 28), soit relèvent d'une dette déjà ouverte
+(A6 — duplication seed session = `L8-arch-authsession`), soit
+sont des observations pédagogiques (R5, R7) sans gain net immédiat.
+
+Cette PR janitor est donc **documentation seulement** — comme
+le janitor post-step 27 (cf. PR #32). Le test étape 29 est jugé
+**fonctionnellement et structurellement sain** par les 3 audits
+parallèles.
+
+#### Fixes déférés (dette nouvelle ou existante)
+
+**J29-A1** (low / low-risk) — **Doublon de regex non factorisé**
+(`/Signer cette pétition/i` × 6 occurrences sur le fichier,
+`/Signée — retirer ma signature/i` × 6 occurrences). **Déféré** :
+extraire `const SIGN_CTA_NAME` et `const SIGNED_CTA_NAME` au
+niveau `describe` couvrirait l.341, l.345, l.432, l.445, l.449
+mais toucherait aussi les tests étapes 26/27/28 déjà mergés.
+Hors scope étape 29. **Pas de nouvelle dette créée** — ce sera
+ouvert si pertinent dans une étape de refacto E2E dédiée.
+
+**J29-A3** (low / low-risk) — **Nommage `hasSignedRow` ambigu**
+(init `true` étape 29 vs init `false` étape 28, même nom de
+variable). **Déféré** : renommer briserait l'effet miroir voulu
+avec le test étape 28 (lecteurs diff-ant les 2 tests voient
+explicitement l'inversion d'init). Choix de design conscient.
+
+**J29-A4** (low / low-risk) — **Commentaire bloc « Séquencement
+applicatif, pas Playwright » dupliqué** (l.392-399 étape 29 quasi
+mot pour mot vs l.289-297 étape 28). **Déféré** : pourrait
+migrer dans un commentaire `describe`-level ou un helper, mais
+même verrou que J29-A1 (touche tests déjà mergés). Hors scope
+étape 29.
+
+**J29-A6** (low / n/a) — **Duplication 4e copie du seed de
+session** entre tests étapes 26/27/28/29. **Déféré** : déjà
+couvert par dette `L8-arch-authsession` consolidée janitor 26
+(extraction d'un helper `installAuthenticatedSession(page,
+{ userId, email })` dans `e2e/utils/mockSupabase.ts`). Le 4e
+call-site confirme la pertinence ; l'étape dédiée reste plus
+sûre que 4 sites refactorisés en mode janitor.
+
+**J29-R5** (low / low-risk) — **Edge cases du flag `hasSignedRow`
+non testés** (DELETE ré-émis, séquence sign↔unsign↔sign aller-
+retour). **Déféré** : pas l'objet du test étape 29 (qui couvre
+la transition simple `true → false`). À traiter par un test
+dédié si la matrice de couverture devient prioritaire. Hors
+scope.
+
+**J29-R7** (low / medium-risk) — **`contentType: 'application/json'
++ body: ''` sur 204 légèrement non-conforme RFC 7230 §3.3.2**.
+En pratique supabase-js v2 court-circuite le parsing JSON sur
+204 (cf. `@supabase/postgrest-js` : `if (response.status === 204)
+return { data: null, error: null }`) ; Chromium accepte ;
+aucun risque effectif sur ce test. **Déféré** : risque medium si
+on change naïvement (introduire `contentType: 'text/plain'` ou
+omettre le champ — autres tests reproduisent le même pattern
+→ asymétrie). À grouper avec une refacto mock-helper future
+(possiblement avec `L8-arch-authsession` ou
+`M7-e2e-storagekey`).
+
+#### Non-findings explicites (confirmation par 3 subagents)
+
+Architecture (3) : A2 variable `existingSignatureRow` bien
+utilisée en branche `hasSignedRow === true` du handler GET
+(boot-time GET avant le clic DELETE), A5 contrat runtime DELETE
+→ 204 sans body fidèle au comportement PostgREST sans `.select()`
+(`web/src/lib/petitions.ts:251-258`), A7 cohérence nommage
+fixture `newSignatureRow` (étape 28) / `existingSignatureRow`
+(étape 29) sémantiquement correcte.
+
+Robustesse (5) : R1 séquencement applicatif `await
+unsignPetition()` puis `await refresh()` garantit que le GET de
+refresh arrive APRÈS le DELETE (flag flippé synchroneusement
+dans le handler avant `route.fulfill`), R2 timeouts 10s + 5s
++ 30s largement suffisants vs < 50 ms par cycle local, R3
+isolation closure correcte (BrowserContext + Page neufs par
+test via `fullyParallel: true`, `page.route()` scoped à la
+page), R4 contrat HTTP 204 + body vide fidèle au comportement
+PostgREST sans `.select()`, R6 `toHaveCount(0)` couvre le
+rendu conditionnel JSX (bouton non rendu) correctement.
+
+Sécurité (8) + Handoff (5) : S1 aucun secret (stub-*-token
+inertes), S2 closure `hasSignedRow` strictement locale au test
+(pas de partage avec étape 28), S3 storage key `sb-127-auth-token`
+absente du runtime `src/` (vérifié `grep -rn "sb-127" web/src` →
+0 hit), S4 aucune migration DB, S5 cohérence RLS (le test
+couvre un cas authentifié `user_id === stubUserId`, conforme à
+`auth.uid() = user_id`), S6 conformité RGPD Art. 7 (retrait du
+consentement) — couverture E2E positive du chemin de
+désinscription, S7 aucun emoji, S8 CSP/vercel.json inchangés.
+H1 ligne 40 État global ajoutée, H2 narrative étape 29
+complète (toutes sections présentes), H3 compteurs cohérents
+(872 vitest inchangé, 34 → 35 E2E, bundle 47.34 kB / gzip
+13.32 kB inchangé), H4 prompt étape 30 récursif présent avec
+Phases 1/2/3 + conditions d'arrêt, H5 prompt étape 29
+historique conservé.
+
+#### Hygiène (janitor étape 29)
+
+- Pas de modification du prototype.
+- Pas de modification du design system `T.*` (CSS vars `--mn-*`).
+- Pas de migration DB.
+- Pas de breaking change visible utilisateur (PR janitor
+  documentation seulement — aucun changement de fichier `.ts` /
+  `.tsx` / `.sql`).
+- Pas de nouvelle dépendance npm.
+- Pas de bump majeur.
+- TS strict + no `any` (n/a — pas de code modifié).
+- Aucun fix qui casse un test existant (n/a — pas de fix).
+- Aucun fix qui ouvre un risque B.
+
+#### Checks finaux (janitor étape 29)
+
+```
+> npm run typecheck && npm run lint && npx vitest run && npm run build
+
+✓ typecheck   (tsc -b + e2e/tsconfig.json)
+✓ lint        (eslint .)
+✓ vitest      (128 files, 872 tests passed, ~60s)
+✓ build       (entry 47.34 kB / gzip 13.32 kB ; TransparencePage 7.69 kB / gzip 3.11 kB lazy ; sentry 436.2 kB / gzip 143.08 kB lazy)
+```
+
+Compteur de tests **inchangé** (872 vitest + 35 E2E Playwright
+attendus en CI) : aucun changement de code.
+
+#### Dette technique consolidée — inchangée
+
+Aucune nouvelle dette ajoutée par le janitor. Les 16 items
+existants (H3-sec, M2-sec-policy, M5-rob, M1-RGPD, M6-rob,
+M7-e2e-storagekey, L1-a11y, L3-arch, L4-sec, L5-arch,
+L6-arch-progress, L7-arch-loginhref, L1-rob, H4-deploy-deno,
+L-sec-webhook-body, L8-arch-authsession) restent ouverts.
+
+Les fixes déférés (J29-A1, A3, A4, A6, R5, R7) sont **soit
+couverts par L8-arch-authsession + M7-e2e-storagekey** (A6, R7),
+**soit hors scope étape 29** (A1, A4 — touchent fichiers déjà
+mergés), **soit choix de design conscient** (A3 — effet miroir
+volontaire), **soit observations pédagogiques** (R5). Aucune
+ne justifie une dette dédiée nouvelle.
+
+#### Décisions janitor
+
+- **0 fix safe-first appliqué** sur 6 findings low (et 21
+  non-findings) — PR janitor « documentation seulement »
+  comme le post-step 27 (PR #32). Tous les findings sont soit
+  hors scope (touchent étapes déjà mergées), soit déjà tracké
+  comme dette, soit observations pédagogiques sans gain net.
+- **21 non-findings explicites** (A2, A5, A7 + R1, R2, R3, R4,
+  R6 + S1-S8 + H1-H5) confirment que la PR étape 29 est
+  fonctionnellement saine et conforme aux invariants
+  d'architecture / robustesse / sécurité / cohérence handoff.
+- **Toutes les dettes high (H3-sec) + medium-high
+  (M2-sec-policy, M5-rob, M1-RGPD, L1-a11y, M6-rob,
+  M7-e2e-storagekey)** restent ouvertes, à traiter dans des
+  étapes dédiées.
+- **Conclusion** : la matrice E2E du `handleSign` côté
+  `PetitionDetailPage.tsx:214-237` est désormais bouclée
+  (sign-branch étape 28 + unsign-branch étape 29). L'étape 30
+  pourra soit traiter une dette externe (M2-sec-policy /
+  T99CP / M1-RGPD si validation reçue), soit refactorer le
+  pattern E2E auth via `L8-arch-authsession` (5e call-site
+  attendu si poll-vote en parallèle), soit ouvrir une
+  nouvelle matrice (poll-detail-page vote/unvote, mobilization
+  detail, transparence variants).
 
 ---
 
