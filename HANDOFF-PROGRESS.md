@@ -8205,6 +8205,254 @@ Playwright validé par la CI (sandbox local : CDN
   non couvert : mobilization detail, poll detail, transparence
   variants).
 
+### Audit vibe janitor étape 28
+
+**Branche** : `claude/janitor-post-step28`
+
+Audit en parallèle via 3 subagents `general-purpose` après le
+merge de la PR principale #33 (commit
+`chore(prod): step 28 …`) : architecture / élégance,
+robustesse / edge cases, sécurité / RGPD / cohérence handoff.
+
+#### Findings par sévérité
+
+| Axe | Total | critical | high | medium | low | Fixable safe-first | Déférés / non-findings |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Architecture | 10 | 0 | 0 | 0 | 10 | 5 candidats | 5 (dont 4 non-findings : A6, A8, A9, A10) |
+| Robustesse | 12 | 0 | 0 | 0 | 6 + 6 info | 5 candidats | 6 non-findings (R7-R12) |
+| Sécurité | 14 | 0 | 0 | 0 | 1 cosmétique | 0 | 13 non-findings (S1-S8 + H1-H5) |
+| **Total** | **36** | **0** | **0** | **0** | **17 + 6 info + 13 non-findings** | **10 candidats → 4 retenus** | **23 (dont 23 non-findings + observations)** |
+
+#### Fixes appliqués (safe-first, primum non nocere)
+
+4 fixes safe-first retenus parmi les 10 candidats, sur le seul
+fichier `web/e2e/petition-signature.spec.ts` (test étape 28
+uniquement, lignes 252-355 après application). Critère de
+sélection : **haute valeur de lisibilité + zéro risque de
+régression** (pas de modification de logique, pas d'extraction
+d'API helper, pas d'élargissement de surface).
+
+**J28-A3** (low / low-risk) — **Renommage `signed` → `hasSignedRow`**
+(closure du mock route). La variable précédente faisait
+shadow avec le champ `signed` exporté par `usePetition`
+(`web/src/hooks/usePetition.ts:12`), perturbant la lecture
+(« quel `signed` ? côté UI ou côté mock ? »). Le nouveau nom
+`hasSignedRow` rend explicite que c'est l'état du mock côté
+serveur (« y a-t-il une ligne signature côté DB stubée »), pas
+l'état React du hook.
+
+**J28-A5** (low / low-risk) — **Extraction de la constante
+`newSignatureRow`** déclarée AVANT le `page.route(...)`. Avant
+janitor : payload `{ id, petition_id, user_id, created_at }`
+dupliqué entre la branche POST (l.300-307) et la branche GET
+(l.316-323) — 8 lignes répétées. Après janitor : 1 littéral,
+2 références (`[newSignatureRow]`). Aucune perte d'expressivité,
+gain DRY local de 8 lignes.
+
+**J28-A2** (low / low-risk) — **Désancrage des regex
+`/^Signer cette pétition$/i` → `/Signer cette pétition/i`**
+(2 occurrences : ligne 332 assertion initiale + ligne 348
+assertion finale `toHaveCount(0)`). Avant janitor : regex
+ancrés pour défense contre un match accidentel sur la string
+« Connectez-vous pour signer cette pétition » du `<div role="note">`
+(`PetitionDetailPage.tsx:281`). Après audit : le filtre
+`getByRole('button')` exclut DÉJÀ le `<div role="note">`
+(`role="note"` ≠ `role="button"`), donc l'ancrage défensif
+était redondant. Désancrer rétablit la cohérence stylistique
+avec le test étape 27 (l.236) qui utilise déjà le regex non
+ancré. Commentaire ajouté en l.332-334 expliquant pourquoi
+l'ancrage n'est plus nécessaire (référence
+`PetitionDetailPage.tsx:281`).
+
+**J28-R3** (low / low-risk) — **Clarification du commentaire sur
+le séquencement applicatif**. Avant janitor (l.287-291) : « Pas
+de race observable côté Playwright qui sérialise les handlers
+de route par requête ». Cette formulation est **incorrecte sur
+le pourquoi** : Playwright sérialise UN handler PAR requête
+mais ne sérialise PAS plusieurs requêtes concurrentes entre
+elles. La non-race vient en réalité du `await signPetition(...)`
+chaîné avec `await refresh()` côté `handleSign`
+(`PetitionDetailPage.tsx:214-237`) : c'est le code applicatif
+qui garantit que le GET arrive APRÈS le flip du flag, pas
+Playwright. Le nouveau commentaire (l.286-295) explicite cette
+dépendance applicative.
+
+Vérifications safe-first sur les 4 fixes :
+
+- Aucune modification de logique : noms de variables, extraction
+  de constantes locales, ajustement de regex (cohérence
+  stylistique), réécriture de commentaires.
+- 4 checks locaux verts après application (typecheck / lint /
+  vitest 872 / build 47.34 kB inchangé).
+- Compteur de tests inchangé (872 vitest + 34 E2E Playwright).
+- Aucun nouveau pattern (helper, util, fixture global).
+- Le test reste 100 % isolé (closure locale, scope limité au
+  callback du test).
+
+#### Fixes déférés (dette nouvelle ou existante)
+
+**J28-A1** (low / medium-risk) — duplication massive du seed de
+session entre tests étapes 26/27/28 (3 copies quasi-identiques).
+**Déféré** : déjà couvert par dette `L8-arch-authsession`
+(consolidée janitor 26) qui prévoit l'extraction d'un helper
+`installAuthenticatedSession(page, { userId, email })` dans
+`e2e/utils/mockSupabase.ts`. Le 3e call-site confirme la
+pertinence YAGNI-resilient mais l'étape dédiée reste plus sûre
+que 3 sites refactorisés en mode janitor.
+
+**J28-A4** (low / low-risk) — clarification du contrat
+`.maybeSingle()` (POST accepte array singulier OU objet seul).
+**Déféré** : observation pédagogique non-prioritaire. Le mock
+fonctionne, le commentaire actuel suffit.
+
+**J28-A7** (low / low-risk) — ajouter cross-référence explicite
+au commentaire 124-148 (étape 26) dans le test étape 28
+(comme le fait étape 27 l.199). **Déféré** : avec
+`L8-arch-authsession` à terme, ce commentaire deviendra la
+JSDoc du helper centralisée — la cross-référence ad-hoc
+serait jetée.
+
+**J28-A9** (low / medium-risk) — ajouter `page.waitForRequest`
+pour valider explicitement l'émission du POST `signatures`.
+**Déféré** : risque medium de flakiness selon timing du retry
+Playwright (cf. `playwright.config.ts:retries: 2`). L'assertion
+finale (bouton signé visible) prouve indirectement le POST.
+
+**J28-R1** (low / low-risk) — resserrer le pattern de route de
+`**/rest/v1/signatures**` à `**/rest/v1/signatures?**` +
+`**/rest/v1/signatures` pour exclure d'éventuels futurs
+endpoints préfixés `signatures_*`. **Déféré** : modification
+qui devrait s'appliquer à tous les tests du fichier (6 autres
+routes du même pattern), donc hors scope janitor étape 28.
+À regrouper dans une étape pattern E2E auth dédiée (L8 / M7).
+
+**J28-R2** (low / low-risk) — whitelister `GET` explicitement +
+fallback 405 sur méthodes inattendues (PATCH/PUT/DELETE/HEAD/
+OPTIONS). **Déféré** : pourrait casser silencieusement un
+futur test qui copierait ce pattern pour tester le unsign-flow
+(DELETE). Sujet à mutualiser avec M7-e2e-storagekey.
+
+**J28-R4** (low / low-risk) — `signature_count` figé à 42 dans
+`petitionFixture` après POST (le mock `petitions` du beforeEach
+n'incrémente pas). Le test n'assert pas sur ce compteur, donc
+pas de faux positif aujourd'hui. **Déféré** : si on veut un
+jour tester la propagation du trigger `signatures_count_inc`
+côté UI, il faudra refactor le fixture `petitions` en mock
+stateful. Hors scope janitor.
+
+**J28-R5** (low / low-risk) — ajouter le header `content-range`
+au fulfill custom (par mimétisme avec `installSupabaseStubs`).
+**Déféré** : supabase-js v2 ne lit ce header que pour
+`count: 'exact'|'planned'|'estimated'`. Ni `signPetition` ni
+`hasUserSigned` n'utilisent count → inerte. Pas de valeur
+ajoutée.
+
+**J28-R6** (low / low-risk) — recalculer `expires_at` dans
+`addInitScript` (côté browser) au lieu du worker Playwright.
+**Déféré** : marge actuelle 24 h vs durée d'un test < 30 s.
+La théorie est correcte mais la pratique est sans impact ;
+ajouter du code pour zéro gain.
+
+**J28-S-L1** (low / low-risk — observation cosmétique sécurité) —
+le mock `page.route` ne désinscrit pas la closure `hasSignedRow`
+en fin de test. **Non-bug** : Playwright recrée Page + Context
+par test (`fullyParallel: true`) → pas de fuite cross-test.
+
+#### Non-findings explicites (confirmation par 3 subagents)
+
+Architecture (4) : A6 volume de commentaires (~30 %, comparable
+26/27), A8 hiérarchie describe (acceptable jusqu'à 8-10 tests),
+A9 absence de `waitForRequest` (choix design cohérent), A10
+mock stateful sûr dans contexte de séquentialisation.
+
+Robustesse (6) : R7 timing 10s + 10s suffisant, R8 IDs
+distincts entre 4 tests authentifiés (`stub-user-id` /
+`stub-signed-user-id` / `stub-unsigned-user-id` /
+`stub-active-signer-id`), R9 ordre Playwright LIFO correct,
+R10 `.maybeSingle()` accepte body array singular + status 201,
+R11 race React boot + `getSession()` neutre (addInitScript avant
+boot + bouton désactivé en `loading`), R12 `waitForRequest`
+absent par choix.
+
+Sécurité (13) : S1 aucun secret, S2 domaine RFC 2606,
+S3 display_name non identifiant, S4 CSP/headers inchangés,
+S5 RLS/schema.sql inchangé, S6 dépendances inchangées, S7
+storage key E2E ne contamine pas le bundle prod (tsconfig.app
+`include: ["src"]` exclut `web/e2e/`), S8 prototype intouché.
+Handoff (H1 table État global, H2 compteurs 872/34, H3 dette
+16 items, H4 prompt étape 29 avec 3 phases récursives,
+H5 narrative cohérente vs étape 27).
+
+#### Hygiène (janitor étape 28)
+
+- Pas de modification du prototype.
+- Pas de modification du design system `T.*` (CSS vars `--mn-*`).
+- Pas de migration DB.
+- Pas de breaking change visible utilisateur (modifications
+  purement internes au test E2E ; pas d'observable côté
+  utilisateur).
+- Pas de nouvelle dépendance npm.
+- Pas de bump majeur.
+- TS strict + no `any`.
+- Aucun fix qui casse un test existant (4 checks locaux verts
+  après application).
+- Aucun fix qui ouvre un risque B.
+- Aucun nouveau `console.error` / `console.warn`.
+
+#### Checks finaux (janitor étape 28)
+
+```
+> npm run typecheck && npm run lint && npx vitest run && npm run build
+
+✓ typecheck   (tsc -b + e2e/tsconfig.json)
+✓ lint        (eslint .)
+✓ vitest      (128 files, 872 tests passed, ~77s)
+✓ build       (entry 47.34 kB / gzip 13.32 kB ; TransparencePage 7.69 kB / gzip 3.11 kB lazy ; sentry 436.2 kB / gzip 143.08 kB lazy)
+```
+
+Compteur de tests **inchangé** (872 vitest + 34 E2E Playwright
+attendus en CI) : les 4 fixes sont des refactos internes du
+test étape 28 (renommage variable + extraction constante +
+désancrage regex + clarification commentaire), aucun ne change
+l'assertion ni la branche couverte.
+
+#### Dette technique consolidée — inchangée
+
+Aucune nouvelle dette ajoutée par le janitor. Les 16 items
+existants (H3-sec, M2-sec-policy, M5-rob, M1-RGPD, M6-rob,
+M7-e2e-storagekey, L1-a11y, L3-arch, L4-sec, L5-arch,
+L6-arch-progress, L7-arch-loginhref, L1-rob, H4-deploy-deno,
+L-sec-webhook-body, L8-arch-authsession) restent ouverts.
+
+Les fixes déférés (J28-A1, A4, A7, A9, R1, R2, R4, R5, R6, S-L1)
+sont **soit couverts par L8-arch-authsession + M7-e2e-storagekey**
+(la majorité), **soit non-bugs cosmétiques** (R5, R6, S-L1),
+**soit observations pédagogiques** (A4, A9, R4). Aucune ne
+justifie une dette dédiée nouvelle.
+
+#### Décisions janitor
+
+- **4 fixes safe-first appliqués** sur 36 entrées — A3
+  (rename `signed` → `hasSignedRow`), A5 (extract
+  `newSignatureRow`), A2 (désancrer regex pour cohérence
+  étape 27), R3 (clarification commentaire séquencement).
+  Tous strictement isolés au test étape 28 (sa closure de test),
+  zéro impact runtime, zéro impact assertion.
+- **6 fixes safe-first candidats reportés volontairement**
+  (A4, A7, R1, R2, R5, R6) car soit déjà couverts par la
+  dette existante (`L8-arch-authsession` / `M7-e2e-storagekey`),
+  soit cosmétiques sans gain net, soit qui nécessiteraient
+  d'élargir le scope au-delà du test étape 28 (risque B).
+- **23 non-findings explicites** (A6, A8-A10 + R7-R12 +
+  S1-S8 + H1-H5) confirment que la PR étape 28 est
+  fonctionnellement saine et conforme aux invariants
+  d'architecture / robustesse / sécurité / cohérence
+  handoff.
+- **Toutes les dettes high (H3-sec) + medium-high
+  (M2-sec-policy, M5-rob, M1-RGPD, L1-a11y, M6-rob,
+  M7-e2e-storagekey)** restent ouvertes, à traiter dans des
+  étapes dédiées.
+
 ---
 
 ## Prompt pour la session N+23 (étape 29)
