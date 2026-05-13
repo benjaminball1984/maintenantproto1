@@ -1,0 +1,32 @@
+# Netlify config — équivalent fonctionnel de l'ancien vercel.json.
+# Référence : https://docs.netlify.com/configure-builds/file-based-configuration/
+
+[build]
+  base = "web"
+  command = "npm ci && npm run build"
+  publish = "dist"
+
+# SPA fallback : toutes les routes inconnues servent index.html.
+# React Router prend ensuite le relais côté client pour résoudre la route.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Security headers — appliqués à toutes les réponses (cf. CLAUDE.md § Sécurité).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://*.ingest.sentry.io; frame-src 'self' https://js.stripe.com https://hooks.stripe.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests"
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=(), payment=(self \"https://js.stripe.com\")"
+    X-DNS-Prefetch-Control = "off"
+
+# Cache long pour les assets versionnés Vite (hash dans le filename → cache-busting auto).
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
