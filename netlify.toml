@@ -3,7 +3,11 @@
 
 [build]
   base = "web"
-  command = "npm ci && npm run build"
+  # `--legacy-peer-deps` aligne Netlify sur la CI GitHub Actions
+  # (cf. .github/workflows/ci.yml). Nécessaire tant que
+  # eslint-plugin-jsx-a11y@6.10.2 ne déclare pas ESLint 10 comme peer
+  # supporté — son peer range s'arrête à ^9, donc `npm ci` strict refuse.
+  command = "npm ci --legacy-peer-deps && npm run build"
   publish = "dist"
 
 # SPA fallback : toutes les routes inconnues servent index.html.
