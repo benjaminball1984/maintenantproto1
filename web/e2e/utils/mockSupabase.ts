@@ -1,6 +1,24 @@
 import type { Page, Route } from '@playwright/test';
 
 /**
+ * Clé `localStorage` utilisée par supabase-js v2 pour persister la session
+ * authentifiée. Sa formule canonique est
+ * `sb-${hostname.split('.')[0]}-auth-token`, dérivée de `VITE_SUPABASE_URL`.
+ * En CI/E2E (`.github/workflows/ci.yml:22`) cette URL est
+ * `http://127.0.0.1:54321`, ce qui donne le hostname `127.0.0.1`, dont
+ * `hostname.split('.')[0]` = `'127'`. D'où la constante exportée
+ * ci-dessous, valide tant que l'URL Supabase CI reste sur `127.0.0.1`.
+ *
+ * Si un jour l'env CI passe à `http://supabase-stub:54321` ou à un autre
+ * hostname, mettre à jour cette constante en miroir — sinon
+ * `installAuthenticatedSession` poserait la session sous une clé que
+ * supabase-js ignore au boot, et `useAuth().status` resterait
+ * `'anonymous'` (les specs E2E timeout sur l'assertion d'état
+ * authentifié).
+ */
+export const SUPABASE_AUTH_STORAGE_KEY = 'sb-127-auth-token';
+
+/**
  * Options du seed de session authentifiée (cf. `installAuthenticatedSession`).
  * Tous les champs sont optionnels — un default raisonnable est appliqué pour
  * chacun afin de garder les call-sites minimaux côté specs.
@@ -27,12 +45,9 @@ export interface AuthenticatedSessionOptions {
  * `L8-arch-authsession` notée à l'étape 28 (refacto isolé aux fichiers
  * `e2e/`, zéro impact runtime).
  *
- * **Détail dérivation storageKey** : supabase-js v2 calcule
- * `storageKey = sb-${hostname.split('.')[0]}-auth-token` depuis
- * `VITE_SUPABASE_URL`. En CI/E2E (`.github/workflows/ci.yml:22`) c'est
- * `http://127.0.0.1:54321`, donc la clé est `sb-127-auth-token`. Si un
- * jour l'env CI bouge (ex. `http://supabase-stub:54321`), il faudra
- * mettre à jour cette constante en miroir.
+ * **Détail dérivation storageKey** : la clé est exportée via la constante
+ * `SUPABASE_AUTH_STORAGE_KEY` ci-dessus pour faciliter le grepping et
+ * documenter la dépendance à l'env CI.
  *
  * **Marge expires_at** : 24h dans le futur, large vs la durée d'un run
  * E2E (<30 s). Aucun signal d'expiration ne devrait se déclencher avant
@@ -60,9 +75,12 @@ export async function installAuthenticatedSession(
       app_metadata: { provider: 'email' },
     },
   };
-  await page.addInitScript((session) => {
-    window.localStorage.setItem('sb-127-auth-token', JSON.stringify(session));
-  }, stubSession);
+  await page.addInitScript(
+    ({ storageKey, session }) => {
+      window.localStorage.setItem(storageKey, JSON.stringify(session));
+    },
+    { storageKey: SUPABASE_AUTH_STORAGE_KEY, session: stubSession },
+  );
 }
 
 /**
