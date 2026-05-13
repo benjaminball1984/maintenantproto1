@@ -145,7 +145,12 @@ describe('ArticleDetailPage', () => {
       fireEvent.submit(screen.getByRole('form', { name: /Poster un commentaire/i }));
     });
     await waitFor(() => expect(mediaMocks.createComment).toHaveBeenCalled());
-    expect(screen.getByText('Bravo !')).toBeInTheDocument();
+    // L'ajout du commentaire au DOM est une seconde mise à jour d'état
+    // (setComments après le createComment) ; passe en synchrone localement
+    // mais flake en CI sous charge parallèle. waitFor évite la race.
+    await waitFor(() => {
+      expect(screen.getByText('Bravo !')).toBeInTheDocument();
+    });
   });
 
   it('redirige si article introuvable', async () => {
