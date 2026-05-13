@@ -37,6 +37,7 @@
 | 26. Post-go-live — conditions externes inchangées : +1 E2E mock (état signataire authentifié signé) — tous les autres items différés |   ✅   |
 | 27. Post-go-live — conditions externes inchangées : +1 E2E mock (état signataire authentifié non signé, symétrique étape 26) — tous les autres items différés |   ✅   |
 | 28. Post-go-live — conditions externes inchangées : +1 E2E mock (flow de signature actif — clic → POST intercepté → bascule visible) — tous les autres items différés |   ✅   |
+| 29. Post-go-live — conditions externes inchangées : +1 E2E mock (flow unsign reverse-flow — clic → DELETE intercepté → bascule retour) — tous les autres items différés |   ✅   |
 
 ---
 
@@ -8452,6 +8453,583 @@ justifie une dette dédiée nouvelle.
   (M2-sec-policy, M5-rob, M1-RGPD, L1-a11y, M6-rob,
   M7-e2e-storagekey)** restent ouvertes, à traiter dans des
   étapes dédiées.
+
+---
+
+## Étape 29 — Post-go-live / Conditions externes inchangées (+1 E2E mock flow unsign reverse-flow) ✅
+
+**Branche** : `claude/apply-session-29-prompt-GvigG`
+
+Dixième étape post-go-live. Conformément à la consigne de fin de
+prompt étape 28 (« Si toujours aucune condition externe résolue →
+6e itération du pattern "+1 test mock E2E ciblé", par exemple flow
+unsign reverse-flow symétrique étape 28 ») et après confirmation
+utilisateur que les conditions externes restent inchangées (« je
+n'en ai aucune idée » au moment de l'ouverture de session — donc
+aucune validation externe ne peut être considérée comme acquise),
+l'étape se concentre sur le livrable suggéré explicitement par le
+prompt étape 29 §2 (premier exemple) : flow unsign reverse-flow
+côté UI (clic réel sur « Signée — retirer ma signature » → DELETE
+`signatures` intercepté → bascule visible vers « Signer cette
+pétition »).
+
+### Audit Lighthouse réel — re-différé étape 30
+
+Pré-requis non rempli : pas de Vercel preview HTTPS / staging
+public en ligne. La consigne explicite du prompt étape 29 §1
+(« Si pas de staging HTTPS : différer étape 30 ») s'applique
+mécaniquement. Bundle inchangé côté `vite build` : entry
+47.34 kB / gzip 13.32 kB, TransparencePage 7.69 kB / gzip
+3.11 kB.
+
+### E2E « happy path » réel — re-différé, alternative livrée ✅
+
+Pas de projet Supabase de test seedé. Le prompt étape 29 §2 liste
+explicitement le flow unsign reverse-flow comme premier exemple
+de fallback. Argument retenu : après les états statiques livrés
+aux étapes 25/26/27 (anonyme / authentifié signé / authentifié
+non signé) et la transition `signed: false → true` livrée à
+l'étape 28, la **transition réciproque** `signed: true → false`
+est le complément naturel pour boucler entièrement la matrice du
+`handleSign` de `PetitionDetailPage.tsx:214-237` côté E2E. Le
+test exécute le clic réel sur le bouton signé, intercepte le
+DELETE `signatures` (PostgREST 204 No Content sans `.select()`),
+puis vérifie que `usePetition.refresh()` rafraîchit l'état UI
+vers la branche `signed: false`.
+
+**+1 test E2E** ajouté à `web/e2e/petition-signature.spec.ts` :
+
+`retire la signature: clic → DELETE intercepté → bascule retour vers « Signer cette pétition »`
+(étape 29) — couvre :
+
+- L'état initial `authStatus === 'authenticated' && signed === true`
+  (bouton « Signée — retirer ma signature », `aria-pressed="true"`).
+- Le clic réel sur le bouton (`signedButton.click()`).
+- L'interception du DELETE `signatures` (méthode HTTP filtrée via
+  `route.request().method() === 'DELETE'`, statut 204 No Content
+  pour matcher le comportement PostgREST par défaut sans `.select()`).
+- La bascule visible vers la branche `signed === false` (bouton
+  « Signer cette pétition », `aria-pressed="false"`) via
+  `usePetition.refresh()` qui re-issue un GET sur `/signatures`
+  (renvoyant cette fois `[]`).
+- La non-régression côté rendu conditionnel : le bouton signé
+  initial « Signée — retirer ma signature » n'est plus rendu une
+  fois `signed = false` (`getByRole('button').toHaveCount(0)`).
+
+**Implémentation** :
+
+1. **Seed session authentifiée via localStorage** — identique
+   étapes 26/27/28 (`addInitScript` injecte une session stubée
+   AVANT le `goto`, sous la clé `sb-127-auth-token` ; cf.
+   commentaire 124-148 du test étape 26). Seul le `user.id`
+   change (`'stub-active-unsigner-id'` vs les 3 précédents
+   `stub-signed-user-id` / `stub-unsigned-user-id` /
+   `stub-active-signer-id`) — utile pour distinguer le test en
+   debug et confirmer l'isolation cross-test Playwright.
+2. **Mock stateful pour `/rest/v1/signatures`** — variable
+   locale `hasSignedRow: boolean` capturée par closure,
+   **initialisée à `true`** (symétrique étape 28 où elle
+   démarrait à `false`). Sur DELETE (unsignPetition
+   `.delete().eq().eq()`), le mock répond 204 No Content (body
+   vide) ET flippe `hasSignedRow = false`. Sur GET subséquent
+   (hasUserSigned via refresh), le body renvoyé dépend du flag :
+   `[{...}]` tant que signé, `[]` après. L'ordre est garanti par
+   `handleSign` côté `PetitionDetailPage.tsx:221-227` :
+   `await unsignPetition(...)` précède `await refresh()`.
+3. **Assertions** :
+   - État initial : `getByRole('button', { name: /Signée — retirer ma signature/i })`
+     visible avec `aria-pressed="true"`.
+   - Action : `signedButton.click()` déclenche `handleSign()` →
+     branche `signed === true` → `unsignPetition()` DELETE 204 →
+     `refresh()` → re-GET signatures → `signed = false` côté
+     usePetition.
+   - État final : `getByRole('button', { name: /Signer cette pétition/i })`
+     visible avec `aria-pressed="false"`. Le bouton signé initial
+     `getByRole('button', { name: /Signée — retirer ma signature/i })`
+     a `toHaveCount(0)`.
+
+**Propriétés** :
+
+- Aucune modification du runtime `src/` — uniquement le fichier
+  spec E2E. Zéro risque de régression côté production.
+- Réutilise le même `petitionFixture` (signature_count 42,
+  target_count 1000) — pas de nouveau mock à maintenir.
+- Réutilise le même pattern session + storage key + 24h
+  expiration que les étapes 26/27/28 (cohérence stylistique).
+- La session stubée est isolée par test (Playwright crée un
+  BrowserContext + Page neufs par test → localStorage propre,
+  routes propres). Pas de fuite vers les 7 autres tests
+  petition-signature.
+- Pas de flake attendu :
+  - `addInitScript` s'exécute AVANT tout script de page → le
+    boot React voit la session immédiatement.
+  - Le mock route filtre par `route.request().method()` — pas
+    de match accidentel DELETE/GET.
+  - Le flag `hasSignedRow: boolean` est une variable locale à la
+    closure du test (pas de fuite cross-test).
+  - `actionTimeout: 10_000` + `expect timeout: 5_000` (cf.
+    `playwright.config.ts`) laissent une marge ample vs la
+    latence d'un mock local (< 5 ms par request).
+- Pas d'emojis, pas de `any`, pas de nouvelle dépendance npm.
+- Le statut 204 No Content respecte le contrat PostgREST par
+  défaut sur `DELETE` sans `.select()` (cf.
+  `web/src/lib/petitions.ts:251-258` qui ne lit que `error`,
+  jamais `data`).
+
+**Suite Playwright** : 34 → 35 tests E2E (CI). Playwright local
+ne peut pas être exécuté dans le sandbox (CDN
+`cdn.playwright.dev` non whitelisté pour le binaire
+`chromium_headless_shell-1223`), mais les 4 checks locaux
+(typecheck / lint / vitest / build) sont verts ET la suite CI
+GitHub Actions reste la source de vérité pour Playwright.
+
+### Monitoring Sentry runtime — re-différé étape 30
+
+DSN absent en env preview (Sentry SaaS non provisionné). Aucun
+event runtime à observer. Re-différé.
+
+### Monitoring Supabase — re-différé étape 30
+
+Pas de trafic réel sur `maintenant-staging`. Re-différé.
+
+### M2-sec-policy — durcissement `signatures_select_public` — re-différé étape 30
+
+Pas de validation produit / DPO reçue à cette étape. Le prompt
+étape 29 explicite la consigne : « Si validation non reçue →
+différer étape 30 et documenter la raison ». Re-différé. Raison
+inchangée vs étapes 26/27/28 : changement RLS visible côté client
+(légitimité Art. 9 RGPD — opinions politiques) qui doit être
+validé par le DPO et par le produit (UX : liste publique des
+signataires conservée ou retirée si la policy exclut `user_id`
+des anonymes ?). La RPC `signatures_count_for_petition` livrée à
+l'étape 24 reste isolée — son helper `getPetitionSignatureCount`
+n'est appelé par aucun call-site UI.
+
+### Cumul T99CP émises publique — re-différé étape 30
+
+Pas de validation produit reçue à cette étape. Re-différé.
+
+### H4-deploy-deno — re-différé étape 30
+
+Pré-requis non rempli : pas de pipeline CI Supabase réel.
+Re-différé.
+
+### M1-RGPD — purge auto `stripe_events.payload` — re-différé étape 30
+
+Pas de décision RGPD reçue. Table critique (idempotence
+webhook), demande de confirmation requise. Re-différé.
+
+### Retours utilisateur·rices — sans objet (pas de trafic)
+
+Aucun compte créé réel, aucun signalement modération, aucun bug
+remonté.
+
+### Job de réconciliation Stripe — re-différé étape 30
+
+Critère prompt §10 inchangé : pas d'erreur Sentry observable
+(monitoring runtime absent), idempotence DB suffit.
+
+### Dette technique différée — étape 30 ou plus tard
+
+Récap consolidé inchangé vs fin janitor étape 28 (16 items —
+H3-sec, M2-sec-policy, M5-rob, M1-RGPD, M6-rob, M7-e2e-storagekey,
+L1-a11y, L3-arch, L4-sec, L5-arch, L6-arch-progress,
+L7-arch-loginhref, L1-rob, H4-deploy-deno, L-sec-webhook-body,
+L8-arch-authsession) — cf. tableau étape 26.
+
+### Bundle après ajout
+
+| Avant étape 29 (fin janitor 28) | Après étape 29 |
+| --- | --- |
+| `index.js` 47.34 kB / gzip 13.32 kB | `index.js` 47.34 kB / gzip 13.32 kB |
+| `TransparencePage.js` 7.69 kB / gzip 3.11 kB | `TransparencePage.js` 7.69 kB / gzip 3.11 kB |
+
+Aucun nouveau chunk : le test ajouté est en zone `e2e/`, exclue
+du bundle production. Aucune nouvelle dépendance npm.
+
+### Tests
+
+- **872 tests vitest verts** (128 fichiers, durée ~60 s) —
+  **inchangé** vs étape 28. Le nouveau test est en E2E
+  Playwright, pas en vitest.
+- **35 tests E2E Playwright** attendus en CI (3 specs petition
+  → 8 tests + 14 specs public-pages + 5 transparence + 4 auth
+  + 3 critical-flows + 1 nouveau étape 29) — **+1** vs étape
+  28 (34 → 35). Validé par la CI GitHub Actions (job
+  `Playwright E2E + axe-core a11y`).
+- 4 checks locaux verts (typecheck, lint, vitest, build).
+
+### Hygiène
+
+- Pas de modification du prototype (`app/Maintenant.html`,
+  `Theme.jsx`).
+- Pas de modification du runtime `src/` ni de `db/schema.sql`.
+- Pas d'emojis dans les fichiers TS / commits / PR.
+- Tokens `T.*` (CSS vars `--mn-*`) **intacts**.
+- Pas de clé service_role dans le bundle front.
+- Pas de nouvelle dépendance npm.
+- Pas de migration DB.
+- Pas de breaking change visible utilisateur.
+
+### Checks finaux
+
+```
+> npm run typecheck && npm run lint && npx vitest run && npm run build
+
+✓ typecheck   (tsc -b + e2e/tsconfig.json)
+✓ lint        (eslint .)
+✓ vitest      (128 files, 872 tests passed, ~60s)
+✓ build       (entry 47.34 kB / gzip 13.32 kB ; TransparencePage 7.69 kB / gzip 3.11 kB lazy ; sentry 436.2 kB / gzip 143.08 kB lazy)
+```
+
+Playwright validé par la CI (sandbox local : CDN
+`cdn.playwright.dev` non whitelisté pour le binaire chromium).
+
+### Décisions
+
+- **+1 E2E mock plutôt qu'un attendisme passif** : conformément
+  à la consigne explicite de fin de prompt étape 28 (« 6e
+  itération du pattern +1 E2E mock ciblé, par exemple flow
+  unsign reverse-flow symétrique étape 28 »). Coût : zéro infra,
+  zéro risque, +2-3 minutes côté CI Playwright (un peu plus long
+  qu'un test statique car DELETE + refresh + re-GET). Bénéfice :
+  la **transition** d'état `signed: true → false` côté UI passe
+  de « couverture unit-test uniquement » à « couverture E2E
+  bout-en-bout ». La matrice du `handleSign` (sign branch +
+  unsign branch) est désormais entièrement couverte en E2E.
+- **Flow unsign plutôt qu'un autre état non couvert** : le
+  prompt étape 29 §2 propose deux pistes (flow unsign OU autre
+  état mobilization/poll/transparence/profil). Choix de la
+  première car (a) elle clôt naturellement la suite
+  `petition-signature.spec.ts` (matrice complète sign + unsign),
+  (b) elle exerce un chemin de code unique non testé en E2E
+  (handleSign → unsignPetition → refresh → re-fetch), (c) elle
+  s'inscrit dans le même contexte mental que les 3 tests
+  précédents (debugging facile pour un dev qui ouvre le fichier),
+  (d) elle confirme que la dette `L8-arch-authsession` mérite
+  d'être traitée dans une étape dédiée (4e call-site qui
+  duplique le seed de session).
+- **Status 204 No Content (DELETE)** : le helper
+  `unsignPetition` ne lit que `error`, jamais `data` (cf.
+  `web/src/lib/petitions.ts:251-258` — `.delete().eq().eq()`
+  sans `.select()`). Le comportement PostgREST par défaut sans
+  `.select()` est `Prefer: return=minimal` → 204. Body vide.
+  Choix conservateur qui matche la prod réelle ; un 200 + body
+  vide marcherait aussi (le helper ignore `data`) mais le 204
+  est plus fidèle.
+- **Tous les autres items différés en bloc** (M2-sec-policy,
+  T99CP cumul public, H4-deploy-deno, M1-RGPD, monitoring,
+  réconciliation Stripe) : conditions externes inchangées vs
+  étape 28. L'utilisateur a confirmé en ouverture de session
+  qu'il ne pouvait pas répondre aux questions d'ouverture
+  (migrations / provisionnement / décisions
+  produit-DPO-RGPD) — re-différer en bloc est la décision la
+  moins coûteuse et la plus honnête.
+
+### Prochaines étapes (étape 30)
+
+- Lighthouse mesuré dès qu'un Vercel preview HTTPS sera en ligne
+  (priorité 1 si oui).
+- Monitoring Sentry canary + 7 j observations dès DSN câblé.
+- Décision produit cumul T99CP émises → RPC
+  `transparency_t99cp_total()` si OK.
+- Décision produit / DPO sur le durcissement
+  `signatures_select_public` (M2-sec-policy).
+- Décision RGPD sur la purge `stripe_events.payload` (M1-RGPD).
+- Si Sentry remonte des erreurs `stripe-webhook` récurrentes →
+  prioriser le job de réconciliation Edge Function.
+- Si toujours aucune condition externe résolue → 7e itération
+  du pattern « +1 test mock E2E ciblé » (la matrice
+  `petition-signature.spec.ts` étant désormais bouclée
+  sign+unsign : viser un autre état non couvert — mobilization
+  detail, poll detail, transparence variants, page profil
+  authentifiée). À privilégier : poll-detail-page (déjà chunk
+  de 7.96 kB en lazy load, hooks symétriques `usePetition`,
+  flow vote/unvote similaire au sign/unsign — duplication
+  utile pour confirmer/dégonfler la dette
+  `L8-arch-authsession`).
+
+### Audit vibe janitor étape 29
+
+À compléter — exécution déléguée à la phase 2 du présent prompt
+(post-merge PR principale).
+
+---
+
+## Prompt pour la session N+24 (étape 30)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD, Lighthouse
+>    ≥ 95, axe-core ≥ 95, `prefers-reduced-motion`). Note la section
+>    « Politique de PR » qui t'autorise à enchaîner ouverture + merge
+>    des PR sans confirmation **jusqu'à la session 50 incluse**. Note
+>    aussi la section « Recopie systématique du prompt de la session
+>    suivante » : **à la clôture de cette étape, recopier le prompt
+>    étape 31 à la fois dans `HANDOFF-PROGRESS.md` ET dans la réponse de
+>    chat finale**. Et enfin la section « Audit récurrent vibe janitor
+>    de fin d'étape » : **après le merge de la PR principale de
+>    l'étape 30, tu dois enchaîner une PR janitor séparée
+>    `chore(janitor): post-step 30 — …` et inclure cette même
+>    instruction janitor dans le prompt étape 31**.
+> 2. `HANDOFF.md` §11 (Points d'attention) + §12 (Suivi) + §13 (Sécurité).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 29 ✅ — étape 30 à faire).
+> 4. `docs/PROD-RUNBOOK.md` — runbook de provisionnement (§1.2 mis à
+>    jour étape 24 avec sanity checks 3+4 pour
+>    `signatures_count_for_petition`).
+> 5. `docs/MODERATION.md` — procédure modération.
+> 6. `docs/USER-GUIDE.md` — FAQ utilisateur·rice.
+>
+> **État actuel à la fin de l'étape 29 + janitor post-step 29** :
+>
+> - **Étape 29 livrable unique** : +1 test E2E mock sur
+>   `web/e2e/petition-signature.spec.ts` (`retire la signature: clic →
+>   DELETE intercepté → bascule retour vers « Signer cette pétition »`).
+>   Couvre la transition `signed: true → false` côté UI via le clic
+>   réel + interception DELETE (PostgREST 204 No Content) + refresh.
+>   Mock stateful par closure (variable locale `hasSignedRow: boolean`
+>   flippée sur DELETE, lue sur GET). Suite Playwright : 34 → 35 tests.
+>   Aucune modification de `src/`, `db/schema.sql`, ni de dépendances
+>   npm. La matrice du `handleSign` côté `PetitionDetailPage.tsx:214-237`
+>   est désormais entièrement couverte en E2E (sign branch + unsign
+>   branch).
+> - **Janitor post-step 29** : (à compléter par la session — cf.
+>   `HANDOFF-PROGRESS.md` § Audit vibe janitor étape 29).
+> - **Tous les autres items différés en bloc** (Lighthouse réel,
+>   E2E happy path réel, monitoring Sentry / Supabase,
+>   M2-sec-policy, T99CP cumul public, H4-deploy-deno, M1-RGPD,
+>   retours utilisateur·rices, job réconciliation Stripe) :
+>   conditions externes inchangées vs étape 28.
+> - **872 tests vitest verts** (128 fichiers, durée ~60 s) —
+>   inchangé vs étape 28.
+> - **35 tests E2E Playwright** verts en CI — +1 vs étape 28.
+> - Build entry inchangé (47.34 kB / gzip 13.32 kB),
+>   TransparencePage inchangé (7.69 kB / gzip 3.11 kB).
+> - Aucune nouvelle dépendance npm.
+>
+> **Provisionnement externe** — état au 2026-05-13 (inchangé depuis
+> étape 19) :
+>
+> - ✅ Supabase staging provisionné (projet `maintenant-staging`,
+>   eu-west-3, Free). Schéma `db/schema.sql` étape 19 appliqué — les
+>   migrations étapes 20 + 22 + 23 + 24 (RPC
+>   `users_signups_monthly` + `signatures_count_for_petition`)
+>   restent à appliquer.
+> - 🔲 Vercel / Stripe live / Edge Functions / Sentry SaaS / PITR /
+>   projet `maintenant-test` (E2E happy path) restent à provisionner
+>   par l'équipe humaine (cf. `docs/PROD-RUNBOOK.md` §2 à §4).
+>
+> **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
+>
+> 1. Vérifier qu'on est bien dans un workspace contenant `web/`. Si
+>    non, `git fetch origin main && git merge --ff-only origin/main`.
+> 2. `cd web && npm ci` (fallback : `npm install --legacy-peer-deps`).
+> 3. `npm run typecheck && npm run lint && npx vitest run && npm run build`
+>    pour vérifier le compteur de tests au point de départ (≥ 872
+>    verts vitest à incrémenter à chaque étape ; 35 verts E2E
+>    Playwright en CI).
+> 4. **Demander à l'équipe humaine** :
+>    - Les migrations étape 20 + étape 22 + étape 23 + étape 24
+>      (`db/schema.sql` RPC `signatures_count_for_petition`)
+>      ont-elles été appliquées à Supabase staging ?
+>    - Le provisionnement Vercel / Stripe live / Sentry SaaS décrit
+>      dans `docs/PROD-RUNBOOK.md` est-il fait ?
+>    - Y a-t-il un projet Supabase de test seedé pour le test E2E
+>      « signature anonyme » ?
+>    - La décision produit sur le cumul T99CP émises publique a-t-elle
+>      tranché ? Si oui en faveur de l'affichage public → l'étape 30
+>      ajoutera la RPC `transparency_t99cp_total()` (migration DB
+>      additive, scalaire SECURITY DEFINER).
+>    - La décision produit / DPO sur le durcissement
+>      `signatures_select_public` a-t-elle tranché ? Si oui en faveur
+>      du durcissement → l'étape 30 migrera les call-sites
+>      `petitions.signature_count` UI les plus chauds vers
+>      `getPetitionSignatureCount`, puis remplacera la policy pour
+>      ne plus projeter `user_id` aux anonymes (**CHANGEMENT RLS visible
+>      côté client → demande confirmation à chaque PR de cette
+>      transition**).
+>    - La décision RGPD sur la purge `stripe_events.payload` (M1-RGPD)
+>      a-t-elle tranché ? Si oui → migration DB additive (trigger TTL
+>      ou job Edge Function périodique) — toucher à `stripe_events` =
+>      **demande confirmation à chaque PR**.
+>
+> **PRÉREQUIS OPÉRATIONNEL BLOQUANT** — gate avant tout redéploiement
+> front :
+>
+> Identique étapes 26-29 : si la migration étape 24 n'est pas
+> appliquée en prod, le helper `getPetitionSignatureCount` renvoie
+> une erreur `function not found` à la première invocation. Tant
+> qu'aucun call-site UI ne l'appelle (fin étape 29), aucun impact
+> utilisateur ; mais dès qu'un call-site sera ajouté (étape 30 si la
+> décision produit / DPO valide le durcissement), la migration
+> devient bloquante.
+>
+> Procédure (cf. `PROD-RUNBOOK §1.2`) :
+>
+> 1. `pg_dump` staging vers bucket privé.
+> 2. `psql < db/schema.sql` (idempotent `CREATE OR REPLACE`).
+> 3. Test SQL admin :
+>    `select public.signatures_count_for_petition('<UUID>'::uuid);`
+> 4. Sanity check anon via curl (cf. `PROD-RUNBOOK §1.2` sanity check 4).
+> 5. Redéployer Vercel / front une fois la RPC en place.
+>
+> **ÉTAPE 30 à exécuter** — Post-go-live (audit réel + monitoring +
+> dette M2-sec-policy / T99CP / H4-deploy-deno / M1-RGPD si validées,
+> sinon 7e itération du pattern « +1 test mock E2E ») :
+>
+> 1. **Audit Lighthouse réel** (priorité 1 si Vercel preview en
+>    ligne) : `npx unlighthouse --site <url>` ou DevTools manuel sur
+>    6 pages clés. Documenter les scores. Corriger les blocages
+>    < 95. Si pas de staging HTTPS : différer étape 31.
+> 2. **E2E « happy path » réel** (priorité 2 si projet Supabase de
+>    test prêt) : `web/e2e/happy-path.spec.ts` qui signe
+>    anonymement une pétition + vérifie le compteur. Sinon ajouter
+>    encore un test mock non-vide (réutiliser
+>    `installSupabaseStubs(page, { rest: ..., rpc: ... })`) — par
+>    exemple : **flow vote/unvote sur poll-detail-page**
+>    (symétrique sign/unsign de l'étape 28/29, exerce
+>    `usePoll` + `votePoll/unvotePoll`, confirme/dégonfle la
+>    dette `L8-arch-authsession` via un 5e call-site qui dupliquerait
+>    encore le seed), OU un autre état non couvert (mobilization
+>    detail, transparence variants, page profil authentifiée). Si
+>    la matrice E2E est bouclée et qu'on veut éviter la
+>    sur-couverture : extraire le helper
+>    `installAuthenticatedSession(page, { userId, email })` dans
+>    `e2e/utils/mockSupabase.ts` (closure de la dette
+>    `L8-arch-authsession`, 4 call-sites identifiés + 1 si poll-vote
+>    en parallèle) — refacto isolé aux fichiers `e2e/`, zéro
+>    impact runtime.
+> 3. **Monitoring Sentry runtime** (si DSN câblé) : test canary +
+>    documenter taux d'erreur 7 j + top 5 issues. Si erreurs
+>    récurrentes `stripe-webhook` → prioriser job de
+>    réconciliation.
+> 4. **Monitoring Supabase** : quotas API / DB CPU / DB memory sur
+>    7 j, alertes Slack actives ?, top requêtes lentes.
+> 5. **M2-sec-policy** — durcissement
+>    `signatures_select_public` (SI validation produit / DPO
+>    reçue) : remplacer la policy actuelle (`for select using (true)`)
+>    par une policy qui n'expose `user_id` qu'à
+>    `auth.uid() = user_id OR public.is_admin(auth.uid())`. Migrer
+>    les call-sites UI qui dépendent encore de la projection
+>    `signatures.user_id` (chercher `from('signatures').select(`,
+>    normalement aucun en public). Migrer les call-sites
+>    « combien de signatures » vers `getPetitionSignatureCount`.
+>    **CHANGEMENT RLS visible côté client → demander confirmation
+>    à chaque PR de cette transition**. Si validation non reçue →
+>    différer étape 31 et documenter la raison.
+> 6. **Cumul T99CP émises publique** (différé étapes 21-29) : si
+>    validation produit reçue → RPC
+>    `transparency_t99cp_total() returns bigint security definer`
+>    + carte dédiée sur TransparencePage. Migration DB additive
+>    listée explicitement → autorisée. Sinon laisser en l'état.
+> 7. **H4-deploy-deno** (dette low low) : si pipeline CI Supabase
+>    réel disponible, ajouter `supabase functions deploy --dry-run`
+>    sur PR. Sinon différer.
+> 8. **M1-RGPD** (purge auto `stripe_events.payload` TTL 90j) : si
+>    décision RGPD reçue → migration DB additive
+>    (`stripe_events_payload_ttl_trigger` ou job Edge Function
+>    périodique). **Toucher à `stripe_events` = demande
+>    confirmation** (table critique du webhook). Sinon différer.
+> 9. **Retours utilisateur·rices** (si trafic réel) : compiler
+>    fixes prioritaires étape 31.
+> 10. **Job de réconciliation Stripe** (dette différée étape 20) :
+>     décider si on l'implémente. Critère : erreurs récurrentes
+>     Sentry sur `stripe-webhook`.
+> 11. **Tests** : suite vitest ≥ 872 + E2E Playwright ≥ 35 verts
+>     en CI.
+> 12. **HANDOFF-PROGRESS.md** : étape 30 ✅ détaillée.
+> 13. **Recopier le prompt étape 31** à la fois dans
+>     `HANDOFF-PROGRESS.md` ET dans la **réponse de chat finale**
+>     (règle récursive). Inclure dans le prompt étape 31 la même
+>     instruction de recopie pour la session N+25, ET l'instruction
+>     d'audit vibe janitor pour N+25.
+>
+> **PHASE 1 — Clôture de l'étape principale (workflow auto-merge)** :
+>
+> Conformément à `CLAUDE.md` § « Politique de PR », autorisation
+> permanente d'enchaîner les étapes ci-dessous sans confirmation :
+>
+> 1. Vérifier les 4 checks locaux verts : `npm run typecheck &&
+>    npm run lint && npx vitest run && npm run build`. Si échec →
+>    corriger, ne pas commit.
+> 2. **Commit** : `chore(prod): step 30 — post-go-live (lighthouse +
+>    e2e réel + monitoring + dette M2-sec-policy/T99CP/H4-deploy-deno/M1-RGPD
+>    si validées)`. Pas d'emojis.
+> 3. **Push** sur la branche imposée par l'harness (retry exponentiel
+>    2/4/8/16 s).
+> 4. **Ouvrir la PR** vers `main` via
+>    `mcp__github__create_pull_request` (titre = commit, body
+>    Summary + Décisions + Test plan).
+> 5. **Attendre les checks GitHub Actions** (les DEUX checks
+>    `Typecheck + Lint + Vitest + Build` ET
+>    `Playwright E2E + axe-core a11y` doivent être verts). Si rouges
+>    → autofix + re-push.
+> 6. **Merger la PR** via `mcp__github__merge_pull_request`.
+>
+> **PHASE 2 — Audit vibe janitor (après le merge de la PR principale)** :
+>
+> Conformément à `CLAUDE.md` § « Audit récurrent vibe janitor de fin
+> d'étape » :
+>
+> 1. Sync : `git checkout main && git pull --ff-only origin main`,
+>    puis `git checkout -b claude/janitor-post-step30`.
+> 2. **Audit en parallèle** via 2-3 subagents `general-purpose` :
+>    architecture / robustesse / sécurité. Chaque agent produit un
+>    rapport ; aucune modification.
+> 3. Synthétiser findings par sévérité + risque régression.
+> 4. **Appliquer UNIQUEMENT les fixes safe-first** (« primum non
+>    nocere ») : aucun fix qui casse un test, aucun nouveau
+>    problème, design system `T.*` intouchable, pas de migration DB,
+>    pas de breaking change, fixes risque medium/high reportés en
+>    dette.
+> 5. Vérifier les 4 checks locaux verts avant push.
+> 6. **PR janitor séparée** : titre `chore(janitor): post-step 30 —
+>    <résumé court>`. Body : Summary + Findings (sévérité + risque)
+>    + Fixes appliqués + Fixes déférés + Test plan.
+> 7. Merger la PR janitor (même workflow auto-merge).
+> 8. Documenter dans `HANDOFF-PROGRESS.md` § Audit vibe janitor
+>    étape 30 : findings totaux, fixes appliqués (chacun avec
+>    risque évalué), dette ajoutée, compteur de tests final.
+>
+> **Phase 3 — Recopie du prompt étape 31 (toujours obligatoire)** :
+>
+> Recopier le prompt étape 31 dans la **réponse de chat finale**, en
+> plus de l'avoir écrit dans `HANDOFF-PROGRESS.md`. Le prompt étape
+> 31 doit lui-même inclure les Phases 1, 2, 3 récursives pour la
+> session N+25.
+>
+> **Conditions d'arrêt malgré l'autorisation permanente** :
+>
+> - Migration DB risquée non listée. L'étape 30 LISTE explicitement :
+>   - Durcissement `signatures_select_public` (M2-sec-policy) SI
+>     validation produit / DPO reçue → autorisé MAIS demander
+>     confirmation à chaque PR car CHANGEMENT RLS visible côté
+>     client.
+>   - RPC `transparency_t99cp_total()` SI validation produit
+>     reçue (additif, autorisé).
+>   - Purge `stripe_events.payload` (M1-RGPD) SI décision RGPD
+>     reçue → demander confirmation car table critique.
+>   - Toute autre migration → demander confirmation.
+> - Changement RGPD non listé.
+> - Breaking change visible utilisateur.
+> - Erreur Vercel / Supabase impossible à debugger en < 3 tentatives.
+> - Review humaine ou commentaire GitHub avant le merge.
+> - En phase janitor : un fix touche au design system `T.*`, casse
+>   un test sans rollback possible, ou nécessite un bump majeur.
+>
+> **Contraintes générales** :
+>
+> - Ne pas toucher au prototype.
+> - TS strict + no `any`.
+> - Conserver les checks verts à chaque étape.
+> - Pas d'emojis dans le code TS ni dans les commits / PR.
+> - Tokens `T.*` intouchables sans validation designer.
+> - Sauvegarder la DB AVANT toute migration prod (`pg_dump` →
+>   bucket privé Supabase Storage).
 
 ---
 
