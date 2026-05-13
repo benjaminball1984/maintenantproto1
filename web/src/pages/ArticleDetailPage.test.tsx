@@ -146,11 +146,12 @@ describe('ArticleDetailPage', () => {
     });
     await waitFor(() => expect(mediaMocks.createComment).toHaveBeenCalled());
     // L'ajout du commentaire au DOM est une seconde mise à jour d'état
-    // (setComments après le createComment) ; passe en synchrone localement
-    // mais flake en CI sous charge parallèle. waitFor évite la race.
-    await waitFor(() => {
-      expect(screen.getByText('Bravo !')).toBeInTheDocument();
-    });
+    // (setComments après l'await createComment) que `act` ne couvre pas :
+    // le handler est async, donc tout ce qui suit le `await` se résout
+    // sur des microtasks ultérieurs. En CI sous charge parallèle, le
+    // flush React peut dépasser le timeout waitFor par défaut (1 s).
+    // findByText (timeout 5s par défaut côté @testing-library) couvre.
+    expect(await screen.findByText('Bravo !')).toBeInTheDocument();
   });
 
   it('redirige si article introuvable', async () => {
