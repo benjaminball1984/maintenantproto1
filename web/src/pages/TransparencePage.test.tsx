@@ -6,9 +6,11 @@ import type * as TransparencyModule from '@/lib/transparency';
 
 type TransparencyResult = TransparencyModule.TransparencyResult;
 type MonthlySignupsResult = TransparencyModule.MonthlySignupsResult;
+type T99cpTotalResult = TransparencyModule.T99cpTotalResult;
 
 const fetchTransparencyCountsMock = vi.fn<() => Promise<TransparencyResult>>();
 const fetchMonthlySignupsMock = vi.fn<() => Promise<MonthlySignupsResult>>();
+const fetchT99cpTotalMock = vi.fn<() => Promise<T99cpTotalResult>>();
 
 vi.mock('@/lib/transparency', async () => {
   const actual = await vi.importActual<typeof TransparencyModule>('@/lib/transparency');
@@ -16,6 +18,7 @@ vi.mock('@/lib/transparency', async () => {
     ...actual,
     fetchTransparencyCounts: (...args: unknown[]) => fetchTransparencyCountsMock(...(args as [])),
     fetchMonthlySignups: (...args: unknown[]) => fetchMonthlySignupsMock(...(args as [])),
+    fetchT99cpTotal: (...args: unknown[]) => fetchT99cpTotalMock(...(args as [])),
   };
 });
 
@@ -41,9 +44,14 @@ const ZERO_COUNTS = {
 beforeEach(() => {
   fetchTransparencyCountsMock.mockReset();
   fetchMonthlySignupsMock.mockReset();
+  fetchT99cpTotalMock.mockReset();
   // Par défaut : tous les buckets à zéro. Évite que les tests existants
   // doivent expliciter ce second fetch à chaque fois.
   fetchMonthlySignupsMock.mockResolvedValue({ data: [], error: null });
+  // Par défaut : pas de carte T99CP affichée (RPC en erreur) — la majorité
+  // des tests existants ne valident pas la carte T99CP. Les tests dédiés
+  // surchargent via `mockResolvedValueOnce`.
+  fetchT99cpTotalMock.mockResolvedValue({ data: null, error: null });
 });
 
 describe('TransparencePage', () => {
@@ -209,5 +217,73 @@ describe('TransparencePage', () => {
     await waitFor(() => {
       expect(screen.getByText(/Graphique indisponible/i)).toBeInTheDocument();
     });
+  });
+
+  it('affiche la carte T99CP cumulée quand la RPC réussit', async () => {
+    fetchTransparencyCountsMock.mockResolvedValueOnce({ data: ZERO_COUNTS, error: null });
+    fetchT99cpTotalMock.mockReset();
+    fetchT99cpTotalMock.mockResolvedValueOnce({ data: 3600, error: null });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('t99cp-total-card')).toBeInTheDocument();
+    });
+    expect(screen.getByText('T99CP émis (cumulé)')).toBeInTheDocument();
+    // 3600 reste sous le seuil de regroupement de milliers (1000 utilise un
+    // séparateur en fr-FR), mais on matche le nombre formaté pour rester
+    // robuste aux versions ICU.
+    expect(screen.getByText(/^3\s?600$/)).toBeInTheDocument();
+  });
+
+  it('affiche la carte T99CP à 0 quand la RPC retourne 0 (pré-1er-adhérent)', async () => {
+    fetchTransparencyCountsMock.mockResolvedValueOnce({ data: ZERO_COUNTS, error: null });
+    fetchT99cpTotalMock.mockReset();
+    fetchT99cpTotalMock.mockResolvedValueOnce({ data: 0, error: null });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('t99cp-total-card')).toBeInTheDocument();
+    });
+    expect(screen.getByText('T99CP émis (cumulé)')).toBeInTheDocument();
+  });
+
+  it('masque silencieusement la carte T99CP quand la RPC échoue', async () => {
+    fetchTransparencyCountsMock.mockResolvedValueOnce({ data: ZERO_COUNTS, error: null });
+    fetchT99cpTotalMock.mockReset();
+    fetchT99cpTotalMock.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message: 'function_not_found',
+        details: '',
+        hint: '',
+        code: 'PGRST',
+        name: 'PostgrestError',
+      } as never,
+    });
+    renderPage();
+    // On attend d'abord que les autres compteurs soient rendus, puis on
+    // vérifie l'absence de la carte T99CP. Sinon le test passerait
+    // trivialement avant même que `fetchT99cpTotal` n'ait résolu.
+    await waitFor(() => {
+      expect(screen.getByRole('list', { name: /Compteurs publics/i })).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(fetchT99cpTotalMock).toHaveBeenCalled();
+    });
+    expect(screen.queryByTestId('t99cp-total-card')).not.toBeInTheDocument();
+    expect(screen.queryByText('T99CP émis (cumulé)')).not.toBeInTheDocument();
+  });
+
+  it('annule proprement le setState T99CP si démontage avant fetch', async () => {
+    fetchTransparencyCountsMock.mockResolvedValueOnce({ data: ZERO_COUNTS, error: null });
+    fetchT99cpTotalMock.mockReset();
+    let resolveT99cp: (v: T99cpTotalResult) => void = () => undefined;
+    fetchT99cpTotalMock.mockReturnValueOnce(
+      new Promise((res) => {
+        resolveT99cp = res;
+      }),
+    );
+    const { unmount } = renderPage();
+    unmount();
+    resolveT99cp({ data: 42, error: null });
+    await new Promise((r) => setTimeout(r, 0));
   });
 });

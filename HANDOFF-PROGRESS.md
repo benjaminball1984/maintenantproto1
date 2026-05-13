@@ -38,6 +38,7 @@
 | 27. Post-go-live — conditions externes inchangées : +1 E2E mock (état signataire authentifié non signé, symétrique étape 26) — tous les autres items différés |   ✅   |
 | 28. Post-go-live — conditions externes inchangées : +1 E2E mock (flow de signature actif — clic → POST intercepté → bascule visible) — tous les autres items différés |   ✅   |
 | 29. Post-go-live — conditions externes inchangées : +1 E2E mock (flow unsign reverse-flow — clic → DELETE intercepté → bascule retour) — tous les autres items différés |   ✅   |
+| 30. Post-go-live — T99CP cumul public (décision produit débloquée 2026-05-13) : RPC additive `transparency_t99cp_total()` + carte dédiée sur `/transparence` |   ✅   |
 
 ---
 
@@ -9060,6 +9061,567 @@ ne justifie une dette dédiée nouvelle.
   attendu si poll-vote en parallèle), soit ouvrir une
   nouvelle matrice (poll-detail-page vote/unvote, mobilization
   detail, transparence variants).
+
+---
+
+## Étape 30 — Post-go-live / T99CP cumul public (chantier débloqué) ✅
+
+**Branche** : `claude/implement-step-30-prompt-UIl7M`
+
+Onzième étape post-go-live. **Première étape depuis la session
+interactive du 2026-05-13 qui livre un chantier substantiel** (pas
+une nouvelle itération du pattern « +1 E2E mock ») : la décision
+produit 2 du goulot 4 (« Compteur d'adhésions / T99CP cumul sur la
+page Transparence ») a été tranchée par Ben en faveur de
+l'affichage public dès le 1er adhérent. Le prompt étape 30 §6
+listait explicitement la RPC `transparency_t99cp_total()` comme
+**migration DB additive autorisée**. Cette étape implémente la
+chaîne complète : RPC SECURITY DEFINER + helper TS + carte
+dédiée + tests unit/E2E.
+
+### Audit Lighthouse réel — re-différé étape 31
+
+Pré-requis partiellement rempli : le site est désormais en ligne
+sur `https://maintenant-le-mouvement.netlify.app` (goulot 1
+débloqué session 2026-05-13, PRs #37/#38/#39). L'outil
+`npx unlighthouse --site <url>` nécessite cependant des binaires
+Chromium pour piloter le scan — non whitelistés dans le sandbox
+de cette session (même contrainte que `playwright install`).
+Différé à l'étape 31 : un dev humain peut exécuter
+`npx unlighthouse` localement et consigner les scores, ou l'étape
+31 peut tenter à nouveau si le sandbox est ré-équipé.
+
+### E2E « happy path » réel — re-différé étape 31
+
+Pas de projet Supabase de test seedé (goulot 5 toujours 🔲). Le
+livrable principal de l'étape 30 étant le chantier T99CP cumul
+public, le 7e mock E2E suggéré en §2 du prompt n'est pas
+nécessaire — on a livré 2 nouveaux tests E2E sur la nouvelle
+carte (cf. infra § E2E coverage).
+
+### T99CP cumul public — livré ✅
+
+**Décision produit** (HANDOFF-PROGRESS § Goulot 4 — Décision 2,
+tranchée Ben 2026-05-13) : carte publique sur `/transparence`
+montrant le cumul des jetons T99CP émis, dès le 1er adhérent. Le
+wording côté UI a été affiné en « T99CP émis (cumulé) » plutôt
+que « Adhésions totales » comme suggéré initialement, pour rester
+précis sur l'unité affichée : `monthlyT99cpBonus() = 60`
+T99CP par invoice Stripe (cf.
+`web/src/lib/stripeWebhookHandler.ts:253`), donc 1 adhésion
+mensuelle ≠ 1 T99CP. Si l'équipe souhaite plus tard afficher le
+nombre d'adhésions plutôt que le cumul T99CP, ce sera une
+seconde RPC `transparency_paid_adhesions_count()` — l'actuelle
+RPC reste utile pour la transparence économique du jeton.
+
+#### Migration DB additive — `transparency_t99cp_total()`
+
+Nouvelle section `§23` ajoutée à `db/schema.sql` (juste après
+`signatures_count_for_petition` §22) :
+
+```sql
+create or replace function public.transparency_t99cp_total()
+  returns bigint
+  language sql
+  stable
+  security definer
+  set search_path = public
+as $$
+  select coalesce(sum(amount), 0)::bigint
+  from public.t99cp_transactions
+  where kind = 'credit';
+$$;
+
+revoke all on function public.transparency_t99cp_total() from public;
+grant execute on function public.transparency_t99cp_total() to anon, authenticated;
+grant execute on function public.transparency_t99cp_total() to service_role;
+```
+
+Propriétés :
+
+- **Additive uniquement** : aucune table, colonne, policy
+  existante touchée. `CREATE OR REPLACE` idempotent — re-applicable
+  sans risque.
+- **SECURITY DEFINER** : contourne RLS sur `t99cp_transactions`
+  (policy `t99cp_select_self` restreint le ledger privé à chaque
+  user). L'agrégation publique ne projette que `sum(amount)`,
+  aucun `user_id`, aucun `reason`, aucune date.
+- **bigint** : précaution. `sum(integer)` peut déborder `int4`
+  au-delà de ~2.1 Md jetons (hors scope humain à toute échelle
+  réaliste). Coût : 0.
+- **`coalesce(sum, 0)`** : garantit un retour non-null sur
+  table vide (pré-1er-adhérent).
+- **search_path verrouillé** : `set search_path = public`
+  (défense en profondeur contre schema-hijack côté
+  SECURITY DEFINER — pattern utilisé par toutes les RPCs depuis
+  l'étape 20).
+- **Grants explicites** : `anon`, `authenticated`, `service_role`
+  — cohérence avec `users_signups_monthly` /
+  `signatures_count_for_petition`.
+
+#### Type TS — `Database.public.Functions.transparency_t99cp_total`
+
+Ajouté à `web/src/types/database.ts:1772-1775` :
+
+```ts
+transparency_t99cp_total: {
+  Args: Record<string, never>;
+  Returns: number;
+};
+```
+
+`Args: Record<string, never>` reflète l'absence de paramètre SQL
+(la RPC est sans argument). `Returns: number` modélise le scalaire
+côté TS — PostgREST sérialise un `bigint` en number tant qu'il
+tient dans `2^53`. Le helper accepte aussi `string` en runtime
+(cf. infra) par défense en profondeur si PostgREST devait
+changer de sérialisation.
+
+#### Helper TS — `fetchT99cpTotal`
+
+Ajouté à `web/src/lib/transparency.ts:217-261` (entre
+`fetchMonthlySignups` et `formatMonthShortFr`) :
+
+```ts
+export interface T99cpTotalResult {
+  data: number | null;
+  error: PostgrestError | null;
+}
+
+export async function fetchT99cpTotal(
+  client: Client = supabase,
+): Promise<T99cpTotalResult> {
+  const { data, error } = await client.rpc('transparency_t99cp_total');
+  if (error) return { data: null, error };
+  if (data === null || data === undefined) return { data: 0, error: null };
+  const value = typeof data === 'string' ? Number(data) : Number(data);
+  if (!Number.isFinite(value) || value < 0) return { data: 0, error: null };
+  return { data: value, error: null };
+}
+```
+
+Garde-fous (chacun couvert par un test unit dédié) :
+
+- `data === null` ou `undefined` → 0 (table vide pré-1er-adhérent).
+- `data` sérialisé en string (bigint PostgREST) → `Number(data)`.
+- Valeur non finie (e.g. RPC mal serialisée) → 0.
+- Valeur négative (incohérence DB défensive) → 0.
+- Erreur PostgREST propagée → `{ data: null, error }`.
+
+#### UI — carte « T99CP émis (cumulé) »
+
+Ajoutée à `web/src/pages/TransparencePage.tsx` en complément de
+la grille existante `METRICS` (compteurs publics). Pattern
+miroir de `chartState` :
+
+- Nouveau type `T99cpState = loading | success | error`.
+- Nouveau `useEffect` (parallèle aux deux existants) appelant
+  `fetchT99cpTotal()` avec garde `cancelled` standard.
+- Render conditionnel **dans la même `<ul aria-label="Compteurs
+  publics">`** que les autres cards, avec
+  `data-testid="t99cp-total-card"` pour facilité de targeting
+  E2E. Sur erreur RPC (par exemple staging Supabase tant que
+  la migration n'est pas appliquée), la carte est
+  **silencieusement masquée** — pas de bandeau d'erreur dédié,
+  on ne casse pas l'affichage des autres compteurs publics.
+
+Label : « T99CP émis (cumulé) » (cf. note supra sur le wording).
+Format : `Intl.NumberFormat('fr-FR')` — séparateur insécable
+(U+202F) au-dessus de 999, comme les autres cards.
+
+#### Tests unit (vitest)
+
+**7 nouveaux tests** sur `web/src/lib/transparency.test.ts`
+(couverture exhaustive du helper) :
+
+1. Appelle la RPC `transparency_t99cp_total` sans arguments.
+2. Retourne la valeur scalaire (number).
+3. Parse une valeur sérialisée en string (bigint PostgREST).
+4. Retourne 0 quand la RPC renvoie null (table vide).
+5. Retourne 0 quand la valeur n'est pas un nombre fini.
+6. Retourne 0 quand la valeur est négative (défense en profondeur).
+7. Propage l'erreur de la RPC.
+
+**4 nouveaux tests** sur `web/src/pages/TransparencePage.test.tsx`
+(intégration page) :
+
+1. Affiche la carte T99CP cumulée quand la RPC réussit (valeur
+   formatée fr-FR).
+2. Affiche la carte T99CP à 0 quand la RPC retourne 0
+   (pré-1er-adhérent — décision produit : pas de seuil masquant).
+3. Masque silencieusement la carte T99CP quand la RPC échoue
+   (RPC manquante en staging avant migration).
+4. Annule proprement le `setState` T99CP si démontage avant fetch
+   (anti-warning React, pattern miroir des 2 autres `useEffect`).
+
+Suite vitest : **872 → 883 tests** (+11), durée ~58s, inchangée.
+
+#### E2E coverage
+
+**2 nouveaux tests** sur `web/e2e/transparence.spec.ts`
+(`test.describe('carte T99CP cumulée (étape 30)')`) :
+
+1. Affiche la carte T99CP avec la valeur retournée par la RPC.
+   Override de route Playwright `**/rest/v1/rpc/transparency_t99cp_total*`
+   renvoyant `'3600'` (scalaire JSON brut, comme PostgREST sur
+   un `returns bigint`). Assertion : `data-testid="t99cp-total-card"`
+   visible, label + valeur 3600 (formatée fr-FR `/3\s?600/`),
+   axe-core sans critical violations.
+2. Masque la carte T99CP en cas d'erreur RPC. Override de route
+   renvoyant 404 + `{ code: 'PGRST202', message: 'function not
+   found' }` — reproduit le cas réel d'un staging tant que la
+   migration §23 n'est pas appliquée. Assertion : autres
+   compteurs présents (liste rendue), `t99cp-total-card` absente
+   du DOM (`toHaveCount(0)`), texte « T99CP émis (cumulé) »
+   absent.
+
+Suite E2E Playwright (CI uniquement) : **35 → 37 tests** (+2).
+
+### Bundle
+
+- `index-*.js` : **47.34 kB / gzip 13.32 kB** — inchangé.
+  Le helper `fetchT99cpTotal` vit dans `transparency.ts` qui est
+  importé uniquement par `TransparencePage` (lazy route), donc
+  pas d'impact sur l'entry.
+- `TransparencePage-*.js` : **7.69 kB → 8.34 kB** (gzip 3.11
+  → 3.26 kB). Croissance attendue (+0.65 kB / +0.15 kB gzip)
+  pour le nouveau type, le nouvel effect, la nouvelle helper
+  call, le nouveau rendu conditionnel JSX.
+- Aucun autre chunk modifié.
+
+### Provisionnement externe — état au 2026-05-13 (inchangé étape 30)
+
+- ✅ Hébergement HTTPS (Netlify, débloqué session 2026-05-13).
+- ✅ Décisions produit / RGPD (3/3 débloquées, dont la décision 2
+  consommée par cette étape).
+- 🔲 Migrations Supabase staging : étapes 20 + 22 + 23 + 24
+  **+ 30** restent à appliquer. La RPC `transparency_t99cp_total`
+  s'ajoute à la liste mais reste **non-bloquante côté UI** :
+  l'absence de la RPC en prod fait que la carte est silencieusement
+  masquée (cf. test E2E ci-dessus). Aucun autre call-site front
+  ne dépend de cette RPC.
+- 🔲 Sentry SaaS (goulot 3) — toujours à provisionner.
+- 🔲 Projet Supabase de test (goulot 5) — toujours à provisionner.
+- 🔲 Stripe live (goulot 6) — toujours à réserver.
+
+### Décisions étape 30
+
+- **Wording carte** : « T99CP émis (cumulé) » plutôt que
+  « Adhésions totales » suggéré dans la décision produit, pour
+  rester précis sur l'unité affichée (cf. supra § T99CP cumul
+  public — livré). Si l'équipe souhaite l'autre label, une
+  étape future ajoutera une seconde RPC
+  `transparency_paid_adhesions_count()` (count distinct) — pas
+  de risque de confusion entre les deux.
+- **Graceful degradation sur erreur RPC** : la carte est
+  silencieusement masquée (pas de bandeau d'erreur) — choix
+  cohérent avec l'objectif « pas de seuil masquant à N adhérents »
+  (décision produit) côté succès, et « ne pas dégrader l'UX des
+  autres compteurs publics » côté erreur.
+- **Pas d'ajout au test de smoke principal** : les 2 nouveaux
+  tests E2E vivent dans un `test.describe` dédié (« carte T99CP
+  cumulée (étape 30) ») pour faciliter le grepping et l'audit
+  janitor. Cohérent avec la structure des `test.describe` des
+  étapes 25-29.
+
+### Prochaines étapes (étape 31)
+
+- Lighthouse mesuré dès qu'un binaire Chromium est disponible
+  côté sandbox OU exécution manuelle par un dev humain
+  (`npx unlighthouse --site https://maintenant-le-mouvement.netlify.app`).
+- Monitoring Sentry canary + 7 j observations dès DSN câblé
+  (goulot 3).
+- Chantier suivant disponible :
+  **M2-sec-policy** (durcissement `signatures_select_public` —
+  décision 1 du goulot 4 tranchée le 2026-05-13). RLS visible
+  côté client → demander confirmation à chaque PR.
+- Chantier suivant disponible :
+  **M1-RGPD** (purge auto `stripe_events.payload` TTL 90j —
+  décision 3 du goulot 4 tranchée le 2026-05-13). Toucher à
+  `stripe_events` = demande confirmation.
+- Si conditions externes encore bloquées sur Lighthouse / Sentry
+  / E2E réel → enchaîner sur M2-sec-policy ou M1-RGPD (les deux
+  décisions produit sont prêtes, seule la PR doit être validée
+  à chaque commit).
+
+### Audit vibe janitor étape 30
+
+(à compléter par la session — cf. PR
+`chore(janitor): post-step 30 — …` séparée)
+
+---
+
+## Prompt pour la session N+25 (étape 31)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, camelCase TS /
+>    snake_case DB, SVG via `ICONS.*` pas d'emojis, RLS, RGPD, Lighthouse
+>    ≥ 95, axe-core ≥ 95, `prefers-reduced-motion`). Note la section
+>    « Politique de PR » qui t'autorise à enchaîner ouverture + merge
+>    des PR sans confirmation **jusqu'à la session 50 incluse**. Note
+>    aussi la section « Recopie systématique du prompt de la session
+>    suivante » : **à la clôture de cette étape, recopier le prompt
+>    étape 32 à la fois dans `HANDOFF-PROGRESS.md` ET dans la réponse de
+>    chat finale**. Et enfin la section « Audit récurrent vibe janitor
+>    de fin d'étape » : **après le merge de la PR principale de
+>    l'étape 31, tu dois enchaîner une PR janitor séparée
+>    `chore(janitor): post-step 31 — …` et inclure cette même
+>    instruction janitor dans le prompt étape 32**.
+> 2. `HANDOFF.md` §11 (Points d'attention) + §12 (Suivi) + §13 (Sécurité).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 30 ✅ — étape 31 à faire).
+> 4. `docs/PROD-RUNBOOK.md` — runbook de provisionnement (§1.2 mis à
+>    jour étape 24 avec sanity checks 3+4 pour
+>    `signatures_count_for_petition`).
+> 5. `docs/MODERATION.md` — procédure modération.
+> 6. `docs/USER-GUIDE.md` — FAQ utilisateur·rice.
+>
+> **État actuel à la fin de l'étape 30 + janitor post-step 30** :
+>
+> - **Étape 30 livrable principal** : chantier T99CP cumul public.
+>   Nouvelle RPC additive `public.transparency_t99cp_total() returns
+>   bigint security definer` ajoutée à `db/schema.sql §23`, helper
+>   TS `fetchT99cpTotal` dans `web/src/lib/transparency.ts`, carte
+>   dédiée « T99CP émis (cumulé) » sur `/transparence` (rendu
+>   conditionnel — masquée silencieusement si la RPC est absente
+>   en staging). Décision produit 2 du goulot 4 (tranchée
+>   2026-05-13) entièrement consommée.
+> - **Tests** : 872 → 883 vitest (+11 : 7 sur le helper, 4 sur la
+>   page). 35 → 37 E2E Playwright (CI) — +2 sur transparence
+>   (carte présente + masquage en cas d'erreur RPC).
+> - **Bundle** : entry inchangé (47.34 kB / gzip 13.32 kB).
+>   TransparencePage : 7.69 → 8.34 kB / gzip 3.11 → 3.26 kB
+>   (croissance attendue, +0.65 kB / +0.15 kB gzip).
+> - **Janitor post-step 30** : (à compléter par la session — cf.
+>   `HANDOFF-PROGRESS.md` § Audit vibe janitor étape 30).
+> - **Tous les autres items différés en bloc** (Lighthouse réel,
+>   E2E happy path réel, monitoring Sentry / Supabase,
+>   M2-sec-policy, H4-deploy-deno, M1-RGPD, retours
+>   utilisateur·rices, job réconciliation Stripe) : conditions
+>   externes inchangées vs étape 30.
+> - Aucune nouvelle dépendance npm.
+>
+> **Provisionnement externe** — état au 2026-05-13 (inchangé étape 30) :
+>
+> - ✅ Hébergement HTTPS Netlify (goulot 1 débloqué).
+> - ✅ Décisions produit / RGPD (goulot 4 débloqué — M2-sec-policy,
+>   T99CP cumul public CONSOMMÉE étape 30, M1-RGPD).
+> - 🔲 Migrations Supabase staging (étapes 20 + 22 + 23 + 24 + **30**
+>   à appliquer).
+> - 🔲 Sentry SaaS / projet Supabase de test / Stripe live (goulots
+>   3, 5, 6).
+>
+> **CONTEXTE D'OUVERTURE** — à exécuter avant toute autre action :
+>
+> 1. Vérifier qu'on est bien dans un workspace contenant `web/`. Si
+>    non, `git fetch origin main && git merge --ff-only origin/main`.
+> 2. `cd web && npm ci` (fallback : `npm install --legacy-peer-deps`).
+> 3. `npm run typecheck && npm run lint && npx vitest run && npm run build`
+>    pour vérifier le compteur de tests au point de départ (≥ 883
+>    verts vitest à incrémenter à chaque étape ; 37 verts E2E
+>    Playwright en CI).
+> 4. **Demander à l'équipe humaine** :
+>    - Les migrations étape 20 + étape 22 + étape 23 + étape 24
+>      + **étape 30** (`db/schema.sql §23` RPC
+>      `transparency_t99cp_total`) ont-elles été appliquées à
+>      Supabase staging ? La RPC étape 30 est **non-bloquante côté
+>      UI** (carte silencieusement masquée si absente) — peut être
+>      appliquée plus tard.
+>    - Audit Lighthouse réel sur
+>      `https://maintenant-le-mouvement.netlify.app` a-t-il été
+>      lancé (par un dev humain ou par re-essai côté sandbox) ?
+>    - Le provisionnement Sentry / Stripe live / projet Supabase
+>      de test décrit dans `docs/PROD-RUNBOOK.md` est-il fait ?
+>    - Souhaitent-ils enchaîner sur **M2-sec-policy** (durcissement
+>      `signatures_select_public` — décision 1 tranchée 2026-05-13,
+>      RLS visible côté client → demande confirmation à chaque PR
+>      de cette transition) ?
+>    - Souhaitent-ils enchaîner sur **M1-RGPD** (purge auto
+>      `stripe_events.payload` TTL 90j — décision 3 tranchée
+>      2026-05-13, touche table critique `stripe_events` →
+>      demande confirmation à chaque PR) ?
+>
+> **PRÉREQUIS OPÉRATIONNEL** — gate avant tout redéploiement front :
+>
+> Identique étapes 26-30. Aucun call-site UI nouveau côté étape 30
+> ne dépend strictement de la RPC `transparency_t99cp_total` : la
+> carte est rendue **conditionnellement** sur le state `success`,
+> donc une RPC absente fait juste disparaître la carte (cf. test
+> E2E « masque la carte T99CP en cas d'erreur RPC »). La migration
+> peut donc être appliquée au rythme de l'équipe ops, **sans
+> bloquer le redéploiement front**.
+>
+> Pour les migrations antérieures (24 — `signatures_count_for_petition`),
+> le gate reste : tant qu'aucun call-site UI ne l'appelle (toujours
+> 0 à fin étape 30), aucun impact utilisateur ; mais dès qu'un
+> call-site sera ajouté (chantier M2-sec-policy si validation
+> reçue), la migration devient bloquante.
+>
+> Procédure (cf. `PROD-RUNBOOK §1.2`) :
+>
+> 1. `pg_dump` staging vers bucket privé.
+> 2. `psql < db/schema.sql` (idempotent `CREATE OR REPLACE`).
+> 3. Test SQL admin : `select public.transparency_t99cp_total();`
+>    doit renvoyer 0 sur un projet sans adhésion crédit, ou la
+>    somme des credits.
+> 4. Sanity check anon via curl :
+>    `curl -sS "$URL/rest/v1/rpc/transparency_t99cp_total" -H "apikey: $ANON_KEY"`
+>    doit renvoyer un nombre, sans erreur.
+> 5. Redéployer Vercel / front si nécessaire (pas obligatoire — la
+>    carte se débloque dès que la RPC est dispo, le bundle front
+>    est inchangé).
+>
+> **ÉTAPE 31 à exécuter** — Post-go-live (audit réel + monitoring +
+> chantier M2-sec-policy / M1-RGPD si validés OU 8e itération du
+> pattern « +1 test mock E2E ciblé », par défaut sur poll-detail
+> vote/unvote symétrique étape 28/29) :
+>
+> 1. **Audit Lighthouse réel** (priorité 1, site live sur Netlify) :
+>    `npx unlighthouse --site https://maintenant-le-mouvement.netlify.app`
+>    si binaire Chromium dispo, sinon DevTools manuel par un dev
+>    humain sur 6 pages clés. Documenter les scores. Corriger les
+>    blocages < 95. Si pas faisable : différer étape 32.
+> 2. **E2E « happy path » réel** (priorité 2 si projet Supabase de
+>    test prêt) : `web/e2e/happy-path.spec.ts` qui signe
+>    anonymement une pétition + vérifie le compteur. Sinon ajouter
+>    encore un test mock non-vide (réutiliser
+>    `installSupabaseStubs(page, { rest: ..., rpc: ... })`) — par
+>    exemple : **flow vote/unvote sur poll-detail-page**
+>    (symétrique sign/unsign de l'étape 28/29, exerce
+>    `usePoll` + `votePoll/unvotePoll`, confirme/dégonfle la
+>    dette `L8-arch-authsession` via un 5e call-site qui dupliquerait
+>    encore le seed), OU un autre état non couvert (mobilization
+>    detail, transparence variants, page profil authentifiée). Si
+>    la matrice E2E est bouclée et qu'on veut éviter la
+>    sur-couverture : extraire le helper
+>    `installAuthenticatedSession(page, { userId, email })` dans
+>    `e2e/utils/mockSupabase.ts` (closure de la dette
+>    `L8-arch-authsession`, 4 call-sites identifiés + 1 si poll-vote
+>    en parallèle) — refacto isolé aux fichiers `e2e/`, zéro
+>    impact runtime.
+> 3. **Monitoring Sentry runtime** (si DSN câblé) : test canary +
+>    documenter taux d'erreur 7 j + top 5 issues. Si erreurs
+>    récurrentes `stripe-webhook` → prioriser job de
+>    réconciliation.
+> 4. **Monitoring Supabase** : quotas API / DB CPU / DB memory sur
+>    7 j, alertes Slack actives ?, top requêtes lentes.
+> 5. **M2-sec-policy** — durcissement
+>    `signatures_select_public` (décision produit / DPO tranchée
+>    2026-05-13) : remplacer la policy actuelle (`for select using
+>    (true)`) par une policy qui n'expose `user_id` qu'à
+>    `auth.uid() = user_id OR public.is_admin(auth.uid())`. Migrer
+>    les call-sites UI qui dépendent encore de la projection
+>    `signatures.user_id` (chercher `from('signatures').select(`,
+>    normalement aucun en public). Migrer les call-sites
+>    « combien de signatures » vers `getPetitionSignatureCount`.
+>    **CHANGEMENT RLS visible côté client → demander confirmation
+>    à chaque PR de cette transition**. Si pas le moment →
+>    différer étape 32.
+> 6. **M1-RGPD** (purge auto `stripe_events.payload` TTL 90j —
+>    décision RGPD tranchée 2026-05-13) : migration DB additive
+>    (`stripe_events_payload_ttl_trigger` ou job Edge Function
+>    périodique). **Toucher à `stripe_events` = demande
+>    confirmation** (table critique du webhook). Sinon différer.
+> 7. **H4-deploy-deno** (dette low low) : si pipeline CI Supabase
+>    réel disponible, ajouter `supabase functions deploy --dry-run`
+>    sur PR. Sinon différer.
+> 8. **Retours utilisateur·rices** (si trafic réel) : compiler
+>    fixes prioritaires étape 32.
+> 9. **Job de réconciliation Stripe** (dette différée étape 20) :
+>    décider si on l'implémente. Critère : erreurs récurrentes
+>    Sentry sur `stripe-webhook`.
+> 10. **Tests** : suite vitest ≥ 883 + E2E Playwright ≥ 37 verts
+>     en CI.
+> 11. **HANDOFF-PROGRESS.md** : étape 31 ✅ détaillée.
+> 12. **Recopier le prompt étape 32** à la fois dans
+>     `HANDOFF-PROGRESS.md` ET dans la **réponse de chat finale**
+>     (règle récursive). Inclure dans le prompt étape 32 la même
+>     instruction de recopie pour la session N+26, ET l'instruction
+>     d'audit vibe janitor pour N+26.
+>
+> **PHASE 1 — Clôture de l'étape principale (workflow auto-merge)** :
+>
+> Conformément à `CLAUDE.md` § « Politique de PR », autorisation
+> permanente d'enchaîner les étapes ci-dessous sans confirmation :
+>
+> 1. Vérifier les 4 checks locaux verts : `npm run typecheck &&
+>    npm run lint && npx vitest run && npm run build`. Si échec →
+>    corriger, ne pas commit.
+> 2. **Commit** : `chore(prod): step 31 — post-go-live (lighthouse +
+>    e2e réel + monitoring + chantier M2-sec-policy/M1-RGPD si
+>    validés)` ou `feat(...)`/`chore(...)` selon le livrable
+>    principal. Pas d'emojis.
+> 3. **Push** sur la branche imposée par l'harness (retry exponentiel
+>    2/4/8/16 s).
+> 4. **Ouvrir la PR** vers `main` via
+>    `mcp__github__create_pull_request` (titre = commit, body
+>    Summary + Décisions + Test plan).
+> 5. **Attendre les checks GitHub Actions** (les DEUX checks
+>    `Typecheck + Lint + Vitest + Build` ET
+>    `Playwright E2E + axe-core a11y` doivent être verts). Si rouges
+>    → autofix + re-push.
+> 6. **Merger la PR** via `mcp__github__merge_pull_request`.
+>
+> **PHASE 2 — Audit vibe janitor (après le merge de la PR principale)** :
+>
+> Conformément à `CLAUDE.md` § « Audit récurrent vibe janitor de fin
+> d'étape » :
+>
+> 1. Sync : `git checkout main && git pull --ff-only origin main`,
+>    puis `git checkout -b claude/janitor-post-step31`.
+> 2. **Audit en parallèle** via 2-3 subagents `general-purpose` :
+>    architecture / robustesse / sécurité. Chaque agent produit un
+>    rapport ; aucune modification.
+> 3. Synthétiser findings par sévérité + risque régression.
+> 4. **Appliquer UNIQUEMENT les fixes safe-first** (« primum non
+>    nocere ») : aucun fix qui casse un test, aucun nouveau
+>    problème, design system `T.*` intouchable, pas de migration DB,
+>    pas de breaking change, fixes risque medium/high reportés en
+>    dette.
+> 5. Vérifier les 4 checks locaux verts avant push.
+> 6. **PR janitor séparée** : titre `chore(janitor): post-step 31 —
+>    <résumé court>`. Body : Summary + Findings (sévérité + risque)
+>    + Fixes appliqués + Fixes déférés + Test plan.
+> 7. Merger la PR janitor (même workflow auto-merge).
+> 8. Documenter dans `HANDOFF-PROGRESS.md` § Audit vibe janitor
+>    étape 31 : findings totaux, fixes appliqués (chacun avec
+>    risque évalué), dette ajoutée, compteur de tests final.
+>
+> **Phase 3 — Recopie du prompt étape 32 (toujours obligatoire)** :
+>
+> Recopier le prompt étape 32 dans la **réponse de chat finale**, en
+> plus de l'avoir écrit dans `HANDOFF-PROGRESS.md`. Le prompt étape
+> 32 doit lui-même inclure les Phases 1, 2, 3 récursives pour la
+> session N+26.
+>
+> **Conditions d'arrêt malgré l'autorisation permanente** :
+>
+> - Migration DB risquée non listée. L'étape 31 LISTE explicitement :
+>   - Durcissement `signatures_select_public` (M2-sec-policy) SI
+>     pertinent → autorisé MAIS demander confirmation à chaque PR
+>     car CHANGEMENT RLS visible côté client.
+>   - Purge `stripe_events.payload` (M1-RGPD) SI pertinent →
+>     demander confirmation car table critique.
+>   - Toute autre migration → demander confirmation.
+> - Changement RGPD non listé.
+> - Breaking change visible utilisateur.
+> - Erreur Netlify / Supabase impossible à debugger en < 3 tentatives.
+> - Review humaine ou commentaire GitHub avant le merge.
+> - En phase janitor : un fix touche au design system `T.*`, casse
+>   un test sans rollback possible, ou nécessite un bump majeur.
+>
+> **Contraintes générales** :
+>
+> - Ne pas toucher au prototype.
+> - TS strict + no `any`.
+> - Conserver les checks verts à chaque étape.
+> - Pas d'emojis dans le code TS ni dans les commits / PR.
+> - Tokens `T.*` intouchables sans validation designer.
+> - Sauvegarder la DB AVANT toute migration prod (`pg_dump` →
+>   bucket privé Supabase Storage).
 
 ---
 

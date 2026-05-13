@@ -119,3 +119,69 @@ test.describe('Page /transparence — compteurs et graphique non-nuls', () => {
     await expect(page.getByText(/Aucune inscription enregistrée/i)).toHaveCount(0);
   });
 });
+
+// Étape 30 : carte T99CP cumulée. La RPC `transparency_t99cp_total`
+// retourne un scalaire bigint sérialisé en JSON. Le mock supabase
+// renvoie la valeur brute via `rpc.<fn>.rows` — supabase-js JSON-parse
+// le body et postgrest-js retourne `data` tel quel. On valide que la
+// carte s'affiche avec la valeur formatée fr-FR (séparateur insécable
+// au-dessus de 999).
+test.describe('Page /transparence — carte T99CP cumulée (étape 30)', () => {
+  test('affiche la carte T99CP avec la valeur retournée par la RPC', async ({ page }) => {
+    await installSupabaseStubs(page, {
+      rpc: {
+        // PostgREST renvoie un scalaire en JSON (number ou string pour
+        // bigint). On envoie un number ici — `fetchT99cpTotal` accepte
+        // les deux formes.
+        transparency_t99cp_total: { rows: [3600] as unknown[] },
+      },
+    });
+    // `installSupabaseStubs` fulfill avec `JSON.stringify(rows)` →
+    // body = `[3600]`. supabase-js sur un `rpc()` scalaire attend un
+    // body brut (le scalaire seul, pas un tableau). On gère ça via
+    // une route plus spécifique qui prend le pas sur celle posée par
+    // `installSupabaseStubs`.
+    await page.route('**/rest/v1/rpc/transparency_t99cp_total*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: '3600',
+      });
+    });
+    await page.goto('/transparence');
+    const card = page.getByTestId('t99cp-total-card');
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await expect(card).toContainText(/T99CP émis \(cumulé\)/);
+    // Match large : Intl.NumberFormat fr-FR utilise un narrow no-break
+    // space (U+202F) au-dessus de 999. On tolère espace ou caractère
+    // unicode quelconque entre les digits.
+    await expect(card.getByText(/^3\s?600$/)).toBeVisible();
+    await expectNoCriticalAxeViolations(page);
+  });
+
+  test('masque la carte T99CP en cas d\'erreur RPC (RPC manquante)', async ({ page }) => {
+    await installSupabaseStubs(page);
+    // Override : la RPC renvoie une erreur PostgREST « function not
+    // found » — comme ce serait le cas en staging tant que la migration
+    // étape 30 n'est pas appliquée. La carte doit être silencieusement
+    // masquée sans casser l'affichage des autres compteurs.
+    await page.route('**/rest/v1/rpc/transparency_t99cp_total*', async (route) => {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 'PGRST202',
+          message: 'function not found',
+        }),
+      });
+    });
+    await page.goto('/transparence');
+    // On attend que la liste des compteurs soit rendue (cycle de fetch
+    // terminé), puis on vérifie que la carte T99CP n'est PAS dans le DOM.
+    await expect(
+      page.getByRole('list', { name: /Compteurs publics/i }),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('t99cp-total-card')).toHaveCount(0);
+    await expect(page.getByText('T99CP émis (cumulé)')).toHaveCount(0);
+  });
+});

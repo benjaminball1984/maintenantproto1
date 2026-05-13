@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   buildMonthsRange,
   fetchMonthlySignups,
+  fetchT99cpTotal,
   fetchTransparencyCounts,
   formatGoLiveDateFr,
   formatMonthShortFr,
@@ -264,5 +265,75 @@ describe('fetchMonthlySignups', () => {
     const { client, rpcMock } = buildRpcClient({ data: [], error: null });
     await fetchMonthlySignups(client);
     expect(rpcMock).toHaveBeenCalledWith('users_signups_monthly', { p_months_back: 12 });
+  });
+});
+
+interface ScalarRpcResult {
+  data: number | string | null;
+  error: { message: string } | null;
+}
+
+function buildScalarRpcClient(result: ScalarRpcResult): {
+  client: SupabaseClient<Database>;
+  rpcMock: ReturnType<typeof vi.fn>;
+} {
+  const rpcMock = vi.fn((_fn: string, _args?: Record<string, unknown>) =>
+    Promise.resolve(result),
+  );
+  const client = { rpc: rpcMock } as unknown as SupabaseClient<Database>;
+  return { client, rpcMock };
+}
+
+describe('fetchT99cpTotal', () => {
+  it('appelle la RPC transparency_t99cp_total sans arguments', async () => {
+    const { client, rpcMock } = buildScalarRpcClient({ data: 0, error: null });
+    await fetchT99cpTotal(client);
+    expect(rpcMock).toHaveBeenCalledWith('transparency_t99cp_total');
+  });
+
+  it('retourne la valeur scalaire (number)', async () => {
+    const { client } = buildScalarRpcClient({ data: 1234, error: null });
+    const { data, error } = await fetchT99cpTotal(client);
+    expect(error).toBeNull();
+    expect(data).toBe(1234);
+  });
+
+  it('parse une valeur sérialisée en string (bigint PostgREST)', async () => {
+    // PostgREST peut sérialiser un `returns bigint` en string pour
+    // préserver la précision au-delà de 2^53. On accepte les deux.
+    const { client } = buildScalarRpcClient({ data: '7777', error: null });
+    const { data, error } = await fetchT99cpTotal(client);
+    expect(error).toBeNull();
+    expect(data).toBe(7777);
+  });
+
+  it('retourne 0 quand la RPC renvoie null (table vide pré-1er-adhérent)', async () => {
+    const { client } = buildScalarRpcClient({ data: null, error: null });
+    const { data, error } = await fetchT99cpTotal(client);
+    expect(error).toBeNull();
+    expect(data).toBe(0);
+  });
+
+  it('retourne 0 quand la valeur n\'est pas un nombre fini', async () => {
+    const { client } = buildScalarRpcClient({ data: 'not-a-number', error: null });
+    const { data, error } = await fetchT99cpTotal(client);
+    expect(error).toBeNull();
+    expect(data).toBe(0);
+  });
+
+  it('retourne 0 quand la valeur est négative (incohérence DB défensive)', async () => {
+    const { client } = buildScalarRpcClient({ data: -5, error: null });
+    const { data } = await fetchT99cpTotal(client);
+    expect(data).toBe(0);
+  });
+
+  it('propage l\'erreur de la RPC', async () => {
+    const { client } = buildScalarRpcClient({
+      data: null,
+      error: { message: 'function_not_found' },
+    });
+    const { data, error } = await fetchT99cpTotal(client);
+    expect(data).toBeNull();
+    expect(error?.message).toBe('function_not_found');
   });
 });

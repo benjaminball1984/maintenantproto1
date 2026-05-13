@@ -2095,5 +2095,47 @@ grant execute on function public.signatures_count_for_petition(uuid) to anon, au
 grant execute on function public.signatures_count_for_petition(uuid) to service_role;
 
 -- =====================================================================================
+-- 23 · Transparence — RPC publique transparency_t99cp_total() (étape 30)
+-- =====================================================================================
+-- Décision produit 2026-05-13 (cf. HANDOFF-PROGRESS § Goulot 4) : afficher
+-- publiquement le cumul de jetons T99CP émis sur la page /transparence dès
+-- le 1er adhérent (pas de seuil masquant). Chaque webhook
+-- `invoice.payment_succeeded` crédite `monthlyT99cpBonus()` = 60 T99CP
+-- (cf. supabase/functions/stripe-webhook/handler.ts), donc le cumul T99CP
+-- émis ≈ 60 × (nombre cumulé d'adhésions payées). Le wording exact côté UI
+-- est « T99CP émis (cumulé) » pour rester précis sur l'unité affichée.
+--
+-- Cette RPC SECURITY DEFINER retourne uniquement un scalaire bigint
+-- (sum(amount)), sans projection des `user_id` ni des `reason`. RLS sur
+-- `t99cp_transactions` reste stricte (`t99cp_select_self` = chaque user
+-- voit son propre ledger), la RPC contourne RLS pour l'agrégation publique
+-- et n'expose aucune PII.
+--
+-- `coalesce(sum, 0)` pour garantir un retour non-null sur une table vide
+-- (pré-premier-adhérent). `bigint` plutôt que integer pour éviter tout
+-- risque d'overflow à très long terme (sum(integer) peut déborder int4
+-- au-delà de ~2.1 Md jetons, ce qui n'arrivera jamais mais coûte 0 à
+-- préserver).
+create or replace function public.transparency_t99cp_total()
+  returns bigint
+  language sql
+  stable
+  security definer
+  set search_path = public
+as $$
+  select coalesce(sum(amount), 0)::bigint
+  from public.t99cp_transactions
+  where kind = 'credit';
+$$;
+
+revoke all on function public.transparency_t99cp_total() from public;
+grant execute on function public.transparency_t99cp_total() to anon, authenticated;
+-- service_role grant par cohérence avec credit_t99cp / debit_t99cp /
+-- users_signups_monthly / signatures_count_for_petition — no-op sur
+-- projet non-hardened, débloquant si un futur outil interne appelle la
+-- RPC en service-role.
+grant execute on function public.transparency_t99cp_total() to service_role;
+
+-- =====================================================================================
 -- FIN du schéma. Régénérer les types : `supabase gen types typescript --local`.
 -- =====================================================================================
