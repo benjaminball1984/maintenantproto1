@@ -41,6 +41,126 @@
 
 ---
 
+## Goulots externes — état au 2026-05-13 (post-étape 29)
+
+Session interactive avec l'équipe humaine (Ben/Lilou) le 2026-05-13.
+Le but de la session était de débloquer les conditions externes qui
+bridaient les sessions post-go-live (étapes 25-29 toutes
+re-différées pour la même raison).
+
+### Goulot 1 — Hébergement HTTPS public ✅ DÉBLOQUÉ
+
+- **Avant** : pas de Vercel preview HTTPS / staging public en ligne →
+  Lighthouse réel impossible (priorité 1 étapes 25-29 toutes
+  re-différées).
+- **Décision** : l'équipe dispose d'un compte Netlify payant (9 €/mois)
+  → bascule Vercel → Netlify avant le premier déploiement (le
+  `vercel.json` était préparé mais jamais utilisé en production,
+  aucun visiteur à migrer).
+- **Livraison** : PRs #37 (`chore(deploy): switch hosting Vercel →
+  Netlify`), #38 (`fix(deploy): netlify build — add --legacy-peer-deps`),
+  #39 (`fix(deploy): add web/.npmrc legacy-peer-deps=true`).
+- **Résultat** : site live sur
+  **https://maintenant-le-mouvement.netlify.app** (région team
+  Ben/Lilou). Auto-deploy sur push `main`, preview URL par PR.
+- **Hygiène** : un override UI Netlify (Build command / Publish dir /
+  Package dir) a été nécessaire pendant le rodage. À nettoyer plus
+  tard par un dev (laisser `netlify.toml` comme seule source de
+  vérité). Non bloquant pour l'instant.
+
+### Goulot 4 — Décisions produit / RGPD ✅ DÉBLOQUÉ
+
+Trois décisions tranchées par Ben au cours de la session interactive,
+chacune débloquant un chantier technique en attente depuis l'étape 24.
+
+#### Décision 1 — Signataires de pétition
+
+**Choix : liste publique avec `display_name` uniquement, ID techniques cachés.**
+
+- Compteur public visible par tous (anon + auth).
+- Liste des signataires affiche le `display_name` (que l'utilisateur
+  choisit à l'inscription / au profil).
+- Colonne `user_id` cachée aux anonymes (RLS durcie :
+  `auth.uid() = user_id OR public.is_admin(...)`).
+- **RGPD** : Art. 9 (opinion politique = donnée sensible) →
+  consentement explicite requis pour affichage public. Le
+  `display_name` étant choisi par l'utilisateur lui-même, le
+  consentement à la signature (cf. case à cocher dédiée) couvre
+  l'affichage public sous ce libellé.
+- **Implication implémentation (étape 30+)** :
+  - Migration policy `signatures_select_public` — chantier
+    **M2-sec-policy** (RLS visible côté client, demande confirmation
+    à chaque PR).
+  - Migrer call-sites UI qui lisent `signatures.user_id` vers une
+    projection limitée à `display_name` (via JOIN `public.users`).
+  - Ajouter case à cocher « j'accepte d'apparaître publiquement
+    parmi les signataires » au moment de la signature (colonne
+    `signatures.public_consent boolean default false` + UI checkbox
+    `PetitionDetailPage`).
+
+#### Décision 2 — Compteur d'adhésions (T99CP cumul) sur page Transparence
+
+**Choix : affichage public dès le début, pas de seuil minimum.**
+
+- Sur la page `/transparence`, nouvelle carte « Adhésions totales »
+  montrant le cumul de jetons T99CP émis (= nombre cumulé
+  d'adhésions payées).
+- Affichage immédiat dès le 1er adhérent (pas de seuil masquant à
+  N adhérents — l'équipe assume la transparence dès le démarrage).
+- **Implication implémentation (étape 30+)** :
+  - Créer la RPC `public.transparency_t99cp_total() returns bigint
+    security definer` (migration DB additive, autorisée — chantier
+    **T99CP cumul public**).
+  - Ajouter une carte UI à `TransparencePage.tsx` (chunk lazy déjà
+    séparé, ~7.7 kB / gzip 3.1 kB).
+
+#### Décision 3 — Purge automatique des données Stripe
+
+**Choix : purge automatique de `stripe_events.payload` à 90 jours.**
+
+- La colonne `stripe_events.payload` (JSONB contenant email + 4
+  derniers chiffres de carte + pays + montant) est automatiquement
+  effacée 90 jours après le `processed_at`.
+- Les autres colonnes (`event_id`, `processed_at`, `source_event_id`,
+  `created_at`) sont **conservées indéfiniment** pour audit +
+  idempotence — elles ne contiennent pas de données personnelles
+  directes.
+- **RGPD** : conformité Art. 5 § e (limitation de conservation).
+  90 j = durée standard de rétrospective opérationnelle (au-delà,
+  le débogage passe par le dashboard Stripe lui-même qui garde
+  les données complètes côté processeur).
+- **Implication implémentation (étape 30+)** :
+  - Choix d'archi à confirmer : trigger `BEFORE UPDATE` sur
+    `stripe_events` + job cron (`pg_cron`) OU Edge Function
+    périodique (recommandé, plus visible côté Supabase Console).
+  - Migration DB sur table critique `stripe_events` → **demande
+    confirmation explicite à chaque PR** de cette implémentation
+    (cf. conditions d'arrêt du prompt étape 30).
+  - Chantier **M1-RGPD**.
+
+### Goulots restants à la fin de la session 2026-05-13
+
+| # | Goulot | Statut | Priorité reco |
+| --- | --- | :---: | --- |
+| 2 | Migrations Supabase staging (étapes 20 + 22 + 23 + 24 à appliquer) | 🔲 | basse (utile seulement APRÈS implémentation M2-sec / T99CP / M1-RGPD) |
+| 3 | Sentry SaaS (DSN + provisionnement) | 🔲 | moyenne (gratuit, 15 min) |
+| 5 | Projet Supabase de test (E2E happy path réel) | 🔲 | moyenne (gratuit, 15 min) |
+| 6 | Stripe live (Kbis + clés live + webhook live) | 🔲 | basse (à réserver quand prêts à encaisser) |
+
+### Impact session 2026-05-13
+
+- **2 goulots débloqués sur 6** (1 et 4).
+- **3 chantiers techniques** désormais autorisés à l'implémentation :
+  M2-sec-policy, T99CP cumul public, M1-RGPD.
+- **Site live** publiquement (placeholder + pages migrées) accessible
+  via Netlify CDN mondial.
+- Les sessions 30-31 peuvent enfin exécuter l'audit Lighthouse réel
+  (priorité 1 du prompt étape 30).
+- Les étapes « +1 E2E mock » ne sont plus l'unique livrable possible
+  par défaut — on peut désormais attaquer du chantier dette.
+
+---
+
 ## Étape 3 — Squelette Vite + React + TS ✅
 
 **Branche** : `claude/setup-vite-react-ts-7amfy`
