@@ -1,6 +1,71 @@
 import type { Page, Route } from '@playwright/test';
 
 /**
+ * Options du seed de session authentifiée (cf. `installAuthenticatedSession`).
+ * Tous les champs sont optionnels — un default raisonnable est appliqué pour
+ * chacun afin de garder les call-sites minimaux côté specs.
+ */
+export interface AuthenticatedSessionOptions {
+  /** id auth.users.id du stub (default `stub-authenticated-user-id`). */
+  userId?: string;
+  /** email du stub (default `stub@example.org`). */
+  email?: string;
+  /** display_name du stub (default `Stub User`). */
+  displayName?: string;
+}
+
+/**
+ * Pré-remplit la session Supabase authentifiée dans `localStorage` AVANT
+ * le `page.goto(...)` afin que `useAuth().status` passe directement à
+ * `'authenticated'` au boot, sans hit réseau `/auth/v1/token`.
+ *
+ * Pourquoi ce helper : 4 call-sites de `petition-signature.spec.ts` (étapes
+ * 26 → 29) dupliquaient exactement la même séquence — fabriquer un objet
+ * `stubSession`, calculer `expires_at = now + 24h`, appeler `addInitScript`
+ * pour poser `sb-127-auth-token`. Un 5e call-site (poll vote/unvote, étape
+ * 31) aurait dupliqué une 5e fois. Centraliser ferme la dette
+ * `L8-arch-authsession` notée à l'étape 28 (refacto isolé aux fichiers
+ * `e2e/`, zéro impact runtime).
+ *
+ * **Détail dérivation storageKey** : supabase-js v2 calcule
+ * `storageKey = sb-${hostname.split('.')[0]}-auth-token` depuis
+ * `VITE_SUPABASE_URL`. En CI/E2E (`.github/workflows/ci.yml:22`) c'est
+ * `http://127.0.0.1:54321`, donc la clé est `sb-127-auth-token`. Si un
+ * jour l'env CI bouge (ex. `http://supabase-stub:54321`), il faudra
+ * mettre à jour cette constante en miroir.
+ *
+ * **Marge expires_at** : 24h dans le futur, large vs la durée d'un run
+ * E2E (<30 s). Aucun signal d'expiration ne devrait se déclencher avant
+ * la fin du test.
+ */
+export async function installAuthenticatedSession(
+  page: Page,
+  options: AuthenticatedSessionOptions = {},
+): Promise<void> {
+  const userId = options.userId ?? 'stub-authenticated-user-id';
+  const email = options.email ?? 'stub@example.org';
+  const displayName = options.displayName ?? 'Stub User';
+  const expiresIn = 86_400;
+  const stubSession = {
+    access_token: 'stub-access-token',
+    token_type: 'bearer',
+    expires_in: expiresIn,
+    expires_at: Math.floor(Date.now() / 1000) + expiresIn,
+    refresh_token: 'stub-refresh-token',
+    user: {
+      id: userId,
+      aud: 'authenticated',
+      email,
+      user_metadata: { display_name: displayName },
+      app_metadata: { provider: 'email' },
+    },
+  };
+  await page.addInitScript((session) => {
+    window.localStorage.setItem('sb-127-auth-token', JSON.stringify(session));
+  }, stubSession);
+}
+
+/**
  * Réponse REST customisable par table. Permet aux specs E2E qui veulent
  * tester l'affichage avec données non-vides (ex. transparence avec
  * compteurs non-nuls) de remplacer la réponse par défaut sans toucher

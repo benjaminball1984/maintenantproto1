@@ -1,6 +1,6 @@
 import { test, expect, type Route } from '@playwright/test';
 
-import { installSupabaseStubs } from './utils/mockSupabase';
+import { installAuthenticatedSession, installSupabaseStubs } from './utils/mockSupabase';
 
 const petitionFixture = {
   id: 'pet-stub-1',
@@ -123,35 +123,16 @@ test.describe('Pétitions — flow consultation + signature stubée', () => {
     // `aria-pressed="true"` (toggle accessibilité), et le CTA anonyme
     // « Se connecter pour signer » NE doit PAS être rendu en parallèle.
     //
-    // Seed de la session authentifiée :
-    // supabase-js v2 dérive `storageKey = sb-${hostname.split('.')[0]}-auth-token`
-    // de `VITE_SUPABASE_URL`. En CI/E2E l'URL est `http://127.0.0.1:54321`
-    // (cf. `.github/workflows/ci.yml`), donc la clé localStorage est
-    // `sb-127-auth-token`. On pré-remplit la session via `addInitScript`
-    // AVANT le `goto` : au boot, `useAuth` appelle `getSession()` qui
-    // lit la session depuis localStorage → `setSession(...)` → `status`
-    // passe directement à `'authenticated'` sans hit réseau /auth/v1/token.
-    //
-    // Pas de signal d'expiration : `expires_at` est calé à ~24h dans
-    // le futur, large marge vs la durée d'un run E2E (<30s).
+    // Seed de la session authentifiée via `installAuthenticatedSession`
+    // (cf. `e2e/utils/mockSupabase.ts`) : pose `sb-127-auth-token` dans
+    // localStorage avant le `goto` pour que `useAuth().status` passe
+    // directement à `'authenticated'` au boot.
     const stubUserId = 'stub-signed-user-id';
-    const stubSession = {
-      access_token: 'stub-access-token',
-      token_type: 'bearer',
-      expires_in: 86_400,
-      expires_at: Math.floor(Date.now() / 1000) + 86_400,
-      refresh_token: 'stub-refresh-token',
-      user: {
-        id: stubUserId,
-        aud: 'authenticated',
-        email: 'signataire@example.org',
-        user_metadata: { display_name: 'Signataire Stub' },
-        app_metadata: { provider: 'email' },
-      },
-    };
-    await page.addInitScript((session) => {
-      window.localStorage.setItem('sb-127-auth-token', JSON.stringify(session));
-    }, stubSession);
+    await installAuthenticatedSession(page, {
+      userId: stubUserId,
+      email: 'signataire@example.org',
+      displayName: 'Signataire Stub',
+    });
 
     // Mock du hit `hasUserSigned(petition.id, user.id)` : renvoie une
     // ligne `signatures` non vide → `signed = true` côté usePetition.
@@ -196,29 +177,16 @@ test.describe('Pétitions — flow consultation + signature stubée', () => {
     // (état toggle initial), et le CTA anonyme « Se connecter pour
     // signer » NE doit PAS être rendu en parallèle.
     //
-    // Seed de session identique à l'étape 26 (cf. commentaire 124-148) —
-    // même formule storage key `sb-127-auth-token` côté CI/E2E, même
-    // pattern `addInitScript`. Seul le `user_id` change (pour rester
-    // distinct du test précédent et faciliter le debug en cas de fuite
-    // cross-test improbable).
+    // Seed de session via `installAuthenticatedSession` — seul le
+    // `user_id` change vs l'étape 26 pour rester distinct du test
+    // précédent et faciliter le debug en cas de fuite cross-test
+    // improbable.
     const stubUserId = 'stub-unsigned-user-id';
-    const stubSession = {
-      access_token: 'stub-access-token',
-      token_type: 'bearer',
-      expires_in: 86_400,
-      expires_at: Math.floor(Date.now() / 1000) + 86_400,
-      refresh_token: 'stub-refresh-token',
-      user: {
-        id: stubUserId,
-        aud: 'authenticated',
-        email: 'curieux@example.org',
-        user_metadata: { display_name: 'Curieux Stub' },
-        app_metadata: { provider: 'email' },
-      },
-    };
-    await page.addInitScript((session) => {
-      window.localStorage.setItem('sb-127-auth-token', JSON.stringify(session));
-    }, stubSession);
+    await installAuthenticatedSession(page, {
+      userId: stubUserId,
+      email: 'curieux@example.org',
+      displayName: 'Curieux Stub',
+    });
 
     // Mock du hit `hasUserSigned(petition.id, user.id)` : renvoie un body
     // vide → `Boolean(data) === false` → `signed = false` côté usePetition
@@ -257,28 +225,15 @@ test.describe('Pétitions — flow consultation + signature stubée', () => {
     // le bouton, l'interception du POST `signatures`, et le rafraîchissement
     // déclenché par `usePetition.refresh()` (cf. `web/src/hooks/usePetition.ts`).
     //
-    // Seed de session : même pattern que les étapes 26/27 (clé localStorage
-    // `sb-127-auth-token`, dérivée de `VITE_SUPABASE_URL=http://127.0.0.1:54321`
-    // en CI). User id distinct pour faciliter le debug en cas de fuite
-    // cross-test improbable.
+    // Seed de session via `installAuthenticatedSession` — user id
+    // distinct pour faciliter le debug en cas de fuite cross-test
+    // improbable.
     const stubUserId = 'stub-active-signer-id';
-    const stubSession = {
-      access_token: 'stub-access-token',
-      token_type: 'bearer',
-      expires_in: 86_400,
-      expires_at: Math.floor(Date.now() / 1000) + 86_400,
-      refresh_token: 'stub-refresh-token',
-      user: {
-        id: stubUserId,
-        aud: 'authenticated',
-        email: 'actif@example.org',
-        user_metadata: { display_name: 'Actif Stub' },
-        app_metadata: { provider: 'email' },
-      },
-    };
-    await page.addInitScript((session) => {
-      window.localStorage.setItem('sb-127-auth-token', JSON.stringify(session));
-    }, stubSession);
+    await installAuthenticatedSession(page, {
+      userId: stubUserId,
+      email: 'actif@example.org',
+      displayName: 'Actif Stub',
+    });
 
     // Mock stateful pour `/rest/v1/signatures` :
     // - GET (hasUserSigned) : renvoie `[]` avant signature, `[{...}]` après.
@@ -357,29 +312,15 @@ test.describe('Pétitions — flow consultation + signature stubée', () => {
     // du `handleSign` côté `PetitionDetailPage.tsx:214-237` est désormais
     // entièrement couverte en E2E (sign branch ET unsign branch).
     //
-    // Seed de session : même pattern que les étapes 26/27/28 (clé
-    // localStorage `sb-127-auth-token`, dérivée de `VITE_SUPABASE_URL=
-    // http://127.0.0.1:54321` en CI). User id distinct (`stub-active-
-    // unsigner-id`) pour faciliter le debug en cas de fuite cross-test
-    // improbable.
+    // Seed de session via `installAuthenticatedSession` — user id
+    // distinct (`stub-active-unsigner-id`) pour faciliter le debug en
+    // cas de fuite cross-test improbable.
     const stubUserId = 'stub-active-unsigner-id';
-    const stubSession = {
-      access_token: 'stub-access-token',
-      token_type: 'bearer',
-      expires_in: 86_400,
-      expires_at: Math.floor(Date.now() / 1000) + 86_400,
-      refresh_token: 'stub-refresh-token',
-      user: {
-        id: stubUserId,
-        aud: 'authenticated',
-        email: 'actif-unsigner@example.org',
-        user_metadata: { display_name: 'Actif Unsigner Stub' },
-        app_metadata: { provider: 'email' },
-      },
-    };
-    await page.addInitScript((session) => {
-      window.localStorage.setItem('sb-127-auth-token', JSON.stringify(session));
-    }, stubSession);
+    await installAuthenticatedSession(page, {
+      userId: stubUserId,
+      email: 'actif-unsigner@example.org',
+      displayName: 'Actif Unsigner Stub',
+    });
 
     // Mock stateful pour `/rest/v1/signatures` (symétrique étape 28) :
     // - GET (hasUserSigned) : renvoie `[{...}]` tant que `hasSignedRow`
