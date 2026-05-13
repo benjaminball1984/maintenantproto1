@@ -1769,6 +1769,10 @@ export interface Database {
         Args: { p_petition: string };
         Returns: number;
       };
+      transparency_t99cp_total: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
     };
     Enums: {
       adhesion_status: 'active' | 'cancelled' | 'expired' | 'pending';

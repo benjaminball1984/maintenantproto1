@@ -214,6 +214,54 @@ export async function fetchMonthlySignups(
   return { data: buckets, error: null };
 }
 
+// =====================================================================================
+// Cumul T99CP émis — RPC publique `transparency_t99cp_total()` (étape 30).
+//
+// Décision produit 2026-05-13 (HANDOFF-PROGRESS § Goulot 4 — Décision 2) :
+// nouvelle carte « T99CP émis (cumulé) » sur /transparence, affichée dès
+// le 1er adhérent. La RPC SECURITY DEFINER (cf. db/schema.sql §23)
+// retourne `sum(amount)` sur `t99cp_transactions where kind = 'credit'`
+// sans projection PII.
+//
+// PostgREST sérialise `bigint` en string (au-delà de 2^53, JS perdrait de
+// la précision). On accepte les deux formes en entrée pour rester compat
+// avec un éventuel changement de sérialisation côté Postgres : si la
+// valeur tient dans Number.MAX_SAFE_INTEGER (= 9e15), `Number(...)` ramène
+// proprement à un number ; sinon on conserve la valeur en tant que number
+// même si elle perd quelques digits — un cumul T99CP > 2^53 implique
+// 1.5e14 adhésions, hors scope humain.
+// =====================================================================================
+
+export interface T99cpTotalResult {
+  data: number | null;
+  error: PostgrestError | null;
+}
+
+/**
+ * Charge le cumul total de T99CP émis (somme des credits) via la RPC
+ * `transparency_t99cp_total`. Retourne 0 sur table vide.
+ *
+ * @param client Supabase client (injectable pour tests).
+ */
+export async function fetchT99cpTotal(
+  client: Client = supabase,
+): Promise<T99cpTotalResult> {
+  // PostgREST renvoie un scalaire (bigint sérialisé en string OU number)
+  // sur un `returns bigint` SQL. On accepte les deux formes.
+  const { data, error } = await client.rpc('transparency_t99cp_total');
+  if (error) {
+    return { data: null, error };
+  }
+  if (data === null || data === undefined) {
+    return { data: 0, error: null };
+  }
+  const value = typeof data === 'string' ? Number(data) : Number(data);
+  if (!Number.isFinite(value) || value < 0) {
+    return { data: 0, error: null };
+  }
+  return { data: value, error: null };
+}
+
 const MONTH_LABELS_FR = [
   'janv.',
   'févr.',

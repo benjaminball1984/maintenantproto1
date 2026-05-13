@@ -145,7 +145,15 @@ describe('ArticleDetailPage', () => {
       fireEvent.submit(screen.getByRole('form', { name: /Poster un commentaire/i }));
     });
     await waitFor(() => expect(mediaMocks.createComment).toHaveBeenCalled());
-    expect(screen.getByText('Bravo !')).toBeInTheDocument();
+    // L'ajout du commentaire au DOM est une seconde mise à jour d'état
+    // (setComments après l'await createComment) que `act` ne couvre pas :
+    // le handler est async, donc tout ce qui suit le `await` se résout
+    // sur des microtasks ultérieurs. En CI sous charge parallèle (GitHub
+    // Actions free tier), le flush React peut dépasser plusieurs secondes.
+    // findByText timeout étendu à 10 s pour absorber les pics de latence.
+    expect(
+      await screen.findByText('Bravo !', undefined, { timeout: 10_000 }),
+    ).toBeInTheDocument();
   });
 
   it('redirige si article introuvable', async () => {

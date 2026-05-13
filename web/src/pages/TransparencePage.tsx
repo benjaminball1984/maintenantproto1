@@ -5,6 +5,7 @@ import MonthlySignupsChart from '@/components/MonthlySignupsChart';
 import {
   GO_LIVE_DATE_ISO,
   fetchMonthlySignups,
+  fetchT99cpTotal,
   fetchTransparencyCounts,
   formatGoLiveDateFr,
   type MonthlySignupBucket,
@@ -105,9 +106,19 @@ type ChartState =
   | { kind: 'success'; buckets: MonthlySignupBucket[] }
   | { kind: 'error' };
 
+// Etat dédié au cumul T99CP. Sur erreur (RPC manquante en staging tant
+// que la migration étape 30 n'est pas appliquée, ou rate limit), la
+// carte est silencieusement masquée — ne pas casser l'affichage des
+// autres compteurs publics qui restent corrects.
+type T99cpState =
+  | { kind: 'loading' }
+  | { kind: 'success'; total: number }
+  | { kind: 'error' };
+
 export default function TransparencePage() {
   const [state, setState] = useState<FetchState>({ kind: 'loading' });
   const [chartState, setChartState] = useState<ChartState>({ kind: 'loading' });
+  const [t99cpState, setT99cpState] = useState<T99cpState>({ kind: 'loading' });
 
   useEffect(() => {
     let cancelled = false;
@@ -155,6 +166,26 @@ export default function TransparencePage() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchT99cpTotal()
+      .then((result) => {
+        if (cancelled) return;
+        if (result.error || result.data === null) {
+          setT99cpState({ kind: 'error' });
+        } else {
+          setT99cpState({ kind: 'success', total: result.data });
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setT99cpState({ kind: 'error' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <main style={pageStyle}>
       <h1 style={h1Style}>Transparence</h1>
@@ -186,6 +217,12 @@ export default function TransparencePage() {
               <p style={cardLabelStyle}>{metric.label}</p>
             </li>
           ))}
+          {t99cpState.kind === 'success' && (
+            <li style={cardStyle} data-testid="t99cp-total-card">
+              <p style={cardValueStyle}>{formatNumber(t99cpState.total)}</p>
+              <p style={cardLabelStyle}>T99CP émis (cumulé)</p>
+            </li>
+          )}
         </ul>
       )}
 
