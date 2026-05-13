@@ -245,4 +245,107 @@ test.describe('Pétitions — flow consultation + signature stubée', () => {
       page.getByRole('link', { name: /Se connecter pour signer/i }),
     ).toHaveCount(0);
   });
+
+  test('signe la pétition: clic → POST intercepté → bascule vers « Signée — retirer ma signature »', async ({
+    page,
+  }) => {
+    // Étape 28 — 5e itération du pattern « +1 test mock E2E » : exécute
+    // le flow de signature actif suggéré explicitement par le prompt
+    // étape 28 §2. États statiques déjà couverts (étapes 25/26/27) :
+    // anonyme, authentifié signé, authentifié non signé. Ce test couvre
+    // la transition `signed: false → true` côté UI via le clic réel sur
+    // le bouton, l'interception du POST `signatures`, et le rafraîchissement
+    // déclenché par `usePetition.refresh()` (cf. `web/src/hooks/usePetition.ts`).
+    //
+    // Seed de session : même pattern que les étapes 26/27 (clé localStorage
+    // `sb-127-auth-token`, dérivée de `VITE_SUPABASE_URL=http://127.0.0.1:54321`
+    // en CI). User id distinct pour faciliter le debug en cas de fuite
+    // cross-test improbable.
+    const stubUserId = 'stub-active-signer-id';
+    const stubSession = {
+      access_token: 'stub-access-token',
+      token_type: 'bearer',
+      expires_in: 86_400,
+      expires_at: Math.floor(Date.now() / 1000) + 86_400,
+      refresh_token: 'stub-refresh-token',
+      user: {
+        id: stubUserId,
+        aud: 'authenticated',
+        email: 'actif@example.org',
+        user_metadata: { display_name: 'Actif Stub' },
+        app_metadata: { provider: 'email' },
+      },
+    };
+    await page.addInitScript((session) => {
+      window.localStorage.setItem('sb-127-auth-token', JSON.stringify(session));
+    }, stubSession);
+
+    // Mock stateful pour `/rest/v1/signatures` :
+    // - GET (hasUserSigned) : renvoie `[]` avant signature, `[{...}]` après.
+    // - POST (signPetition `.insert(...).select('*').maybeSingle()`) :
+    //   renvoie 201 + ligne insérée, bascule le flag interne `signed`.
+    //
+    // L'ordre est garanti par `handleSign` côté PetitionDetailPage :
+    // `await signPetition(...)` → `await refresh()` → re-issue GET. Pas
+    // de race observable côté Playwright qui sérialise les handlers de
+    // route par requête.
+    let signed = false;
+    await page.route('**/rest/v1/signatures**', async (route: Route) => {
+      const method = route.request().method();
+      if (method === 'POST') {
+        signed = true;
+        return route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: 'sig-stub-new',
+              petition_id: petitionFixture.id,
+              user_id: stubUserId,
+              created_at: new Date().toISOString(),
+            },
+          ]),
+        });
+      }
+      // GET (`hasUserSigned`) — body vide ou non selon l'état du flag.
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          signed
+            ? [
+                {
+                  id: 'sig-stub-new',
+                  petition_id: petitionFixture.id,
+                  user_id: stubUserId,
+                  created_at: new Date().toISOString(),
+                },
+              ]
+            : [],
+        ),
+      });
+    });
+
+    await page.goto(`/petitions/${petitionFixture.slug}`);
+
+    // État initial : « Signer cette pétition » visible, aria-pressed="false".
+    const signButton = page.getByRole('button', { name: /^Signer cette pétition$/i });
+    await expect(signButton).toBeVisible({ timeout: 10_000 });
+    await expect(signButton).toHaveAttribute('aria-pressed', 'false');
+
+    // Clic réel sur le bouton → handleSign() → signPetition() POST
+    // intercepté → refresh() → re-GET sur `/signatures` qui renvoie
+    // maintenant une ligne non vide → `signed = true` côté usePetition.
+    await signButton.click();
+
+    // État final : « Signée — retirer ma signature » visible,
+    // aria-pressed="true". Le bouton initial ne doit plus être rendu
+    // (le rendu conditionnel JSX bascule sur la branche `signed`).
+    const signedButton = page.getByRole('button', { name: /Signée — retirer ma signature/i });
+    await expect(signedButton).toBeVisible({ timeout: 10_000 });
+    await expect(signedButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      page.getByRole('button', { name: /^Signer cette pétition$/i }),
+    ).toHaveCount(0);
+  });
 });
