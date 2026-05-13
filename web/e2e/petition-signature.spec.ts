@@ -345,4 +345,108 @@ test.describe('Pétitions — flow consultation + signature stubée', () => {
       page.getByRole('button', { name: /Signer cette pétition/i }),
     ).toHaveCount(0);
   });
+
+  test('retire la signature: clic → DELETE intercepté → bascule retour vers « Signer cette pétition »', async ({
+    page,
+  }) => {
+    // Étape 29 — 6e itération du pattern « +1 test mock E2E » : flow
+    // unsign reverse-flow suggéré explicitement par le prompt étape 29
+    // §2 (premier exemple : « flow unsign reverse-flow (clic sur Signée —
+    // retirer ma signature → DELETE intercepté → bascule retour vers
+    // Signer cette pétition) »). Symétrique du test étape 28 : la matrice
+    // du `handleSign` côté `PetitionDetailPage.tsx:214-237` est désormais
+    // entièrement couverte en E2E (sign branch ET unsign branch).
+    //
+    // Seed de session : même pattern que les étapes 26/27/28 (clé
+    // localStorage `sb-127-auth-token`, dérivée de `VITE_SUPABASE_URL=
+    // http://127.0.0.1:54321` en CI). User id distinct (`stub-active-
+    // unsigner-id`) pour faciliter le debug en cas de fuite cross-test
+    // improbable.
+    const stubUserId = 'stub-active-unsigner-id';
+    const stubSession = {
+      access_token: 'stub-access-token',
+      token_type: 'bearer',
+      expires_in: 86_400,
+      expires_at: Math.floor(Date.now() / 1000) + 86_400,
+      refresh_token: 'stub-refresh-token',
+      user: {
+        id: stubUserId,
+        aud: 'authenticated',
+        email: 'actif-unsigner@example.org',
+        user_metadata: { display_name: 'Actif Unsigner Stub' },
+        app_metadata: { provider: 'email' },
+      },
+    };
+    await page.addInitScript((session) => {
+      window.localStorage.setItem('sb-127-auth-token', JSON.stringify(session));
+    }, stubSession);
+
+    // Mock stateful pour `/rest/v1/signatures` (symétrique étape 28) :
+    // - GET (hasUserSigned) : renvoie `[{...}]` tant que `hasSignedRow`
+    //   est `true`, `[]` après DELETE.
+    // - DELETE (unsignPetition `.delete().eq(...).eq(...)`) : renvoie
+    //   204 No Content (comportement PostgREST par défaut sans `.select()`,
+    //   cf. `web/src/lib/petitions.ts:251-258` qui ne chaîne pas `.select()`)
+    //   et bascule le flag interne `hasSignedRow = false`.
+    //
+    // **Séquencement applicatif, pas Playwright** : la non-race entre
+    // DELETE et GET subséquent vient de `handleSign` côté
+    // `PetitionDetailPage.tsx:221-227` qui chaîne `await unsignPetition(...)`
+    // PUIS `await refresh()` (lui-même fait `getPetition()` puis
+    // `hasUserSigned()`). Playwright sérialise les handlers de route par
+    // requête mais ne sérialise PAS plusieurs requêtes concurrentes ;
+    // c'est le `await` côté UI qui garantit que le GET arrive APRÈS le
+    // flip du flag.
+    const existingSignatureRow = {
+      id: 'sig-stub-existing',
+      petition_id: petitionFixture.id,
+      user_id: stubUserId,
+      created_at: new Date().toISOString(),
+    };
+    let hasSignedRow = true;
+    await page.route('**/rest/v1/signatures**', async (route: Route) => {
+      const method = route.request().method();
+      if (method === 'DELETE') {
+        hasSignedRow = false;
+        // PostgREST renvoie 204 No Content sur DELETE sans .select() ; le
+        // helper `unsignPetition` ne lit que `error`, jamais `data`.
+        return route.fulfill({
+          status: 204,
+          contentType: 'application/json',
+          body: '',
+        });
+      }
+      // GET (`hasUserSigned`) — body non vide tant que `hasSignedRow` est
+      // `true`, vide après le DELETE.
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(hasSignedRow ? [existingSignatureRow] : []),
+      });
+    });
+
+    await page.goto(`/petitions/${petitionFixture.slug}`);
+
+    // État initial : « Signée — retirer ma signature » visible,
+    // aria-pressed="true" (l'utilisateur a déjà signé au boot).
+    const signedButton = page.getByRole('button', { name: /Signée — retirer ma signature/i });
+    await expect(signedButton).toBeVisible({ timeout: 10_000 });
+    await expect(signedButton).toHaveAttribute('aria-pressed', 'true');
+
+    // Clic réel sur le bouton → handleSign() (branche `signed === true`)
+    // → unsignPetition() DELETE intercepté → refresh() → re-GET sur
+    // `/signatures` qui renvoie maintenant un body vide → `signed = false`
+    // côté usePetition.
+    await signedButton.click();
+
+    // État final : « Signer cette pétition » visible, aria-pressed="false".
+    // Le bouton signé initial ne doit plus être rendu (le rendu conditionnel
+    // JSX bascule sur la branche `signed === false`).
+    const signButton = page.getByRole('button', { name: /Signer cette pétition/i });
+    await expect(signButton).toBeVisible({ timeout: 10_000 });
+    await expect(signButton).toHaveAttribute('aria-pressed', 'false');
+    await expect(
+      page.getByRole('button', { name: /Signée — retirer ma signature/i }),
+    ).toHaveCount(0);
+  });
 });
