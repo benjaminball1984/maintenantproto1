@@ -273,22 +273,35 @@ variable d'env `STRIPE_WEBHOOK_SECRET` de l'Edge Function (cf. 1.7).
 
 ---
 
-## 3. Vercel
+## 3. Netlify
 
-### 3.1 Linkage du repo
+### 3.1 Création du site
 
-```bash
-cd /chemin/vers/maintenant
-npx vercel login
-npx vercel link
-# Sélectionner / créer le projet "maintenant"
-```
+1. Se connecter à **https://app.netlify.com** (plan payant, équipe
+   `Maintenant!`).
+2. **Team → Sites → Add new site → Import an existing project**.
+3. Provider Git : **GitHub** (autoriser l'app Netlify à lire le repo
+   `benjaminball1984/maintenantproto1` la première fois).
+4. Sélectionner le repo `maintenantproto1`.
+5. Build settings : Netlify détecte automatiquement `netlify.toml` à
+   la racine et applique :
+   - **Base directory** : `web`
+   - **Build command** : `npm ci && npm run build`
+   - **Publish directory** : `dist` (résolu en `web/dist`)
+6. **Deploy site** → le premier build démarre. ~2-3 min pour
+   `npm ci` (premier passage) + `npm run build` (~30 s).
+7. Récupérer l'URL générée du type `https://<nom-aléatoire>.netlify.app`
+   (renommable dans **Site settings → Site information → Change site
+   name**, ex. `maintenantproto1-staging.netlify.app`).
 
 ### 3.2 Variables d'environnement
 
-Vercel Dashboard → **Project Settings → Environment Variables** :
+Netlify Dashboard → **Site configuration → Environment variables** →
+**Add a variable** (cocher « Same value for all deploy contexts » ou
+distinguer Production / Deploy preview / Branch deploys selon les
+besoins) :
 
-| Var | Production | Preview | Development |
+| Var | Production | Deploy preview / Branch | Local (`.env.local`) |
 | --- | --- | --- | --- |
 | `VITE_SUPABASE_URL` | prod URL | staging URL | localhost |
 | `VITE_SUPABASE_ANON_KEY` | prod anon key | staging anon key | local key |
@@ -296,17 +309,23 @@ Vercel Dashboard → **Project Settings → Environment Variables** :
 | `VITE_SENTRY_DSN` | prod DSN | staging DSN | (vide) |
 | `VITE_SUPPORT_USER_ID` | UUID du compte support | idem | idem |
 | `VITE_SUPPORT_EMAIL` | `contact@maintenant.org` | idem | idem |
+| `VITE_APP_URL` | `https://maintenant.org` | URL Netlify | `http://localhost:5173` |
+| `VITE_APP_ENV` | `production` | `staging` | `development` |
 
-**⚠️ Aucune variable `service_role`, aucun secret Stripe côté Vercel
-(toutes les opérations sensibles passent par les Edge Functions
-Supabase qui ont leurs propres env vars).**
+**⚠️ Aucune variable `service_role`, aucun secret Stripe (`sk_live_*`,
+`whsec_*`), aucun token Supabase service role côté Netlify (toutes
+les opérations sensibles passent par les Supabase Edge Functions qui
+ont leurs propres env vars).**
+
+Après ajout : **Deploys → Trigger deploy → Clear cache and deploy
+site** pour que les nouvelles variables soient prises en compte.
 
 ### 3.3 Vérification headers CSP
 
-Une fois la première deploy preview en ligne :
+Une fois la première deploy en ligne :
 
 ```bash
-curl -I https://<staging-url>.vercel.app/
+curl -I https://<site-name>.netlify.app/
 ```
 
 Doit contenir :
@@ -316,31 +335,49 @@ Doit contenir :
 - `x-content-type-options: nosniff`
 - `x-frame-options: DENY`
 - `referrer-policy: strict-origin-when-cross-origin`
-- `permissions-policy: geolocation=(), microphone=(), camera=(), payment=()`
+- `permissions-policy: geolocation=(), microphone=(), camera=(), payment=(self "https://js.stripe.com")`
 
-Si une directive manque → revoir `vercel.json` racine.
+Si une directive manque → revoir `netlify.toml` racine (section
+`[[headers]]`).
 
 ### 3.4 Protection mot de passe sur staging
 
-**Tant que le site n'est pas public** :
+**Tant que le site n'est pas public** (plan Pro requis) :
 
-Vercel Dashboard → **Project Settings → Deployment Protection** →
-activer **« Password protection »** sur les déploiements **Preview**
-(pas sur Production une fois lancé).
+Netlify Dashboard → **Site configuration → Visitor access →
+Password protection** → activer un mot de passe partagé pour les
+déploiements de **branche** et **deploy previews** (pas sur
+production une fois lancé).
+
+Alternative gratuite : laisser le site public mais ajouter un
+`robots.txt` qui interdit l'indexation (`User-agent: * / Disallow: /`)
+jusqu'au go-live.
 
 ### 3.5 Domaine custom
 
-- **Project Settings → Domains** → ajouter `maintenant.org` (prod) et
-  `staging.maintenant.org` (preview).
+- **Site configuration → Domain management → Add domain alias** →
+  ajouter `maintenant.org` (prod) et `staging.maintenant.org`
+  (branche `staging` ou deploy preview).
 - Configurer les DNS chez le registrar :
-  - Apex : `A` → `76.76.21.21`
-  - Sous-domaines : `CNAME` → `cname.vercel-dns.com`
-- Attendre la délivrance du certificat TLS (auto via Vercel).
+  - **Option 1 (Netlify DNS, recommandé)** : déléguer les
+    nameservers du domaine à Netlify (`dns1.p01.nsone.net`,
+    `dns2.p01.nsone.net`, etc. — Netlify donne les valeurs
+    exactes). Tout le DNS est ensuite géré dans le dashboard
+    Netlify, et le certificat TLS est généré automatiquement.
+  - **Option 2 (DNS externe)** :
+    - Apex (`maintenant.org`) : `ALIAS` ou `ANAME` → `apex-loadbalancer.netlify.com`
+      (ou `A` → 4 IPs fournies par Netlify si registrar sans ALIAS).
+    - Sous-domaines (`staging.maintenant.org`) : `CNAME` → le nom du
+      site Netlify (ex. `maintenantproto1-staging.netlify.app`).
+- Attendre la délivrance du certificat TLS Let's Encrypt (auto via
+  Netlify, ~1-5 min après propagation DNS).
 
 ### 3.6 Première mise en prod
 
 1. Push sur `main` → trigger CI GitHub Actions (unit + e2e).
-2. Si CI verte → Vercel crée le déploiement production automatiquement.
+2. Si CI verte → Netlify crée le déploiement production automatiquement
+   (branche de production configurée dans **Site configuration → Build
+   & deploy → Branches → Production branch**).
 3. Smoke test manuel sur `https://maintenant.org` :
    - Page d'accueil charge en < 2 s.
    - Inscription + confirmation email fonctionnent.
