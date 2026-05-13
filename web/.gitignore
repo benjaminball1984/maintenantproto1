@@ -15,6 +15,11 @@ coverage
 .env
 .env.local
 
+# Playwright local artefacts (CI archives `web/playwright-report` via
+# upload-artifact ; rien à committer côté repo).
+test-results
+playwright-report
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
