@@ -41,6 +41,8 @@
 | 30. Post-go-live — T99CP cumul public (décision produit débloquée 2026-05-13) : RPC additive `transparency_t99cp_total()` + carte dédiée sur `/transparence` |   ✅   |
 | 31. Post-go-live — conditions externes inchangées : +2 E2E mock (poll-detail vote/unvote, symétrique sign/unsign étape 28/29) + extraction helper `installAuthenticatedSession` (clôture `L8-arch-authsession`) — tous les autres items différés |   ✅   |
 | 32. Post-go-live — conditions externes inchangées : +2 E2E mock (mobilization-detail rsvp/cancel, symétrique poll vote/unvote étape 31) — tous les autres items différés |   ✅   |
+| 33. Post-go-live — conditions externes inchangées : 10e itération du pattern E2E mock sur `/campaigns/:slug` (PR #47, ramène à 883 vitest + 43 E2E Playwright verts en CI) |   ✅   |
+| 34. Bascule plan visible-first (cf. `PLAN-VISIBLE-FIRST.md`) — Home renouvelée : hero refondu + dual CTA Adhérer/Découvrir + 4 compteurs live (signataires, mobilisations, communes, T99CP) + 3 cards d'action (pétitions, mobilisations, services) + section mission + Footer 3 colonnes (mission / outils / légal) |   ✅   |
 
 ---
 
@@ -10544,6 +10546,249 @@ janitor étape 31 :
   retenue. Le pattern janitor « 4 fixes doc-only safe-first »
   continue d'être un vecteur sain de progrès incrémental sans
   risque de régression.
+
+---
+
+## Étape 34 — Bascule plan visible-first / Home renouvelée ✅
+
+### Contexte d'ouverture
+
+- Plan révisé `PLAN-VISIBLE-FIRST.md` adopté en début de session :
+  condensé 17 → 9 étapes (34→42) avec **front-loading des livrables
+  visuels**. Dette technique invisible (Lighthouse réel, Sentry,
+  M2-sec-policy, M1-RGPD, backups, Stripe reconciliation) regroupée
+  en une seule étape 41.
+- État entrant : étape 33 ✅ mergée (PR #47, 10e itération du
+  pattern E2E mock sur `/campaigns/:slug`). 883 vitest + 43 E2E
+  Playwright verts en CI. Déployé sur
+  `https://maintenant-le-mouvement.netlify.app/`.
+- `HomePage` était un simple `<Placeholder>` depuis le squelette
+  étape 3 ; aucune route home travaillée jusqu'à présent.
+
+### Livré
+
+- **`web/src/pages/HomePage.tsx`** réécrit complètement :
+  - **Hero** : eyebrow `La voix des 99 %` + H1 fort
+    `Maintenant ! Le pouvoir citoyen, à portée de clic.` + sub-headline
+    (mission condensée) + **dual CTA** `Adhérer` (→ `/join`) et
+    `Découvrir` (ancre `#mission` in-page, pas de 404 — la route
+    `/decouvrir` est créée étape 36 et la cible sera basculée à ce
+    moment-là).
+  - **4 compteurs live** au-dessus du fold dans une grille
+    responsive (`auto-fit minmax(180px, 1fr)`) : Signataires
+    (`signatures`), Mobilisations en cours (`publishedMobilizations`),
+    Communes libres (`publishedCommunes`), T99CP émis (
+    `fetchT99cpTotal`). État `loading` → placeholder « … » avec
+    `aria-label="Chargement…"`. État `error` → tiret `—` (silencieux,
+    ne casse pas le rendu). Cleanup `cancelled` flag dans les
+    deux `useEffect` (cohérent avec le pattern `TransparencePage`).
+  - **3 cards d'action** « Ce que tu peux faire dès maintenant » :
+    Pétitions (`/petitions`), Mobilisations (`/mobilizations`),
+    Services entraide (`/services`). Icônes `ICONS.*` (IconPen,
+    IconFlame, IconHome) sur fond `--mn-brand-light`, layout
+    grille responsive.
+  - **Section mission** avec ancre `id="mission"` (cible du CTA
+    Découvrir) et lien secondaire « Voir nos compteurs publics »
+    → `/transparence`.
+  - Aucun nouveau token de design — uniquement réutilisation des
+    variables CSS `--mn-*` (gradient signature, surfaces, text-1/2,
+    border, brand, brand-light, brand-dark, radius).
+  - 0 backend touché, RLS inchangée.
+- **`web/src/components/Footer.tsx`** refait en **3 colonnes** (cf.
+  plan §Étape 34) :
+  - Colonne Mission : pitch court + CTA `Rejoindre le mouvement` →
+    `/join`.
+  - Colonne Outils : navigation vers Pétitions, Mobilisations,
+    Campagnes, Sondages, Services entraide, Média, Communes libres.
+  - Colonne Légal : Confidentialité, Mentions légales, Cookies,
+    Contact, Transparence (compat 100 % `aria-label="Liens légaux"`
+    pour ne pas casser les tests existants).
+  - Bandeau baseline « Plateforme citoyenne, sans publicité ni
+    pistage. » + année.
+- **`HANDOFF-PROGRESS.md`** : ajout étape 33 ✅ rétroactif (entrée
+  table État global, courte — la session 33 n'a pas été journalée à
+  son moment, on rétablit la traçabilité via la PR #47) + entrée
+  étape 34.
+
+### Tests
+
+- **+9 tests `HomePage.test.tsx`** : H1 contient « Maintenant ! »,
+  dual CTA targets, 4 compteurs live formatés FR (`fr-FR` Intl ⇒
+  narrow no-break space matché via `\s`), placeholder
+  « Chargement… » durant le pending, fallback `—` sur erreur,
+  3 cards d'action avec `href`, section mission + lien
+  `/transparence`, cleanup démontage compteurs, cleanup démontage
+  T99CP. Pattern de mock cohérent avec `TransparencePage.test.tsx`
+  (`vi.mock('@/lib/transparency')` + `importActual`).
+- **+3 tests `Footer.test.tsx`** : présence des 3 colonnes (Mission
+  / Outils / Légal), liens outils principaux (Pétitions /
+  Mobilisations / Services entraide), CTA Rejoindre depuis Mission.
+- **Total : 883 → 895 vitest (+12)**. E2E Playwright inchangés
+  (43 verts).
+
+### Bundle
+
+- `HomePage-*.js` : 8.35 KB / gzip 2.80 KB (vs `Placeholder` à
+  ~négligeable). Toujours sous la cible Lighthouse — la home
+  charge déjà router + react vendor chunks.
+- Pas de nouvelle dépendance npm.
+
+### Décisions étape 34
+
+- **« Découvrir » CTA → ancre `#mission`** plutôt que
+  `/decouvrir` (404 jusqu'à étape 36). Bascule de l'ancre vers la
+  route quand `/decouvrir` est créée (étape 36 §Plan).
+- **Hero text « Maintenant ! Le pouvoir citoyen, à portée de clic. »**
+  : conserve « Maintenant ! » en début de H1 pour que
+  `App.test.tsx` (qui match `/Maintenant !/i` sur le heading
+  principal) reste vert sans modification.
+- **Footer compat aria** : `<nav aria-label="Liens légaux">`
+  conservé tel quel (pas de `aria-labelledby`) pour ne pas
+  casser le sélecteur `getByRole('navigation', { name: /Liens
+  légaux/i })` utilisé ailleurs (4 occurrences dans la suite de
+  tests). L'en-tête « Légal » reste visible mais n'est PAS
+  l'accessible name du landmark.
+- **Pas de squelette de chargement type Loading skeleton** sur les
+  compteurs : reporté étape 40 (cf. plan « Animations & onboarding »
+  qui livre `<Skeleton>` réutilisable). En attendant on utilise un
+  simple placeholder « … » + `aria-label="Chargement…"` pour
+  garder la livraison étape 34 légère.
+- **Footer.tsx layout** : grille `auto-fit minmax(220px, 1fr)`
+  pour faire tomber les colonnes sur mobile en bloc empilé (cf.
+  breakpoints 767/1023 dans HANDOFF). Pas de media-query explicite
+  nécessaire à ce stade.
+
+### Items différés
+
+- `/decouvrir` page (étape 36 du plan).
+- Empty states sur les pages listings vides (étape 35).
+- Loading skeletons + onboarding modal (étape 40).
+- Bloc technique pré-launch (Lighthouse réel, Sentry, M2-sec-policy,
+  M1-RGPD, backups, k6 charge) → étape 41 consolidée.
+
+### Prochaines étapes (étape 35)
+
+- Composant `<EmptyState>` réutilisable (icon `ICONS.*` + heading +
+  microcopie + CTA "Créer la première"), appliqué à 13 pages
+  listings vides : pétitions, mobilisations, polls, campaigns,
+  communes, media, services (housing/carpooling/marketplace/
+  lending/garden/sel/crowdfunding).
+- Polish uniforme des cards listings (hover state, spacing,
+  transitions ≤ 200 ms, `prefers-reduced-motion` respecté).
+
+---
+
+## Prompt pour la session N+29 (étape 35)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par
+> l'harness — typiquement `claude/<auto>`).
+>
+> **Plan de référence** : `PLAN-VISIBLE-FIRST.md` à la racine. Tu
+> suis le plan condensé 34→42 (9 étapes). Étape 34 ✅ mergée :
+> Home renouvelée + Footer 3 colonnes (895 vitest verts, 43 E2E
+> verts).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`,
+>    camelCase TS / snake_case DB, SVG via `ICONS.*` pas
+>    d'emojis, RLS, RGPD, Lighthouse ≥ 95, axe-core ≥ 95,
+>    `prefers-reduced-motion`). Note la **Politique de PR** qui
+>    autorise auto-merge jusqu'à la session 50, la **Recopie
+>    systématique du prompt** et l'**Audit récurrent vibe
+>    janitor** (PR séparée après le merge de la PR principale).
+> 2. `PLAN-VISIBLE-FIRST.md` § Étape 35 — Empty states + Cards
+>    polish.
+> 3. `HANDOFF-PROGRESS.md` — journal (dernière entrée : étape 34 ✅
+>    le 2026-05-14).
+>
+> **ÉTAPE 35 à exécuter — Empty states + Cards polish (impact n°2)** :
+>
+> 1. **Composant réutilisable `<EmptyState>`** dans
+>    `web/src/components/EmptyState.tsx` :
+>    - Props : `icon: ReactElement` (ICONS.*),
+>      `title: string`, `description: string`,
+>      `cta?: { to: string; label: string }` (optionnel),
+>      `testId?: string`.
+>    - Layout : centré, vertical (icon → titre → desc → CTA),
+>      `max-width: 480` typique, padding `2rem 1.5rem`.
+>    - Couleurs depuis variables CSS (`--mn-brand-light` pour
+>      icon wrap, `--mn-text-2` pour desc, `--mn-brand` pour CTA
+>      primaire).
+>    - Pas de tokens `T.*` modifiés.
+> 2. **Appliquer `<EmptyState>` sur les 13 pages listings vides** :
+>    `PetitionsPage`, `MobilizationsPage`, `PollsPage`,
+>    `CampaignsPage`, `CommunesPage`, `MediaPage`,
+>    `services/HousingPage`, `services/CarpoolingPage`,
+>    `services/MarketplacePage`, `services/LendingPage`,
+>    `services/GardenPage`, `services/SelPage`,
+>    `services/CrowdfundingPage`.
+>    - Chacune doit, quand la liste retournée par la lib est
+>      vide ET non en erreur, afficher `<EmptyState>` avec un
+>      `cta` cohérent (« Créer la première pétition », etc.).
+>    - Sur les pages RequireAuth-only-pour-création, garder
+>      le CTA même pour anon (qui sera renvoyé sur AuthModal
+>      via le pattern existant — ne pas dupliquer la logique).
+> 3. **Polish uniforme cards listings** :
+>    - Repérer 3 patterns d'item-card actuels (petition card,
+>      mobilization card, services housing card) → extraire
+>      éventuels styles communs en helper si la duplication
+>      devient évidente (sinon laisser inline pour rester
+>      « primum non nocere »).
+>    - Ajouter hover state `transform: translateY(-2px)` + box-shadow
+>      léger (`0 4px 12px rgba(0,0,0,0.06)`), transition
+>      `transform 200ms, box-shadow 200ms`.
+>    - **Respecter `@media (prefers-reduced-motion: reduce)`** :
+>      annuler les transitions (`transition: none !important;` dans
+>      un fichier CSS dédié `web/src/index.css` ou bloc local
+>      inline avec `useReducedMotion` si pas de helper existant).
+> 4. **Tests** :
+>    - ≥ 5 tests `<EmptyState>` (render texte / icon / CTA absent /
+>      CTA présent avec href correct / testId propagé).
+>    - Maintenir 895 vitest verts (+ ≥ 5 nouveaux ⇒ ≥ 900).
+>    - E2E inchangés (43).
+> 5. **Risque** : aucun — CSS-in-JS local, pas de tokens `T.*`
+>    touchés, pas de backend, pas de RLS.
+> 6. **4 checks locaux verts AVANT push** : `npm run typecheck`,
+>    `npm run lint`, `npm run test`, `npm run build`.
+> 7. **Commit** : `feat(ui): step 35 — empty states + cards polish`.
+> 8. **PR draft → main** (autorisation auto-merge cf. CLAUDE.md
+>    § Politique de PR jusqu'à la session 50 incluse). Body :
+>    Summary + Décisions + Test plan.
+> 9. **HANDOFF-PROGRESS.md** : ajouter étape 35 ✅ après l'entrée
+>    étape 34 (mêmes sous-sections : Contexte / Livré / Tests /
+>    Bundle / Décisions / Items différés / Prochaines étapes 36).
+> 10. **Audit janitor post-step 35** (cf. CLAUDE.md §Audit
+>     vibe janitor) :
+>     - 2-3 subagents `general-purpose` en parallèle :
+>       architecture/élégance, robustesse/edge-cases, sécurité.
+>     - Synthèse + priorisation par sévérité + risque de
+>       régression.
+>     - Application **safe-first uniquement** (primum non
+>       nocere : rollback immédiat si un test casse).
+>     - PR séparée `chore(janitor): post-step 35 — …` avec son
+>       propre cycle commit + push + auto-merge.
+>     - Documenter sous-section « ### Audit vibe janitor étape
+>       35 » dans `HANDOFF-PROGRESS.md`.
+> 11. **Recopier le prompt étape 36** à la fois dans
+>     `HANDOFF-PROGRESS.md` ET dans la réponse de chat finale
+>     (règle récursive — chaque prompt généré doit lui-même
+>     reconduire cette consigne pour la session N+1).
+>
+> **Conditions d'arrêt malgré l'autorisation auto-merge** :
+>
+> - Migration DB risquée non listée explicitement dans le prompt.
+> - Changement RGPD non listé.
+> - Breaking change visible utilisateur (URL changée, suppression
+>   de page).
+> - Modification des tokens `T.*` sans validation designer.
+> - Review humaine ou commentaire GitHub avant le merge.
+> - 3 tentatives consécutives n'ont pas suffi à rendre les 4
+>   checks locaux verts.
+>
+> **Étape suivante (36 — `/decouvrir`)** : nouvelle route éditoriale
+> + bascule du CTA « Découvrir » du hero (ancre `#mission` → `/decouvrir`)
+> + bascule de la mission band → `/decouvrir`. Cf. plan §Étape 36.
 
 ---
 
