@@ -9821,6 +9821,275 @@ les modifications vivent dans `web/e2e/**`.
   authentifié, OU extraire un 2e helper E2E si nouveau pattern
   émerge.
 
+### Audit vibe janitor étape 31
+
+**Branche** : `claude/janitor-post-step31`
+
+Audit en parallèle via 3 subagents `general-purpose` après le merge
+de la PR principale #43 (commit
+`chore(prod): step 31 …`) : architecture / élégance,
+robustesse / edge cases, sécurité / RGPD / cohérence handoff.
+
+#### Findings par sévérité
+
+| Axe | Total | critical | high | medium | low | Fixable safe-first | Déférés / non-findings |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Architecture | 8 | 0 | 0 | 0 | 8 | 1 retenu (A1) | 0 non-findings + 7 différés (A2, A3, A4, A5, A6, A7, A8) |
+| Robustesse | 13 | 0 | 0 | 1 (R5) | 5 | 1 retenu (R5 via A1 light) | 5 non-findings (R7, R9-R13) + 6 différés (R1, R2, R3, R4, R6, R8) |
+| Sécurité / Handoff | 7 | 0 | 0 | 0 | 2 | 1 retenu (H1) | 5 non-findings (RGPD1, S1, RLS1, HC1, HC2) + 1 différé (H2 — fold dans H1) |
+| **Total** | **28** | **0** | **0** | **1** | **15** | **2 retenus** | **10 non-findings + 14 différés** |
+
+#### Fixes appliqués (safe-first, primum non nocere)
+
+**2 fixes appliqués** sur 28 findings (7%) — tous strictement isolés
+au scope janitor, zéro impact runtime.
+
+**J31-A1** (low / low-risk) — **Extraction de la constante
+`SUPABASE_AUTH_STORAGE_KEY`** dans `web/e2e/utils/mockSupabase.ts`.
+Le littéral `'sb-127-auth-token'` était codé en dur dans
+`addInitScript` ; la JSDoc documentait la dépendance à
+`VITE_SUPABASE_URL=http://127.0.0.1:54321` mais sans constante
+grep-able. Refacto : déclaration `export const
+SUPABASE_AUTH_STORAGE_KEY = 'sb-127-auth-token'` au sommet du
+module, JSDoc dédiée détaillant la dérivation supabase-js v2 et le
+risque CI-drift, `addInitScript` reçoit maintenant la clé en
+argument (closure-safe via objet `{ storageKey, session }`).
+Adresse convergence des findings A1 (architecture) + R5
+(robustesse — variante light : pas de runtime guard, pas de
+dérivation env, juste un nommage explicite). Diff : ~10 lignes,
+zéro changement de comportement.
+
+**J31-H1** (low / low-risk) — **Mise à jour de la dette technique
+consolidée** dans `HANDOFF-PROGRESS.md` pour marquer
+`L8-arch-authsession` comme **fermée à l'étape 31**. Le tableau
+de l'étape 30 listait L8 parmi les « Dettes existantes
+inchangées » ; le narratif étape 31 a déjà acté la fermeture mais
+le tableau global ne la reflétait pas. Édition doc pure, cohérence
+documentaire.
+
+#### Fixes déférés (dette nouvelle ou existante)
+
+**J31-A2** (low / low-risk) — **Helper `installAuthenticatedSession`
+ne retourne pas l'objet résolu**. Pourrait exposer
+`{ userId, email, displayName }` calculés avec defaults pour
+éviter la double-déclaration aux call-sites. **Déféré** :
+refacto strictement additif mais nécessite de modifier les 6
+call-sites pour utiliser la valeur de retour. Bénéfice marginal
+vs le pattern actuel (déclaration locale `stubUserId` claire).
+À traiter dans une étape de polish dédiée si la matrice E2E
+auth grossit.
+
+**J31-A3** (low / low-risk) — **Pattern stateful toggle mock
+POST/DELETE-flag-flip dupliqué 4× désormais** (2 dans
+`petition-signature.spec.ts` étapes 28/29 + 2 dans
+`poll-vote.spec.ts` étape 31). Helper
+`installStatefulToggleRoute(page, { urlGlob, getRow, methodOn,
+methodOff })` extrairait ~20 lignes/site. **Déféré** comme
+nouvelle dette **`L9-arch-stateful-mock`** : nécessite design API
++ refacto 4 call-sites E2E, risque medium d'ouvrir un edge case
+sur l'ordre LIFO des routes Playwright ou la closure du flag
+côté handler. Hors scope janitor « primum non nocere ».
+
+**J31-A4** (low / low-risk) — **Pas d'interface explicite
+`PollFixture` / `PollOptionFixture`** dans `poll-vote.spec.ts`.
+**Déféré** : cohérent avec le voisin `petition-signature.spec.ts`
+qui n'en a pas non plus ; un type partagé serait propre mais pas
+urgent. À grouper dans une refacto de typage des fixtures E2E.
+
+**J31-A5** (low / low-risk) — **Champ `existingVoteRow.user_id`
+non consommé par le mock GET (qui ne renvoie que `option_id`)**.
+**Déféré** : strictement, `id`, `poll_id`, `user_id` et
+`created_at` de `existingVoteRow` sont tous documentaires (jamais
+lus par `getUserVote .select('option_id')`). Supprimer juste
+`user_id` introduirait une asymétrie avec `newVoteRow` (test vote)
+sans bénéfice clair. Soit on supprime tout le mock body soit on
+garde tout — préférer l'aspect documentaire des fixtures complètes.
+
+**J31-A6** (low / low-risk) — **`optionFixtures[0]` (`opt-stub-low`)
+jamais référencé** dans aucun des 2 tests. **Déféré** : choix
+volontaire pour montrer un rendu multi-option ; un commentaire
+clarifiant l'intention serait bienvenu mais non bloquant.
+
+**J31-A7** (low / low-risk) — **Compteurs « 7e itération » / « 8e
+itération » dans les commentaires** vont dériver mécaniquement
+à chaque nouvelle étape. **Déféré** : pointer vers
+`HANDOFF-PROGRESS.md § étape 31` plutôt que figer un numéro
+préviendrait la dérive. Pattern présent depuis étape 26.
+
+**J31-A8** (low / low-risk) — **Export
+`AuthenticatedSessionOptions`** non nécessaire (aucun call-site
+externe n'annote l'objet inline). **Déféré** : export ne nuit
+pas, utile si un futur helper compose. Cohérent avec
+`SupabaseStubOverrides` également exporté.
+
+**J31-R1** (low / low-risk) — **`pollFixture.members_only = false`
+diverge du default `createPoll: true`**. Choix volontaire pour
+éviter de mocker la vérif RLS `votes_insert_member` côté serveur.
+**Déféré** : un 3e test avec `members_only: true` confirmerait
+la parité UI mais le call-site UI est strictement identique côté
+client (la RLS membre est server-side only — cf. RLS1 ci-dessous).
+
+**J31-R2** (low / low-risk) — **Glob `**/rest/v1/polls**` matche
+aussi `/rest/v1/poll_options?...`**. Playwright LIFO garantit que
+l'ordre actuel fonctionne (`poll_options` enregistré APRÈS,
+prioritaire), mais un swap futur briserait silencieusement.
+**Déféré** : ancrer en `**/rest/v1/polls?**` (exiger le `?`)
+résoudrait l'ambiguïté. Risque medium si appliqué maintenant —
+modifier le pattern pourrait casser un autre call-site (test
+liste polls par ex.). À tester soigneusement dans une refacto
+mock-helper dédiée (à grouper avec `L9-arch-stateful-mock` et
+`L-e2e-rpc-scalar`).
+
+**J31-R3** (low / low-risk) — **Invariant d'ordre
+`installSupabaseStubs` AVANT les routes spécifiques** non assert.
+**Déféré** : doc-only ou wrapping API qui forcerait l'ordre. Pas
+urgent — le `beforeEach` actuel respecte l'ordre.
+
+**J31-R4** (low / low-risk) — **`installAuthenticatedSession`
+idempotent-mais-additif** (deux appels enregistrent deux
+`addInitScript`, le second `setItem` gagne). **Déféré** : pas de
+bug actuel, helper documenté.
+
+**J31-R5 (partielle, deferred-stronger)** (medium / low-risk fort)
+— **Pas de runtime guard sur `SUPABASE_AUTH_STORAGE_KEY`**. La
+constante (fix J31-A1) reste codée en dur ; en cas de drift CI
+env, la session serait silencieusement posée sous une clé
+ignorée par supabase-js. **Déféré** comme nouvelle dette
+**`L10-e2e-storagekey-env`** : variante R5 forte
+(`new URL(process.env.VITE_SUPABASE_URL).hostname.split('.')[0]`
+au module load) plus robuste, mais introduit nouveau failure
+mode (URL malformée, env manquante). À traiter dans étape
+dédiée si CI env bouge.
+
+**J31-R6** (low / medium-risk) — **`closes_at: null` + microtask
+race** : `useEffect` dans `PollDetailPage.tsx:238-248` appelle
+`queueMicrotask(setIsClosed(false))` ; l'initial state est déjà
+`false`, donc pas de race en pratique. **Déféré** doc-only.
+
+**J31-R8** (low / low-risk) — **Trigger `votes_count_inc` non
+simulé** côté mock — la barre de progression / `%` rendue avec
+des compteurs statiques. **Déféré** : déjà commenté dans le
+spec (lignes 42-47) ; couverture du compteur dynamique à
+faire en E2E réel (projet Supabase de test).
+
+**J31-H2** (low / low-risk) — **Pas de nouvelle section « Dette
+technique consolidée » à la fin de l'étape 31** (vs étape 30 qui
+en a une). **Déféré** : fold dans le présent janitor via le fix
+J31-H1.
+
+#### Non-findings explicites (confirmation par 3 subagents)
+
+Architecture (0) : tous les 8 findings sont actionnables (différés
+ou retenus).
+
+Robustesse (5) : R7 (`aria-pressed` synchrone — auto-retry Playwright
+absorbe), R9 (helper garantit `user?.id` truthy avant fetch), R10
+(`expires_at = now + 24h` >> durée run E2E), R11 (Playwright
+`BrowserContext` frais par test), R12 (`new Date().toISOString()`
+UTC locale-free), R13 (séquencement applicatif
+`await votePoll` puis `await refresh()` — pas de race).
+
+Sécurité (5) + Handoff (1) : RGPD1 (emails `@example.org` IANA RFC
+2606 reserved, safe), S1 (zéro pattern JWT / Stripe / Supabase key —
+seulement placeholders `stub-access-token`), RLS1 (claim « RLS
+membre is server-side only » vérifié : `votePoll` côté client n'a
+PAS de gate `members_only`, donc le mock ne falsifie pas un
+comportement RLS), HC1 (étape 31 row au tableau global cohérente),
+HC2 (prompt étape 32 récursif + compteurs à jour + Phases 1/2/3
+référencées + L8 correctement marqué fermé). Non-findings
+explicites : CSP / `netlify.toml` non touché, `stripe_events` non
+modifié, `.gitignore` propre, `package.json` non modifié.
+
+#### Hygiène (janitor étape 31)
+
+- Pas de modification du prototype.
+- Pas de modification du design system `T.*` (CSS vars `--mn-*`).
+- Pas de migration DB.
+- Pas de breaking change visible utilisateur (2 fixes : 1 refacto
+  E2E util pure + 1 mise à jour doc).
+- Pas de nouvelle dépendance npm.
+- Pas de bump majeur.
+- TS strict + no `any` (vérifié sur le fix A1).
+- Aucun fix qui casse un test existant (883 tests vitest +
+  39 E2E Playwright attendus en CI inchangés).
+- Aucun fix qui ouvre un risque B.
+
+#### Checks finaux (janitor étape 31)
+
+```
+> npm run typecheck && npm run lint && npx vitest run && npm run build
+
+✓ typecheck   (tsc -b + e2e/tsconfig.json)
+✓ lint        (eslint .)
+✓ vitest      (128 files, 883 tests passed, ~60s)
+✓ build       (entry 47.34 kB / gzip 13.32 kB ; PollDetailPage
+              7.96 kB / gzip 2.99 kB lazy inchangés)
+```
+
+Compteur de tests **inchangé** (883 vitest + 39 E2E Playwright
+attendus en CI) : aucun changement de test, le fix A1 préserve
+sémantique exacte du helper (même clé `localStorage`, même
+session stub).
+
+#### Dette technique consolidée — mise à jour
+
+**Dette fermée à l'étape 31** :
+
+- **`L8-arch-authsession`** ✅ FERMÉE — Helper
+  `installAuthenticatedSession` extrait dans
+  `web/e2e/utils/mockSupabase.ts` (étape 31 livrable principal).
+  6 call-sites convertis (4 dans `petition-signature.spec.ts`
+  étapes 26/27/28/29 + 2 dans `poll-vote.spec.ts` étape 31).
+
+**Nouvelles dettes ajoutées par le janitor étape 31** :
+
+- **`L9-arch-stateful-mock`** (J31-A3, low / medium-risk) —
+  Pattern stateful toggle mock POST/DELETE-flag-flip dupliqué 4×.
+  Helper `installStatefulToggleRoute` à extraire dans une étape
+  refacto mock-helper dédiée (groupée avec `L-e2e-rpc-scalar`
+  et `M7-e2e-storagekey`).
+- **`L10-e2e-storagekey-env`** (J31-R5 strong, medium / low-risk) —
+  Variante runtime guard / env-derivation pour
+  `SUPABASE_AUTH_STORAGE_KEY`. À traiter si CI env bouge ou si
+  matrice E2E s'élargit à plusieurs hostnames Supabase.
+
+**Dettes existantes inchangées** (étape 30 — L8 fermée, autres
+inchangées) : H3-sec, M2-sec-policy, M5-rob, M1-RGPD, M6-rob,
+M7-e2e-storagekey, L1-a11y, L3-arch, L4-sec, L5-arch,
+L6-arch-progress, L7-arch-loginhref, L1-rob, H4-deploy-deno,
+L-sec-webhook-body, L-arch-useasyncfetch, L-arch-helper-contract,
+L-arch-format-number, L-e2e-rpc-scalar, L-rpc-adhesions-count,
+L-rpc-helpers-robust, L-test-articledetail-act,
+L-rpc-t99cp-reason-scope.
+
+#### Décisions janitor
+
+- **2 fixes safe-first appliqués** sur 28 findings (7%) — pattern
+  similaire au janitor étape 28 (4 fixes safe-first sur étape de
+  type « +1 test mock E2E »). Diff : 1 refacto E2E util pure
+  (A1) + 1 mise à jour dette consolidée (H1). Zéro impact runtime.
+- **14 nouvelles dettes / déférés** consolidés (J31-A2 à A8 +
+  R1-R6, R8 + H2) — la PR étape 31 a introduit un nouveau spec
+  E2E et un nouveau helper, qui ouvrent naturellement plus de
+  surface d'audit. Toutes les dettes différées sont **safe-first
+  non applicables** (medium risque ou hors scope, comme
+  L9-arch-stateful-mock qui nécessite un refacto cross-spec).
+- **10 non-findings explicites** confirment que la PR étape 31
+  est fonctionnellement saine : RLS server-side correctement
+  caractérisée, zéro fuite secret, prompt étape 32 conforme aux
+  règles récursives, helper E2E type-strict.
+- **Toutes les dettes high (H3-sec) + medium-high (M2-sec-policy,
+  M5-rob, M1-RGPD, L1-a11y, M6-rob, M7-e2e-storagekey)** restent
+  ouvertes, à traiter dans des étapes dédiées.
+- **Conclusion** : l'étape 31 a fermé proprement la dette
+  `L8-arch-authsession` ouverte à l'étape 28 (3 étapes plus
+  tard) et ouvert 2 nouvelles dettes mineures (`L9-arch-stateful-
+  mock`, `L10-e2e-storagekey-env`). Le pattern « +1 test E2E
+  ciblé + extraction helper si dette mûrit » continue d'être un
+  vecteur de progrès incrémental sain quand les conditions
+  externes (Lighthouse réel, projet Supabase de test, Sentry,
+  Stripe live, M2-sec-policy, M1-RGPD) restent bloquées.
+
 ---
 
 ## Prompt pour la session N+26 (étape 32)
