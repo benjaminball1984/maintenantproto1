@@ -45,6 +45,7 @@
 | 34. Bascule plan visible-first (cf. `PLAN-VISIBLE-FIRST.md`) — Home renouvelée : hero refondu + dual CTA Adhérer/Découvrir + 4 compteurs live (signataires, mobilisations, communes, T99CP) + 3 cards d'action (pétitions, mobilisations, services) + section mission + Footer 3 colonnes (mission / outils / légal) |   ✅   |
 | 35. Plan visible-first §Étape 35 — Empty states + Cards polish : composant `<EmptyState>` réutilisable (icon ICONS.* + heading + microcopie + CTA optionnel) appliqué aux 13 pages listings vides + hover state uniforme `.mn-listing-card` (translateY-2px + box-shadow 4px 14px ≤180ms) avec respect strict `prefers-reduced-motion` |   ✅   |
 | 36. Plan visible-first §Étape 36 — Page `/decouvrir` éditoriale (5 sections : Mission, Comment ça marche, Les outils, Notre vision, Roadmap) + 3 témoignages marqués démo (placeholders RGPD) + bascule CTA hero `Découvrir` `#mission` → `/decouvrir` + lien Footer colonne Mission + ajout à `PUBLIC_ROUTES` E2E (smoke + axe-core) |   ✅   |
+| 37. Plan visible-first §Étape 37 — `/transparence` polish (microcopie « comment c'est calculé » sous chaque compteur, T99CP mise en avant fond `--mn-brand-light`, graphique `MonthlySignupsChart` agrandi via `minHeight=360px`, lien `/decouvrir` en bas) + Profil enrichi (badges contribution 4 compteurs `head:true count:exact` self-scope, historique 10 dernières actions merge 4 tables + sort desc + ellipse, queries lecture seule RLS publique inchangée) |   ✅   |
 
 ---
 
@@ -11195,6 +11196,307 @@ pattern « PR principale propre → janitor pur documentaire » est
 maintenant l'état stable du projet sur les livraisons frontend
 plan visible-first (étapes 32, 34, 35, 36 toutes terminées sur ce
 mode).
+
+---
+
+## Étape 37 — `/transparence` polish + Profil enrichi ✅
+
+### Contexte d'ouverture
+
+- Plan visible-first §Étape 37. PR janitor post-step 36 mergée
+  (compteurs : 907 vitest + 41 E2E locaux + 1 nouveau smoke
+  `/decouvrir`).
+- Page `/transparence` déjà en place (étape 19 v1, étape 21
+  graphique mensuel, étape 30 carte T99CP cumul). Manquait : la
+  microcopie « comment c'est calculé » sous chaque compteur, la
+  mise en avant visuelle de la carte T99CP, l'agrandissement du
+  graphique, et un lien interne vers la nouvelle page
+  `/decouvrir` (étape 36).
+- Page `/profile` déjà en place (étape 6 v1 avatar + bio, bascule
+  TS strict ultérieure). Manquait : les compteurs de
+  contribution (signatures, RSVP, votes, posts) et l'historique
+  des 10 dernières actions.
+- L'équipe n'a plus de crédits Netlify (signalé par Ben au début
+  de la session). Le push GitHub reste OK, mais le déploiement
+  preview Netlify n'est pas attendu — la livraison reste validée
+  par les 4 checks locaux verts (typecheck + lint + 924 vitest +
+  build).
+
+### Livré
+
+- **`web/src/pages/TransparencePage.tsx` — polish** :
+  - Microcopie « comment c'est calculé » (`cardHintStyle`,
+    fontSize 12, `var(--mn-text-3)`) ajoutée sous chaque
+    compteur. Texte tiré de la docstring `fetchTransparencyCounts`
+    (`count(*) sur public.<table>` + filtre `status = published`
+    pour les contenus éditoriaux). 6 hints pour les 6 compteurs
+    publics + 1 hint pour la carte T99CP (`sum(amount) sur
+    t99cp_transactions où kind = credit, RPC SECURITY DEFINER`).
+  - Carte T99CP : nouveau style `t99cpCardStyle` (fond
+    `--mn-brand-light`, border `--mn-brand`) — mise en avant
+    visuelle car indicateur monnaie solidaire le plus
+    différenciant vs dashboards classiques d'asso.
+  - `<MonthlySignupsChart>` rendu avec nouvelle prop
+    `minHeight={360}` (au lieu de `auto` ≈ 220 px viewBox). Le
+    SVG conserve son `viewBox` et son `preserveAspectRatio` ; le
+    wrapper réserve la hauteur visuelle (avec un fallback
+    `minHeight` calculé sur le SVG pour Safari).
+  - Nouveau paragraphe en bas de page : « En savoir plus sur le
+    mouvement → Découvrir Maintenant ! » avec `<Link
+    to="/decouvrir">`.
+- **`web/src/components/MonthlySignupsChart.tsx`** :
+  - Ajout d'une prop optionnelle `minHeight?: number` (compat
+    descendante — wrapper conservé par défaut, comportement
+    actuel inchangé).
+  - Ajout d'un `data-testid="monthly-signups-chart"` sur le
+    wrapper pour permettre l'assertion E2E / vitest sur le
+    `style.minHeight`.
+- **`web/src/lib/profile.ts`** :
+  - Nouvelle fonction `fetchProfileStats(userId, client = supabase)`
+    — 4 queries parallèles `head: true, count: 'exact'` sur
+    `signatures`, `participations`, `votes`, `posts` filtrées
+    par `user_id` / `author_id`. Pattern aligné sur
+    `fetchTransparencyCounts.countTable`. Aucune ligne
+    transférée — seul le `count` revient.
+  - Nouvelle fonction `fetchProfileActivity(userId, limit = 10, client)`
+    — 4 queries parallèles en lecture seule sur les mêmes
+    tables, projection `id, created_at, <relation>(title, slug)`
+    via embed PostgREST. Merge JS + tri `created_at desc` + slice
+    `limit`. Helper `pickEmbedded` accepte les deux formes de
+    relation (objet 1-to-1, tableau 1-to-N) pour rester robuste
+    aux variations de typage du SDK. Helper `excerpt` tronque
+    les bodies de posts à 80 caractères (ellipse `…`).
+  - Self-scope (`eq('user_id', userId)`) : robuste au futur
+    durcissement RLS sur `signatures_select_public` (dette
+    M2-sec) — un filtre côté front sur sa propre uid ne sera
+    jamais bloqué par `auth.uid() = user_id`.
+- **`web/src/pages/ProfilePage.tsx`** — enrichissement :
+  - Ajout de 2 `useEffect` qui chargent stats + activity au
+    montage (avec cancellation pattern identique à
+    TransparencePage).
+  - Nouvelle section « Contributions » (4 cards dans une grille
+    `auto-fit minmax(140px, 1fr)`) : Pétitions signées,
+    Mobilisations rejointes, Votes émis, Publications.
+  - Nouvelle section « Activité récente » (liste 10 items max)
+    avec icône par type (`IconCheckCircle` /
+    `IconCalendar` / `IconList` / `IconPen`), libellé
+    (titre / question / extrait body), date formatée fr-FR, et
+    lien interne vers la page de détail (signatures →
+    `/petitions/<slug>`, participations → `/mobilisations/<slug>`,
+    votes → `/sondages/<slug>`, posts → pas de lien).
+  - Empty state explicite quand `data: []` (« Aucune action
+    enregistrée pour l'instant »).
+  - Fallback `role="status"` neutre sur erreur (« Compteurs
+    indisponibles », « Historique indisponible ») — pas de
+    `role="alert"` pour ne pas spammer l'utilisateur si seul un
+    fetch secondaire échoue.
+
+### Tests
+
+- **+8 tests dans `web/src/lib/profile.test.ts`** :
+  - 3 tests `fetchProfileStats` : agrégation 4 compteurs, normalisation
+    `count: null → 0`, propagation 1ère erreur.
+  - 5 tests `fetchProfileActivity` : merge + tri 4 sources, limit,
+    propagation erreur, embed forme tableau, ellipse body long.
+  - Pattern stub `buildProfileClient(perTable)` : chaque
+    `from(table)` renvoie une chain isolée avec branche `count`
+    (head:true) ou `list` selon le `select` reçu.
+- **+4 tests dans `web/src/pages/TransparencePage.test.tsx`** :
+  - Microcopies « count(*) » présentes pour `users` + `signatures` + 4
+    contenus filtrés `status = « published »`.
+  - `monthly-signups-chart` rendu avec `style.minHeight = 360px`.
+  - Lien « Découvrir Maintenant ! » → `href="/decouvrir"`.
+  - Carte T99CP fond `var(--mn-brand-light)` (vs `--mn-surface-2`).
+- **+5 tests dans `web/src/pages/ProfilePage.test.tsx`** :
+  - Affichage des 4 compteurs (signatures 7, participations 3,
+    votes 12, posts 1) avec labels FR.
+  - `fetchProfileStats` appelée avec `auth.uid()` (`'u1'`).
+  - Message neutre sur erreur compteurs.
+  - Historique : 3 items ordonnés desc, liens vers
+    `/petitions/<slug>` et `/mobilisations/<slug>`, post sans lien.
+  - Empty state historique vide.
+- **Pattern de mock** : `vi.hoisted({ fetchProfileStats, fetchProfileActivity })`
+  + `vi.mock('@/lib/profile', { ...actual, fetchProfileStats, fetchProfileActivity })`
+  — alignement avec le pattern existant de `getProfile`/`uploadAvatar`.
+  Tous les `render(<ProfilePage />)` deviennent `renderPage()` avec
+  `MemoryRouter` (le profil expose désormais des `<Link>`).
+- **Total vitest : 907 → 924 (+17 tests : +8 lib + +4 transparence +
+  +5 profil)**. 131 fichiers, 100 % verts.
+- **E2E Playwright** : 41 tests locaux toujours verts (aucun
+  scénario nouveau cette étape — `/transparence` et `/profile`
+  ont déjà leur smoke + axe-core via `PUBLIC_ROUTES`).
+
+### Bundle (post-build local)
+
+- `TransparencePage.js` : 7.53 kB / gzip 2.84 kB (vs ~6 kB
+  étape 30 — +1.5 kB pour microcopies + nouveau bouton T99CP +
+  link decouvrir).
+- `ProfilePage.js` : 18.89 kB / gzip 5.76 kB (vs ~14 kB
+  estimé étape 6 — +5 kB pour stats grid + activity timeline + 4
+  icônes additionnelles + appels `fetchProfileStats` /
+  `fetchProfileActivity`).
+- `index.js` : 49.44 kB / gzip 13.89 kB (~stable).
+- `MonthlySignupsChart` reste inliné dans le chunk
+  `TransparencePage`.
+
+### Décisions étape 37
+
+- **Pas de lib partagée pour les microcopies** — chaque hint vit
+  dans le `METRICS` array de `TransparencePage` (pattern aligné
+  sur le `label`). Factoriser dans `lib/transparency.ts`
+  reviendrait à dupliquer les docstrings DB qu'on cite déjà
+  textuellement.
+- **`fetchProfileActivity` fait 4 fetches au lieu d'1 RPC UNION**
+  — éviter d'ajouter une migration DB en mode polish étape 37.
+  Performance acceptable (≤ 10 lignes par table, head:true
+  bandwidth ~0, RTT × 4 ≈ 200 ms en cold cache). Une RPC
+  `profile_activity_recent(p_user_id, p_limit)` reste possible
+  pour l'étape 41 (bloc technique pré-launch) si l'écart de
+  latence devient sensible.
+- **Pas de loading skeleton sur Profile** — l'étape 40 introduira
+  des `<Skeleton>` réutilisables en remplaçant les
+  « Chargement… » texte par défaut sur tous les listings. Garder
+  l'aspect « pré-skeleton » homogène en attendant.
+- **`pickEmbedded` accepte tableau** — défensif vs SDK
+  Supabase qui peut sérialiser `relation(...)` en array si la FK
+  est ambiguë (PostgREST peut décider). Coût nul, robustesse +1.
+- **Liens activité utilisent les routes FR** (`/petitions/`,
+  `/mobilisations/`, `/sondages/`) déjà câblées au router (cf.
+  étape 9/10/11). Aucun nouveau routing introduit.
+
+### Items différés (dette ajoutée)
+
+- **L11-arch-editorial-styles** (= JAN36-A2 + JAN36-A3) — la
+  duplication `pageStyle / h1Style / subtitleStyle` éditoriaux
+  n'a pas été touchée. ProfilePage utilise déjà ses propres
+  styles ; TransparencePage les conserve. À traiter en étape
+  dédiée « design system éditorial ».
+- **L11-perf-rpc-activity** — `fetchProfileActivity` fait 4 RTT
+  vs 1 RPC UNION. Bande passante OK (10 lignes/table max), mais
+  RTT × 4 ≈ 200 ms cold. Candidat étape 41 si Lighthouse réel
+  montre un TBT > 200 ms sur `/profile`.
+- **JAN36-* déjà tracée** — ne pas re-rouvrir lors de l'audit
+  janitor étape 37.
+
+### Prochaines étapes (étape 38)
+
+- `/reseau` refondue : timeline visible (déjà en lib
+  `social.ts` via `useFeed`), cards posts polish.
+- Câbler `followUser` / `unfollowUser` (déjà en lib) sur un
+  composant `<FollowButton>` réutilisable.
+- Header sticky avec recherche globale (placeholder UI).
+- Breadcrumbs sur toutes les sous-pages.
+- 11e itération du pattern E2E mock stateful POST/DELETE → close
+  enfin la dette `L9-arch-stateful-mock` en extrayant
+  `installStatefulToggleRoute`.
+
+---
+
+## Prompt pour la session N+32 (étape 38)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par
+> l'harness — typiquement `claude/<auto>`).
+>
+> **Plan de référence** : `PLAN-VISIBLE-FIRST.md` à la racine. Tu
+> suis le plan condensé 34→42 (9 étapes). Étape 37 ✅ mergée :
+> `/transparence` polish + Profil enrichi (924 vitest verts, 41
+> E2E locaux + smoke `/decouvrir` CI).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, SVG
+>    via `ICONS.*` pas d'emojis, RLS, RGPD, Lighthouse ≥ 95,
+>    axe-core ≥ 95, `prefers-reduced-motion`). Note la
+>    **Politique de PR** auto-merge jusqu'à session 50, la
+>    **Recopie systématique du prompt** et l'**Audit récurrent
+>    vibe janitor**.
+> 2. `PLAN-VISIBLE-FIRST.md` § Étape 38 — Communauté +
+>    Navigation polish.
+> 3. `HANDOFF-PROGRESS.md` — journal (dernière entrée : étape
+>    37 ✅).
+>
+> **ÉTAPE 38 à exécuter — `/reseau` refondue + Header sticky +
+> Breadcrumbs + 11e mock stateful** :
+>
+> 1. **`/reseau` refondue** dans `ReseauPage.tsx` :
+>    - Timeline visible avec `useFeed` (déjà en lib `social.ts`).
+>      Cards posts polish (`.mn-listing-card` ou variant
+>      réseau).
+>    - Composant `<FollowButton>` réutilisable câblé sur
+>      `followUser` / `unfollowUser` (déjà en lib `social.ts`).
+>      Placement : sur les cards de profil + sur la page de
+>      profil d'un autre utilisateur (si route existe).
+>    - **Vérifier RLS `follows`** avant câblage : policies
+>      `follows_insert_self` + `follows_select_public` doivent
+>      autoriser le suivi sans bloquer la lecture symétrique.
+>      Si RLS bloque, **demander confirmation** (changement
+>      RGPD potentiel — qui peut voir mes follows).
+> 2. **Header sticky + recherche globale placeholder** :
+>    - Header sticky `position: sticky; top: 0` (ou refacto si
+>      déjà en place — vérifier `AppNav` ou layout root).
+>    - Input recherche globale placeholder (pas de logique
+>      backend — juste UI + `onSubmit` qui navigate vers
+>      `/recherche?q=…` ou `<Placeholder>`). Étape 41 ou plus
+>      tard wirera la vraie recherche full-text.
+>    - Conserver les tokens `T.*` — pas de modification de
+>      la palette.
+> 3. **Breadcrumbs sur sous-pages** :
+>    - Composant `<Breadcrumbs>` réutilisable qui prend une
+>      liste `[{ label, to }]`. Placement sur
+>      `/petitions/:slug`, `/mobilisations/:slug`,
+>      `/sondages/:slug`, `/campagnes/:slug`, `/communes/:slug`,
+>      `/services/*`.
+>    - Accessibilité : `<nav aria-label="Fil d'Ariane">` +
+>      séparateurs `aria-hidden="true"`.
+> 4. **11e itération E2E mock stateful POST/DELETE** :
+>    - Extraire `installStatefulToggleRoute(page, { matchUrl,
+>      methodToggle })` dans `e2e/helpers/stateful.ts` (ou
+>      similaire). Refactor les 10 itérations existantes
+>      (sign/unsign, vote/unvote, rsvp/cancel, ×4 routes) pour
+>      utiliser ce helper.
+>    - **Close enfin la dette `L9-arch-stateful-mock`**
+>      (cf. items différés HANDOFF-PROGRESS).
+>    - Nouveau scénario E2E : follow/unfollow sur ReseauPage ou
+>      sur une page profil. Symétrique sign/unsign étape 28/29.
+> 5. **Risque** : `followUser` / `unfollowUser` non encore
+>    exposés UI → faire valider RLS `follows` côté policies
+>    AVANT câblage. Si pas de policies en place, **stopper et
+>    confirmer**.
+> 6. **Tests** :
+>    - ≥ 8 tests vitest (3 ReseauPage timeline/feed, 2
+>      FollowButton, 2 Breadcrumbs, 1 Header sticky).
+>    - ≥ 1 E2E follow/unfollow (11e mock stateful via le
+>      nouveau helper).
+>    - Maintenir 924 vitest verts (+ ≥ 8 nouveaux ⇒ ≥ 932).
+> 7. **4 checks locaux verts AVANT push** : typecheck + lint +
+>    test + build.
+> 8. **Commit** : `feat(reseau,nav): step 38 — /reseau refondue
+>    + header sticky + breadcrumbs + 11e mock stateful (clôture
+>    L9-arch-stateful-mock)`.
+> 9. **PR draft → main**, auto-merge si CI verte (cf. CLAUDE.md
+>    § Politique de PR).
+> 10. **HANDOFF-PROGRESS.md** : ajouter étape 38 ✅ (sections
+>     Contexte / Livré / Tests / Bundle / Décisions / Items
+>     différés / Prochaines étapes 39).
+> 11. **Audit janitor post-step 38** (cf. CLAUDE.md §Audit
+>     récurrent vibe janitor) — 2-3 subagents en parallèle, PR
+>     séparée `chore(janitor): post-step 38 — …`.
+> 12. **Recopier le prompt étape 39** à la fois dans
+>     `HANDOFF-PROGRESS.md` ET dans la réponse de chat finale
+>     (règle récursive — chaque prompt généré doit lui-même
+>     reconduire cette consigne pour la session N+1).
+>
+> **Conditions d'arrêt malgré l'autorisation auto-merge** :
+> migration DB risquée non listée, changement RGPD non listé
+> (par ex. RLS `follows` qui rendrait visibles les follows
+> privés), breaking change visible utilisateur, modification
+> tokens `T.*` sans validation designer, review humaine avant
+> merge, 3 tentatives consécutives sans 4 checks verts.
+>
+> **Étape suivante (39 — FAQ + À propos + Roadmap)** : pages
+> éditoriales statiques (`/faq` accordion 15-20 questions,
+> `/about` équipe + valeurs, `/roadmap` timeline visuelle
+> 2026-2028). Risque 0, ≥ 6 tests. Cf. plan §Étape 39.
 
 ---
 
