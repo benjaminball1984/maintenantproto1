@@ -10676,6 +10676,93 @@ janitor étape 31 :
 - Polish uniforme des cards listings (hover state, spacing,
   transitions ≤ 200 ms, `prefers-reduced-motion` respecté).
 
+### Audit vibe janitor étape 34
+
+Trois subagents `general-purpose` lancés en parallèle (architecture
+/ élégance, robustesse / edge cases, sécurité / cohérence handoff)
+sur le périmètre étape 34 (HomePage.tsx, Footer.tsx, tests
+associés, PLAN-VISIBLE-FIRST.md, HANDOFF-PROGRESS.md §étape 34).
+
+**Findings totaux** : 11 findings, tous **sévérité `low`**. Aucun
+finding `critical` / `high` / `medium`.
+
+**Fixes appliqués** : 0.
+
+Raison du « 0 fix appliqué » : tous les findings restent **low**
+avec un risque de régression non-nul (medium ou high) si fix
+appliqué — donc tous reportés en dette plutôt qu'embarqués en mode
+janitor. Application stricte du « primum non nocere » qui sous-tend
+la politique d'audit récurrent (cf. CLAUDE.md §Audit récurrent vibe
+janitor). Le pattern « 0 fix safe-first » se voit sur les étapes
+where la PR principale est déjà propre — c'est le 2e épisode
+(après l'audit étape 32 qui n'avait posé que des doc-fixes).
+
+**Dette ajoutée** (à reprendre lors d'étapes dédiées, hors janitor) :
+
+- **JAN34-A1 / low / régression medium** — `formatNumber` dupliqué
+  entre `HomePage.tsx` et `TransparencePage.tsx`. Extraction vers
+  `lib/transparency.ts::formatNumberFr` à faire dans une PR refacto
+  séparée (touche 2 fichiers, hors scope janitor).
+- **JAN34-A2 / low / régression high** — Pattern `useEffect(fetch +
+  cancelled + setState)` dupliqué entre HomePage et
+  TransparencePage. Extraction `useTransparencyCounts()` /
+  `useT99cpTotal()` changerait la surface de mock des tests
+  existants — à n'envisager qu'avec migration coordonnée des deux
+  pages.
+- **JAN34-A3 / low / régression medium** — ~230 lignes de constantes
+  `CSSProperties` en module-scope dans `HomePage.tsx`. CLAUDE.md
+  autorise CSS Modules pour le nouveau code mais les tokens inline
+  sont la norme actuelle du repo — refacto à coordonner avec une
+  bascule globale ou jamais.
+- **JAN34-A4 / low / régression low** — `className="sr-only"` posé
+  sur l'h2 caché du wrapper compteurs alors que la classe n'existe
+  pas dans `index.css`. Inerte aujourd'hui. À nettoyer le jour où
+  une vraie util `.sr-only` est introduite globalement.
+- **JAN34-A5 / low / régression high** — Couleur
+  `rgba(225, 29, 116, 0.08)` en dur dans `heroSectionStyle` (radial
+  gradient hero). Pas de token `--mn-brand-rgb` / `--mn-glow`
+  existant ; introduire une nouvelle CSS var déclencherait l'arrêt
+  janitor (« design system T.* intouchable »). Toléré comme
+  exception charte, documenté ici pour traçabilité.
+- **JAN34-A6 / low / régression medium** — CTA `Découvrir` utilise
+  `<a href="#mission">` plutôt que `<Link to="#mission">`. Pas de
+  smooth-scroll ni focus management. À aligner étape 36 quand
+  l'ancre bascule vers `/decouvrir`.
+- **JAN34-R1 / low / régression low** — Test « fallback erreur »
+  HomePage ne couvre pas explicitement l'état mixte
+  counters-error + T99CP-loading. Documenté pour étape test-hygiene
+  ultérieure.
+- **JAN34-R2 / low / régression medium** — Pas de
+  `scroll-behavior: smooth` global sur l'ancre `#mission`. Ajouter
+  un global aurait un impact transverse + interaction
+  `prefers-reduced-motion` non triviale (Firefox &lt; 120). Différé.
+- **JAN34-R3 / low / régression high** — Contraste
+  `--mn-brand-dark` (#b91560) sur `--mn-brand-light` (#fde9f2) ≈
+  4.7:1 — au-dessus du seuil AA texte normal (4.5:1) mais en
+  dessous d'AAA (7:1) pour l'eyebrow en `fontSize: 13`. Fix
+  nécessite toucher aux tokens `T.*` — explicitement interdit
+  janitor. Documenté.
+- **JAN34-R4 / low / régression medium** — Double labelling sur la
+  liste des compteurs (`aria-labelledby` sur la section vers un h2
+  visually-hidden + `aria-label` sur le `<ul>`). NVDA/VoiceOver
+  gèrent correctement, mais redondant. Différé.
+- **JAN34-F1 / low / régression low** — Warnings React
+  `act(...)` sur 2 tests HomePage (cartes + mission). Les tests
+  passent, mais les `useEffect` qui résolvent les Promises mockées
+  déclenchent un setState après l'assertion synchrone. À traiter en
+  étape test-hygiene dédiée (ajouter `await waitFor(...)` ou
+  `await act(async () =&gt; {})` final).
+
+**Compteur de tests final post-janitor étape 34** : 895 vitest
+verts (inchangé — aucun fix appliqué) + 41 E2E Playwright verts
+locaux (43 attendus en CI selon le plan ; écart à investiguer
+ultérieurement — possible 2 tests filtrés par env CI vs local).
+
+**Conditions d'arrêt janitor non déclenchées** : aucune migration
+DB, aucun touch tokens `T.*`, aucun fix qui aurait cassé un test
+existant. PR janitor exclusivement documentaire ce coup-ci.
+
+
 ---
 
 ## Prompt pour la session N+29 (étape 35)
