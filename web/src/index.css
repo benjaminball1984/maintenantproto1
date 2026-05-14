@@ -107,3 +107,35 @@ select:focus-visible {
     box-shadow: none;
   }
 }
+
+/* Accordion réutilisable (étape 39 — FAQ / pages éditoriales).
+   Le chevron tourne de 0° à 180° à l'ouverture du `<details>` natif.
+   Transition strictement ≤ 200 ms, désactivée pour
+   `prefers-reduced-motion`. */
+.mn-accordion-item > summary {
+  outline: none;
+}
+
+.mn-accordion-item > summary::-webkit-details-marker {
+  display: none;
+}
+
+.mn-accordion-item .mn-accordion-chevron {
+  transition: transform 180ms ease;
+}
+
+.mn-accordion-item[open] .mn-accordion-chevron {
+  transform: rotate(180deg);
+}
+
+.mn-accordion-item > summary:focus-visible {
+  outline: 2px solid var(--mn-brand);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mn-accordion-item .mn-accordion-chevron {
+    transition: none;
+  }
+}

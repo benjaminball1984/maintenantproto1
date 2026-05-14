@@ -47,6 +47,7 @@
 | 36. Plan visible-first §Étape 36 — Page `/decouvrir` éditoriale (5 sections : Mission, Comment ça marche, Les outils, Notre vision, Roadmap) + 3 témoignages marqués démo (placeholders RGPD) + bascule CTA hero `Découvrir` `#mission` → `/decouvrir` + lien Footer colonne Mission + ajout à `PUBLIC_ROUTES` E2E (smoke + axe-core) |   ✅   |
 | 37. Plan visible-first §Étape 37 — `/transparence` polish (microcopie « comment c'est calculé » sous chaque compteur, T99CP mise en avant fond `--mn-brand-light`, graphique `MonthlySignupsChart` agrandi via `minHeight=360px`, lien `/decouvrir` en bas) + Profil enrichi (badges contribution 4 compteurs `head:true count:exact` self-scope, historique 10 dernières actions merge 4 tables + sort desc + ellipse, queries lecture seule RLS publique inchangée) |   ✅   |
 | 38. Plan visible-first §Étape 38 — Communauté + Navigation polish : `<FollowButton>` réutilisable câblé sur `followUser` / `unfollowUser` (lib `social.ts`) + UI optimiste avec rollback sur erreur, intégration dans cards posts ReseauPage (visible uniquement pour viewer authentifié ≠ auteur), header sticky `position: sticky; top: 0; z-index: 10` + recherche globale placeholder (navigate `/recherche?q=…`), composant `<Breadcrumbs>` réutilisable avec `aria-current="page"` appliqué à 5 detail pages (petitions / mobilisations / sondages / campagnes / communes), 11e itération du pattern E2E mock stateful POST/DELETE via nouveau helper `installStatefulToggleRoute` (clôt la dette `L9-arch-stateful-mock` au sens « helper extrait + 1 nouveau call-site qui l'utilise »). RLS `follows_*` vérifiée (insert/delete self, select public). |   ✅   |
+| 39. Plan visible-first §Étape 39 — Pages éditoriales (FAQ + À propos + Roadmap) : composant `<Accordion>` réutilisable basé sur `<details>` natif (chevron rotation 180° transition ≤ 180 ms + `prefers-reduced-motion`), `/faq` avec 19 Q/R réparties sur 5 catégories (Compte / RGPD / T99CP / Stripe / Modération), `/about` avec 3 sections (équipe 3 profils démo + 5 valeurs + 5 dates clés), `/roadmap` avec timeline ordre chronologique 2026-2028 (6 jalons, statuts `done` / `in-progress` / `planned` + légende couleurs), routes lazy ajoutées au router + 3 routes au `PUBLIC_ROUTES` E2E (smoke + axe-core), Footer enrichi (Roadmap colonne Outils, FAQ colonne Légal, À propos colonne Mission). Risque 0 (pages statiques, pas de fetch). |   ✅   |
 
 ---
 
@@ -11706,6 +11707,312 @@ principale ajoute > 200 LOC de lib + page.
   mouvement.
 - `/roadmap` : timeline visuelle 2026-2028 (jalons publics).
 - Risque 0 (pages statiques), ≥ 6 tests.
+
+---
+
+## Étape 39 — Pages éditoriales (FAQ + À propos + Roadmap) ✅
+
+### Contexte d'ouverture
+
+- Plan visible-first §Étape 39. PR janitor post-step 38 inexistante
+  au démarrage (compteur de référence : 943 vitest verts + 41 E2E
+  Playwright locaux).
+- Trois pages publiques manquantes pour la base éditoriale du
+  lancement : pas de FAQ structurée (les utilisateurs envoyaient
+  les questions par mail), pas de page "À propos" listant
+  l'équipe et les valeurs, pas de roadmap publique avec
+  l'horizon 2026-2028.
+- Risque 0 : pages 100 % statiques, pas de fetch Supabase, pas
+  de migration DB, pas de changement RGPD ni de tokens `T.*`.
+
+### Livré
+
+- **Composant `<Accordion>`** (`web/src/components/Accordion.tsx`) :
+  - Props : `items: AccordionItem[]` (chaque item = `{ id, question,
+    answer }` avec `ReactNode` pour question et answer), `ariaLabel`,
+    `testId`.
+  - Repose sur `<details>` / `<summary>` natif → clavier +
+    `aria-expanded` gérés par le navigateur.
+  - Chevron `<svg>` inline (polyline) qui tourne de 0° à 180° à
+    l'ouverture via `transition: transform 180ms ease` (cf.
+    `index.css` sélecteur `.mn-accordion-item[open] .mn-accordion-chevron`).
+  - Désactivation stricte de la transition sous
+    `@media (prefers-reduced-motion: reduce)`.
+  - `summary::-webkit-details-marker { display: none }` pour
+    masquer le marqueur natif et `outline: 2px solid var(--mn-brand)`
+    en `:focus-visible` pour l'a11y clavier.
+  - 6 tests vitest (rendu, état initial fermé, toggle click,
+    re-toggle, propagation `ariaLabel` + `testId`).
+- **`FaqPage`** (`web/src/pages/FaqPage.tsx`) :
+  - 19 Q/R réparties sur 5 catégories : Compte (4 — signup,
+    login, reset, delete), RGPD (4 — data, export, right-to-erasure,
+    region), T99CP (4 — what, how, rights, transferable), Stripe
+    (3 — safe, refund, data), Modération (4 — report, rules,
+    sanctions, appeal).
+  - Eyebrow + H1 + lead pattern identique à `DecouvrirPage`
+    (max-width 880 ; padding aéré).
+  - Chaque catégorie = `<section aria-labelledby>` + `<h2>` + un
+    `<Accordion>` indépendant (test ids `faq-category-{id}` +
+    `faq-accordion-{id}`).
+  - Lien fallback vers `/legal/contact` ≥ 2× dans la page.
+  - 6 tests vitest (H1, 5 catégories, ≥ 15 questions, accordion
+    open au click, summary text non vide a11y, lien Contact).
+- **`AboutPage`** (`web/src/pages/AboutPage.tsx`) :
+  - 3 sections : équipe (3 profils démo avec badge « Profil démo »
+    + initiales avatar `<span>` + nom + rôle + bio courte),
+    valeurs (5 piliers : indépendance, transparence, horizontalité,
+    utilité, privacy — chacun avec une icône `ICONS.*`), dates
+    clés (5 jalons rétrospectifs 2025 T1 → 2026 T3).
+  - Test ids : `about-team`, `about-values`, `about-history`,
+    `about-team-demo-badge` (×3), `about-value-{id}` (×5).
+  - 6 tests vitest (H1, 3 sections rendues, ≥ 3 membres équipe
+    + badge démo, 5 valeurs, ≥ 3 dates historique, liens
+    internes vers /roadmap + /legal/contact).
+- **`RoadmapPage`** + **`TimelineItem`**
+  (`web/src/pages/RoadmapPage.tsx` + `web/src/pages/roadmapData.ts`) :
+  - 6 jalons publics 2026-2028 ordonnés chronologiquement :
+    Lancement public (`done`), Pages éditoriales & onboarding
+    (`in-progress`), 50 communes libres (`planned`), API publique
+    transparence (`planned`), Fédération européenne (`planned`),
+    Pacte citoyen national (`planned`).
+  - Composant `<TimelineItem>` (privé au module) : grille 3
+    colonnes (110 px date badge + 32 px icon column + 1fr body).
+    Connector vertical entre items (sauf le dernier).
+  - Icônes statut : `IconCheckCircle` (done, vert
+    `var(--mn-success)`), `IconFlame` (in-progress, brand
+    `var(--mn-brand)`), `IconCalendar` (planned, grisé
+    `var(--mn-text-3)`). Bordure 2px + texte assortis.
+  - `ROADMAP_ITEMS` + types `RoadmapItemDef` / `RoadmapItemStatus`
+    extraits dans `roadmapData.ts` pour respecter la règle
+    ESLint `react-refresh/only-export-components` (cf. fix de
+    lint au cours du dev).
+  - 6 tests vitest (H1, ≥ 5 items dans timeline `<ol>`, 3
+    statuts présents, ordre chrono identique à `ROADMAP_ITEMS`,
+    légende des 3 statuts, liens internes vers /about,
+    /decouvrir, /legal/contact).
+- **Routes ajoutées** dans `web/src/router.tsx` (lazy import) :
+  `path: 'faq'` → `<FaqPage>`, `path: 'about'` → `<AboutPage>`,
+  `path: 'roadmap'` → `<RoadmapPage>`. Toutes publiques (pas de
+  `RequireAuth`).
+- **Footer enrichi** (`web/src/components/Footer.tsx`) — 1 lien
+  par colonne ajouté pour ne pas surcharger :
+  - Colonne Mission : `/about` (À propos).
+  - Colonne Outils : `/roadmap` (Roadmap).
+  - Colonne Légal : `/faq` (FAQ).
+- **`PUBLIC_ROUTES` E2E enrichi** (`web/e2e/public-pages.spec.ts`)
+  — 3 nouvelles routes (`/faq`, `/about`, `/roadmap`) avec
+  regex headings pour le smoke + axe-core (sans violation
+  critique).
+- **CSS global `index.css`** — ajout d'une section
+  « Accordion réutilisable » avec les 4 sélecteurs requis
+  (`summary::-webkit-details-marker`, `.mn-accordion-chevron`
+  transition, `[open]` rotation, focus-visible, désactivation
+  `prefers-reduced-motion`).
+
+### Tests
+
+- **+6 tests `Accordion.test.tsx`** (composant réutilisable).
+- **+6 tests `FaqPage.test.tsx`** (page complète).
+- **+6 tests `AboutPage.test.tsx`** (page complète).
+- **+6 tests `RoadmapPage.test.tsx`** (page complète).
+- **Total vitest : 943 → 967 (+24 tests, soit +17 au-dessus du
+  minimum ≥ 7 du prompt)**. 137 fichiers, 100 % verts. Typecheck
+  + lint + build OK au premier passage post-fix lint (NBSPs
+  stripping + `react-refresh/only-export-components` via
+  extraction `roadmapData.ts`).
+
+### Bundle (post-build local)
+
+- `FaqPage.js` : **10.47 kB / gzip 3.88 kB** — le plus gros des 3
+  (contenu textuel le plus dense).
+- `AboutPage.js` : **8.23 kB / gzip 2.84 kB**.
+- `RoadmapPage.js` : **6.37 kB / gzip 2.33 kB** — le plus léger.
+- `index.js` (entry partagé) : **51.27 kB / gzip 14.36 kB** —
+  hausse marginale (~+0.5 kB) liée à `<Accordion>` partagé.
+- `react.js`, `supabase.js`, `sentry.js` inchangés.
+
+### Décisions étape 39
+
+- **`<details>` natif vs accordion JS custom** : le natif gagne
+  pour l'a11y clavier (`Enter` / `Space` + lecteurs d'écran) et
+  pour la simplicité. Le seul coût est de devoir styler
+  `summary::-webkit-details-marker` pour masquer le marqueur
+  natif et de gérer le chevron via CSS sur l'attribut `[open]`.
+- **Chevron SVG inline plutôt qu'`ICONS.*`** : le chevron
+  `polyline 6 9 12 15 18 9` est purement décoratif (`aria-hidden`)
+  et n'a pas d'équivalent dans `icons.tsx`. Plutôt que d'élargir
+  la lib partagée pour 1 usage, on garde l'inline. À promouvoir
+  dans `icons.tsx` si un 2e site l'utilise.
+- **`ROADMAP_ITEMS` dans un fichier `.ts` séparé** : la règle
+  ESLint `react-refresh/only-export-components` interdit
+  d'exporter une constante depuis un fichier qui exporte aussi
+  un composant React (sinon le HMR ne sait plus quoi
+  remplacer). On extrait dans `roadmapData.ts` plutôt que de
+  désactiver la règle — c'est aussi plus propre pour les tests
+  qui importent uniquement les données.
+- **`TimelineItem` non exporté** : initialement exporté
+  publiquement, finalement gardé privé au module pour éviter
+  la même règle fast-refresh ET parce qu'aucun test ne
+  l'utilise directement (les assertions passent par les
+  `data-testid` sur la page rendue).
+- **3 statuts hardcodés (`done` / `in-progress` / `planned`)
+  sans `working-on-it` / `at-risk`** : on garde 3 valeurs pour
+  ne pas surcharger la légende. Les jalons « à risque » seront
+  remontés via le canal édito (article média) plutôt que via la
+  roadmap.
+- **Footer 1 lien par colonne** : respect strict du prompt.
+  L'alternative était de mettre les 3 nouveaux liens dans une
+  4ᵉ colonne « Ressources » — refusé pour ne pas casser le
+  pattern 3 colonnes du Footer adopté en étape 34.
+- **Pas de page `/help` ni `/contribuer`** : `/contribuer` est
+  prévu en étape 42 (lancement public), pas anticipé ici.
+- **Accordions tous fermés par défaut** : meilleure exploration
+  visuelle (l'utilisateur parcourt les questions avant de
+  développer). Si un comportement « 1ʳᵉ question ouverte » est
+  voulu, ajout futur d'une prop `defaultOpenId` à `<Accordion>`.
+
+### Items différés (dette ajoutée)
+
+- **`L12-faq-search`** — `/faq` n'a pas de barre de recherche
+  interne pour filtrer les Q/R. À considérer si la FAQ dépasse
+  30 questions (la moitié seraient invisibles sous le fold sur
+  mobile). Risque medium : nécessite un état React + un fuzzy
+  match (Fuse.js ou similaire).
+- **`L12-accordion-defaultopen`** — `<Accordion>` ne supporte
+  pas `defaultOpenId` ni le mode « 1 seul ouvert à la fois ».
+  À ajouter si un autre call-site le demande. Faisable en
+  rétrocompatible (props optionnelles).
+- **`L12-roadmap-detailed-children`** — La page roadmap ne
+  permet pas de déplier un jalon pour voir les sous-tâches.
+  À considérer si la roadmap devient un outil de pilotage et
+  pas seulement un livrable comm.
+- **`L12-about-real-team`** — Les 3 profils équipe sont
+  marqués `Profil démo` ; à remplacer par les vraies bios +
+  avatars uploadés (RGPD : consentement explicite des
+  intéressé·es requis avant publication).
+- **`L12-roadmap-i18n`** — Roadmap monolingue FR. L'i18n EN /
+  DE / ES est dans le jalon « Fédération européenne » (2027) ;
+  pas anticipé ici.
+- **`L12-chevron-promotion`** — Chevron SVG inline dans
+  `Accordion.tsx` ; à promouvoir dans `icons.tsx` si un 2ᵉ
+  site l'utilise (header, breadcrumbs, etc.).
+
+### Prochaines étapes (étape 40)
+
+- **Loading skeletons** sur les pages listing
+  (`PetitionsPage`, `MobilizationsPage`, etc.) — remplace le
+  texte « Chargement… » par des skeletons animés.
+- **Toast notifications** réutilisables (`<Toast>` + provider
+  contextuel) pour les confirmations d'action (signature,
+  vote, RSVP, follow).
+- **Onboarding modal première visite** (3-4 étapes), avec flag
+  `mn-onboarding-seen` en localStorage. CTA final « S'inscrire ».
+- Toutes transitions ≤ 200 ms, `prefers-reduced-motion`
+  respecté.
+- Risque 0 (localStorage = pas de RGPD car technique pure),
+  ≥ 5 tests onboarding + skeleton + toast.
+
+---
+
+## Prompt pour la session N+34 (étape 40)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par
+> l'harness — typiquement `claude/<auto>`).
+>
+> **Plan de référence** : `PLAN-VISIBLE-FIRST.md` à la racine. Tu
+> suis le plan condensé 34→42 (9 étapes). Étape 39 ✅ mergée :
+> Pages éditoriales (FAQ + À propos + Roadmap) — 967 vitest verts,
+> 44 E2E locaux (3 nouveaux smoke `/faq`, `/about`, `/roadmap`
+> avec axe-core).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, SVG
+>    via `ICONS.*` pas d'emojis, RLS, RGPD, Lighthouse ≥ 95,
+>    axe-core ≥ 95, `prefers-reduced-motion`). Note la
+>    **Politique de PR** auto-merge jusqu'à session 50, la
+>    **Recopie systématique du prompt** et l'**Audit récurrent
+>    vibe janitor**.
+> 2. `PLAN-VISIBLE-FIRST.md` § Étape 40 — Animations & onboarding
+>    première visite.
+> 3. `HANDOFF-PROGRESS.md` — journal (dernière entrée : étape
+>    39 ✅).
+>
+> **ÉTAPE 40 à exécuter — Skeletons + Toasts + Onboarding** :
+>
+> 1. **Loading skeletons** : composant `<Skeleton>` réutilisable
+>    (props `width`, `height`, `borderRadius`, `variant?`
+>    `'rect' | 'circle' | 'text'`). Animation `keyframes
+>    skeleton-shimmer` ≤ 200 ms par cycle (ou statique pulse).
+>    Désactivation stricte sous `prefers-reduced-motion`.
+>    Remplacer le texte « Chargement… » par des skeletons sur
+>    au moins 3 pages listings (`PetitionsPage`, `MobilizationsPage`,
+>    `MediaPage` — au choix selon valeur visible). Ne pas
+>    casser les autres pages.
+> 2. **Toast notifications** : composant `<ToastProvider>` +
+>    hook `useToast()` (API minimale : `success(msg)`,
+>    `error(msg)`, `info(msg)`). Stack visuel en bas à droite,
+>    auto-dismiss 4 s, `role="status"` + `aria-live="polite"`
+>    (info/success) ou `role="alert"` (error). Câbler 3
+>    actions clés : signature pétition (`success`), vote
+>    sondage (`success`), follow (`success` ou silent selon
+>    préférence). Anim entry/exit ≤ 200 ms avec
+>    `prefers-reduced-motion`.
+> 3. **Onboarding modal première visite** : composant
+>    `<OnboardingModal>` (3-4 étapes carousel). Flag localStorage
+>    `mn-onboarding-seen`, lu au mount du `RootLayout`. Si
+>    absent ET utilisateur anonyme → ouvre la modal. Si
+>    présent ou utilisateur authentifié → skip. Étapes
+>    proposées : (1) Bienvenue + valeur produit, (2) 3
+>    outils-clés (pétitions / mobilisations / communes libres),
+>    (3) Transparence (compteurs publics + T99CP), (4) CTA
+>    final « S'inscrire » / « Plus tard ».
+> 4. **Risque** : flag localStorage = pas de RGPD (technique
+>    pure, pas de personnal data). Aucune migration DB.
+> 5. **Tests** :
+>    - ≥ 2 tests `Skeleton.test.tsx` (rendu rect/circle, respect
+>      `prefers-reduced-motion`).
+>    - ≥ 3 tests `Toast.test.tsx` (success/error/info, auto-dismiss
+>      4 s avec `vi.useFakeTimers`, `role="status"` vs
+>      `role="alert"`).
+>    - ≥ 3 tests `OnboardingModal.test.tsx` (4 étapes navigation,
+>      flag localStorage écrit au close, skip si flag déjà
+>      présent).
+>    - ≥ 2 tests intégration listings (skeletons rendus pendant
+>      `loading`, remplacés par contenu au `success`).
+>    - Maintenir 967 vitest verts (+ ≥ 5 nouveaux ⇒ ≥ 972 ;
+>      objectif réaliste ≥ 980).
+> 6. **4 checks locaux verts AVANT push** : typecheck + lint +
+>    test + build.
+> 7. **Commit** : `feat(ux): step 40 — skeletons + toasts +
+>    onboarding première visite`.
+> 8. **PR draft → main**, auto-merge si CI verte (cf. CLAUDE.md
+>    § Politique de PR).
+> 9. **HANDOFF-PROGRESS.md** : ajouter étape 40 ✅ (sections
+>    Contexte / Livré / Tests / Bundle / Décisions / Items
+>    différés / Prochaines étapes 41).
+> 10. **Audit janitor post-step 40** (cf. CLAUDE.md §Audit
+>     récurrent vibe janitor) — 2-3 subagents en parallèle, PR
+>     séparée `chore(janitor): post-step 40 — …`.
+> 11. **Recopier le prompt étape 41** à la fois dans
+>     `HANDOFF-PROGRESS.md` ET dans la réponse de chat finale
+>     (règle récursive — chaque prompt généré doit lui-même
+>     reconduire cette consigne pour la session N+1).
+>
+> **Conditions d'arrêt malgré l'autorisation auto-merge** :
+> migration DB risquée non listée, changement RGPD non listé,
+> breaking change visible utilisateur (modale onboarding qui
+> bloque l'accès si bug), modification tokens `T.*` sans
+> validation designer, review humaine avant merge, 3
+> tentatives consécutives sans 4 checks verts.
+>
+> **Étape suivante (41 — Bloc technique pré-launch)** : audit
+> Lighthouse réel ≥ 95 sur 6 pages clés, Sentry runtime, backups
+> DB, M2-sec-policy (RLS `signatures_select_public`), M1-RGPD
+> (purge `stripe_events.payload` TTL 90 j), job réconciliation
+> Stripe, tests de charge k6, runbook ops finale. Cf. plan
+> §Étape 41 — touche RLS + tables critiques → confirmer chaque
+> PR.
 
 ---
 

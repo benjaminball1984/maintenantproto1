@@ -20,6 +20,9 @@ const PUBLIC_ROUTES: { path: string; heading: RegExp }[] = [
   { path: '/legal/notice', heading: /Mentions/i },
   { path: '/legal/cookies', heading: /Cookies/i },
   { path: '/legal/contact', heading: /Contact/i },
+  { path: '/faq', heading: /Foire aux questions/i },
+  { path: '/about', heading: /À propos du mouvement/i },
+  { path: '/roadmap', heading: /feuille de route/i },
 ];
 
 test.describe('Pages publiques — smoke + a11y', () => {
