@@ -54,12 +54,12 @@ describe('HomePage', () => {
     ).toBeInTheDocument();
   });
 
-  it('expose les deux CTA Adhérer (→ /join) et Découvrir (ancre #mission)', () => {
+  it('expose les deux CTA Adhérer (→ /join) et Découvrir (→ /decouvrir)', () => {
     renderHome();
     const adherer = screen.getByRole('link', { name: /Adhérer/i });
     expect(adherer).toHaveAttribute('href', '/join');
-    const decouvrir = screen.getByRole('link', { name: /Découvrir la mission/i });
-    expect(decouvrir).toHaveAttribute('href', '#mission');
+    const decouvrir = screen.getByRole('link', { name: /Découvrir le mouvement/i });
+    expect(decouvrir).toHaveAttribute('href', '/decouvrir');
   });
 
   it('affiche les 4 compteurs live (signataires, mobilisations, communes, T99CP)', async () => {
