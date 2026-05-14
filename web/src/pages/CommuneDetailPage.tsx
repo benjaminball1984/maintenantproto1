@@ -1,6 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import Breadcrumbs from '@/components/Breadcrumbs';
 import { IconArrowLeft, IconCheckCircle, IconPin, IconUsers } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { joinCommune, leaveCommune } from '@/lib/communes';
@@ -217,6 +218,13 @@ export default function CommuneDetailPage() {
 
   return (
     <main style={pageStyle}>
+      <Breadcrumbs
+        items={[
+          { label: 'Accueil', to: '/' },
+          { label: 'Communes', to: '/communes' },
+          { label: commune.name },
+        ]}
+      />
       <Link to="/communes" style={backLinkStyle}>
         <IconArrowLeft /> Retour aux communes
       </Link>

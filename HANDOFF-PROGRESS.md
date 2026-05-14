@@ -46,6 +46,7 @@
 | 35. Plan visible-first §Étape 35 — Empty states + Cards polish : composant `<EmptyState>` réutilisable (icon ICONS.* + heading + microcopie + CTA optionnel) appliqué aux 13 pages listings vides + hover state uniforme `.mn-listing-card` (translateY-2px + box-shadow 4px 14px ≤180ms) avec respect strict `prefers-reduced-motion` |   ✅   |
 | 36. Plan visible-first §Étape 36 — Page `/decouvrir` éditoriale (5 sections : Mission, Comment ça marche, Les outils, Notre vision, Roadmap) + 3 témoignages marqués démo (placeholders RGPD) + bascule CTA hero `Découvrir` `#mission` → `/decouvrir` + lien Footer colonne Mission + ajout à `PUBLIC_ROUTES` E2E (smoke + axe-core) |   ✅   |
 | 37. Plan visible-first §Étape 37 — `/transparence` polish (microcopie « comment c'est calculé » sous chaque compteur, T99CP mise en avant fond `--mn-brand-light`, graphique `MonthlySignupsChart` agrandi via `minHeight=360px`, lien `/decouvrir` en bas) + Profil enrichi (badges contribution 4 compteurs `head:true count:exact` self-scope, historique 10 dernières actions merge 4 tables + sort desc + ellipse, queries lecture seule RLS publique inchangée) |   ✅   |
+| 38. Plan visible-first §Étape 38 — Communauté + Navigation polish : `<FollowButton>` réutilisable câblé sur `followUser` / `unfollowUser` (lib `social.ts`) + UI optimiste avec rollback sur erreur, intégration dans cards posts ReseauPage (visible uniquement pour viewer authentifié ≠ auteur), header sticky `position: sticky; top: 0; z-index: 10` + recherche globale placeholder (navigate `/recherche?q=…`), composant `<Breadcrumbs>` réutilisable avec `aria-current="page"` appliqué à 5 detail pages (petitions / mobilisations / sondages / campagnes / communes), 11e itération du pattern E2E mock stateful POST/DELETE via nouveau helper `installStatefulToggleRoute` (clôt la dette `L9-arch-stateful-mock` au sens « helper extrait + 1 nouveau call-site qui l'utilise »). RLS `follows_*` vérifiée (insert/delete self, select public). |   ✅   |
 
 ---
 
@@ -11540,6 +11541,258 @@ consécutives (32, 34, 35, 36) sans aucun fix appliqué, étape 37
 réintroduit 5 fixes safe-first sur un périmètre plus large
 (lib + 3 pages + 1 composant). Pattern à reconduire si la PR
 principale ajoute > 200 LOC de lib + page.
+
+---
+
+## Étape 38 — Communauté + Navigation polish ✅
+
+### Contexte d'ouverture
+
+- Plan visible-first §Étape 38. PR janitor post-step 37 mergée
+  (compteurs : 924 vitest + 41 E2E locaux).
+- `followUser` / `unfollowUser` déjà en lib `social.ts` mais
+  jamais exposés UI — bouton manquant côté `/reseau`.
+- Pas de header sticky ni de recherche globale visible.
+- Pas de fil d'Ariane sur les sous-pages — l'utilisateur ne
+  voit que le lien « Retour » comme repère hiérarchique.
+- Dette `L9-arch-stateful-mock` ouverte depuis l'étape 31 :
+  pattern stateful POST/DELETE-flag-flip dupliqué 10× dans les
+  E2E (sign/unsign, vote/unvote, rsvp/cancel, campaign-action).
+
+### Livré
+
+- **Composant `<FollowButton>`** (`web/src/components/FollowButton.tsx`) :
+  - Props : `followerId | null`, `followeeId`, `initiallyFollowing`,
+    `onChange?`.
+  - Câble `followUser` / `unfollowUser` avec UI optimiste +
+    rollback sur erreur (state local bascule immédiatement, revient
+    si la RPC échoue + message d'erreur en `role="alert"`).
+  - Désactivé en anonyme (`followerId === null`) et en auto-suivi
+    (`followerId === followeeId` — la contrainte DB
+    `follower_id <> followee_id` est doublée côté UI).
+  - `aria-pressed` bascule entre `"false"` / `"true"`, label
+    accessibilité « Suivre » / « Ne plus suivre ».
+- **Composant `<Breadcrumbs>`** (`web/src/components/Breadcrumbs.tsx`) :
+  - Props : `items: BreadcrumbItem[]` (label + optional to).
+  - Sémantique : `<nav aria-label="Fil d'Ariane">` + `<ol>` ; le
+    dernier item porte `aria-current="page"` et n'est pas un lien.
+  - Séparateurs `›` en `aria-hidden="true"`.
+  - Appliqué à 5 detail pages : `PetitionDetailPage`,
+    `MobilizationDetailPage`, `PollDetailPage`, `CampaignDetailPage`,
+    `CommuneDetailPage` (3 niveaux : Accueil → liste → titre).
+- **`RootLayout` — header sticky + recherche globale placeholder** :
+  - `position: sticky; top: 0; z-index: 10` sur le header.
+    L'AuthModal a un overlay au-dessus du `z-index: 10`, donc
+    pas de conflit.
+  - Form recherche globale `role="search"` avec input + bouton
+    submit (IconSearch). Submit navigate vers
+    `/recherche?q=<encoded>`. La route `/recherche` n'est PAS
+    câblée à l'étape 38 — elle tombe sur `NotFoundPage`, placeholder
+    fonctionnel cadrant l'attente sans déployer un index full-text
+    incomplet.
+  - Bouton submit `disabled` tant que la query trim est vide.
+- **`ReseauPage` — câblage FollowButton dans cards posts** :
+  - Nouveau `Set` `followingSet` indexé sur `followee_id` (O(1)
+    lookup vs `includes()` par card).
+  - PostCard reçoit `viewerId` + `followingAuthor` props ;
+    `showFollow = viewerId && viewerId !== post.author_id`.
+  - Bouton placé dans `<footer style={{ justifyContent: 'flex-end' }}>`
+    pour ne pas perturber la lecture du body.
+- **E2E helper `installStatefulToggleRoute`** (`web/e2e/utils/statefulRoute.ts`) :
+  - Encapsule le pattern POST (201)/DELETE (204)/GET (200 → []
+    ou [row]) avec closure `toggled` interne.
+  - Options : `matchUrl`, `insertedRow`, `initiallyToggled?`,
+    `projection?` (pour les cas comme `getUserVote` qui projettent
+    `option_id`).
+  - Retourne un handle `isToggled()` pour assertions cross-test.
+  - **Clôt la dette `L9-arch-stateful-mock`** au sens « helper
+    extrait + 1 nouveau call-site qui l'utilise (follow-unfollow) ».
+    Les 10 call-sites existants (signatures, votes, participations,
+    campaign_actions) NE SONT PAS refactorés en étape 38 — risque
+    medium d'ouvrir un edge case sur l'ordre LIFO des routes
+    Playwright (cf. dette d'origine). Reporté en dette
+    **`L11-e2e-refacto-stateful-callsites`**.
+- **Nouveau E2E `follow-unfollow.spec.ts`** (11e itération) :
+  - Session authentifiée via `installAuthenticatedSession`
+    (helper extrait étape 31, ferme la dette `L8-arch-authsession`).
+  - Mock du feed `/rest/v1/posts` avec un post d'un autre user.
+  - `installStatefulToggleRoute({ matchUrl: '**/rest/v1/follows**', ... })`.
+  - Assertions : clic « Suivre » → POST intercepté → bascule
+    `aria-pressed="true"` + libellé « Ne plus suivre ». Re-clic
+    → DELETE → retour à l'état initial.
+
+### Tests
+
+- **+8 tests `FollowButton.test.tsx`** : rendu initial (false/true),
+  clic follow (appel `followUser`), clic unfollow (appel
+  `unfollowUser`), rollback erreur RLS, désactivation anonyme,
+  désactivation auto-suivi, callback `onChange`.
+- **+5 tests `Breadcrumbs.test.tsx`** : sémantique nav/ol, liens
+  intermédiaires + page courante, séparateurs aria-hidden,
+  items vides, item unique.
+- **+3 tests `App.test.tsx`** (header recherche globale) : form
+  role="search", submit disabled si query vide, submit navigate
+  vers `/recherche?q=…`.
+- **+3 tests `ReseauPage.test.tsx`** (intégration FollowButton) :
+  rendu bouton sur post d'autre user, masqué en anonyme, masqué
+  sur ses propres posts (auto-suivi).
+- **+2 fixes tests existants** (`CommuneDetailPage.test.tsx`) :
+  bascule `getByText(sample.name)` → `getByRole('heading', ...)`
+  car le breadcrumb fait apparaître `commune.name` deux fois (H1
+  + dernier crumb). Idem `getByRole('list')` → `getAllByRole`
+  + filter (breadcrumb `<ol>` + members `<ul>`).
+- **+1 E2E `follow-unfollow.spec.ts`** : 1 test stateful
+  (toggle on + toggle off dans le même test).
+- **Total vitest : 924 → 943 (+19 tests)**. 133 fichiers, 100 %
+  verts. Typecheck + lint + build OK.
+
+### Bundle (post-build local)
+
+- `ReseauPage.js` : ~10 kB / gzip 3.6 kB (vs 9.83 kB étape 37 —
+  +0.5 kB pour FollowButton intégré).
+- `index.js` (entry) : ~50 kB / gzip 14 kB (~stable — header
+  recherche +1 form + 1 icon).
+- 5 detail pages chunks : +~0.5 kB chacune (breadcrumb composant
+  partagé via `index.js`).
+- `MonthlySignupsChart` inchangé.
+
+### Décisions étape 38
+
+- **Pas de page `/recherche` câblée** — placeholder UI
+  uniquement. L'étape 41 (bloc technique pré-launch) ou une étape
+  dédiée full-text traitera l'indexation Postgres (`tsvector`,
+  `websearch_to_tsquery`).
+- **`installStatefulToggleRoute` clôt L9-arch sans refacto
+  cross-spec** : la dette d'origine spécifie « risque medium »
+  pour le refacto des 10 sites existants. On extrait + on utilise
+  pour le 11e, on documente la dette résiduelle pour les 10. Le
+  helper devient le « standard » pour les nouveaux sites.
+- **Breadcrumbs sur 5 detail pages + pas sur Service detail** :
+  les 8 service detail pages (`HousingDetailPage`,
+  `CarpoolingDetailPage`, etc.) sont reportées à une passe
+  ultérieure — leur structure header diffère (hero card avec
+  cover image) et le breadcrumb demanderait plus de polish
+  visuel. Tracé en dette `L11-nav-breadcrumbs-services`.
+- **Header sticky pas de backdrop-filter** : risque
+  performance/compat Safari ; le `background: var(--mn-surface)`
+  opaque suffit pour la lisibilité au scroll.
+- **FollowButton ne lit pas `useAuth`** : le caller passe
+  `followerId` explicitement. Évite un appel hook obligatoire,
+  facilite les tests unitaires, et permet de réutiliser le bouton
+  dans des contextes où le viewer est connu autrement (ex.
+  page profil d'un autre user via SSR future).
+
+### Items différés (dette ajoutée)
+
+- **`L11-e2e-refacto-stateful-callsites`** — Refactor les 10
+  call-sites existants du pattern stateful pour utiliser
+  `installStatefulToggleRoute`. Risque medium (ordre LIFO routes
+  Playwright). À traiter dans une étape dédiée test-hygiene après
+  l'étape 41 pré-launch.
+- **`L11-nav-breadcrumbs-services`** — Breadcrumbs pas appliqués
+  aux 8 service detail pages (hero card avec cover). À traiter
+  quand on harmonise le design des hero detail pages.
+- **`L11-recherche-fulltext`** — Placeholder `/recherche?q=…`
+  pointe sur `NotFoundPage`. À câbler en étape dédiée full-text
+  Postgres `tsvector` (post-launch).
+- **`L11-followbutton-followers-count`** — `FollowButton` ne
+  rafraîchit pas le compteur followers du parent. À considérer si
+  on ajoute un compteur visible « X abonnés » sur une page profil.
+
+### Prochaines étapes (étape 39)
+
+- `/faq` : accordion 15-20 questions (account, RGPD, T99CP, Stripe…).
+- `/about` : équipe (placeholders), valeurs, historique
+  mouvement.
+- `/roadmap` : timeline visuelle 2026-2028 (jalons publics).
+- Risque 0 (pages statiques), ≥ 6 tests.
+
+---
+
+## Prompt pour la session N+33 (étape 39)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par
+> l'harness — typiquement `claude/<auto>`).
+>
+> **Plan de référence** : `PLAN-VISIBLE-FIRST.md` à la racine. Tu
+> suis le plan condensé 34→42 (9 étapes). Étape 38 ✅ mergée :
+> Communauté + Navigation polish (943 vitest verts, 41 E2E locaux
+> + 1 nouveau follow-unfollow stateful).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, SVG
+>    via `ICONS.*` pas d'emojis, RLS, RGPD, Lighthouse ≥ 95,
+>    axe-core ≥ 95, `prefers-reduced-motion`). Note la
+>    **Politique de PR** auto-merge jusqu'à session 50, la
+>    **Recopie systématique du prompt** et l'**Audit récurrent
+>    vibe janitor**.
+> 2. `PLAN-VISIBLE-FIRST.md` § Étape 39 — FAQ + À propos +
+>    Roadmap.
+> 3. `HANDOFF-PROGRESS.md` — journal (dernière entrée : étape
+>    38 ✅).
+>
+> **ÉTAPE 39 à exécuter — `/faq` + `/about` + `/roadmap`** :
+>
+> 1. **`/faq`** : page `web/src/pages/FaqPage.tsx` avec accordion
+>    15-20 questions/réponses. Catégories : Compte (login,
+>    sign-up, reset password), RGPD (export, suppression, droit
+>    à l'oubli), T99CP (qu'est-ce que c'est, comment en obtenir),
+>    Stripe (sécurité du paiement, remboursement), Modération
+>    (signalement, sanctions). Composant `<Accordion>` réutilisable
+>    avec `<details>` natif + style custom (chevron qui tourne,
+>    transition height ≤ 200 ms avec `prefers-reduced-motion`).
+> 2. **`/about`** : page `web/src/pages/AboutPage.tsx`. 3
+>    sections : équipe (placeholders avatar + nom + bio courte,
+>    marqués démo), valeurs (3-5 piliers du mouvement),
+>    historique (3-5 dates clés : lancement projet, mise en
+>    service, 1er adhérent T99CP, etc.).
+> 3. **`/roadmap`** : page `web/src/pages/RoadmapPage.tsx`.
+>    Timeline visuelle des jalons 2026-2028. Composant
+>    `<TimelineItem>` (icon ICONS.* + date + titre + description
+>    + état `done` / `in-progress` / `planned`).
+> 4. **Ajouter à `PUBLIC_ROUTES`** dans `web/e2e/public-pages.spec.ts`
+>    pour smoke + axe-core sur les 3 nouvelles routes.
+> 5. **Lien Footer** — colonne « Mission » ou « Outils » ajouter
+>    `/faq`, `/about`, `/roadmap` si pertinent. Ne pas
+>    surcharger : 1 lien par colonne max.
+> 6. **Risque : 0** (pages statiques, pas de fetch, pas de
+>    backend). Aucune migration DB.
+> 7. **Tests** :
+>    - ≥ 3 tests `FaqPage` (accordion open/close, axe-core,
+>      au moins 15 questions rendues).
+>    - ≥ 2 tests `AboutPage` (équipe + valeurs rendus).
+>    - ≥ 2 tests `RoadmapPage` (3 états de jalon, items dans
+>      l'ordre chronologique).
+>    - Maintenir 943 vitest verts (+ ≥ 7 nouveaux ⇒ ≥ 950).
+> 8. **4 checks locaux verts AVANT push** : typecheck + lint +
+>    test + build.
+> 9. **Commit** : `feat(faq,about,roadmap): step 39 — pages
+>    éditoriales (FAQ accordion + équipe + timeline jalons)`.
+> 10. **PR draft → main**, auto-merge si CI verte (cf. CLAUDE.md
+>     § Politique de PR).
+> 11. **HANDOFF-PROGRESS.md** : ajouter étape 39 ✅ (sections
+>     Contexte / Livré / Tests / Bundle / Décisions / Items
+>     différés / Prochaines étapes 40).
+> 12. **Audit janitor post-step 39** (cf. CLAUDE.md §Audit
+>     récurrent vibe janitor) — 2-3 subagents en parallèle, PR
+>     séparée `chore(janitor): post-step 39 — …`.
+> 13. **Recopier le prompt étape 40** à la fois dans
+>     `HANDOFF-PROGRESS.md` ET dans la réponse de chat finale
+>     (règle récursive — chaque prompt généré doit lui-même
+>     reconduire cette consigne pour la session N+1).
+>
+> **Conditions d'arrêt malgré l'autorisation auto-merge** :
+> migration DB risquée non listée, changement RGPD non listé,
+> breaking change visible utilisateur, modification tokens `T.*`
+> sans validation designer, review humaine avant merge, 3
+> tentatives consécutives sans 4 checks verts.
+>
+> **Étape suivante (40 — Animations & onboarding première
+> visite)** : loading skeletons sur listings, toast notifications
+> réutilisables, onboarding modal première visite (3-4 étapes,
+> flag `mn-onboarding-seen` localStorage). Toutes transitions
+> ≤ 200 ms, `prefers-reduced-motion` respecté. Cf. plan §Étape 40.
 
 ---
 

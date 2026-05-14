@@ -1,6 +1,8 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 
+import Breadcrumbs from '@/components/Breadcrumbs';
+
 import {
   IconArrowLeft,
   IconCalendar,
@@ -295,6 +297,13 @@ export default function MobilizationDetailPage() {
 
   return (
     <main style={pageStyle}>
+      <Breadcrumbs
+        items={[
+          { label: 'Accueil', to: '/' },
+          { label: 'Mobilisations', to: '/mobilizations' },
+          { label: mobilization.title },
+        ]}
+      />
       <Link to="/mobilizations" style={backLinkStyle}>
         <IconArrowLeft /> Toutes les mobilisations
       </Link>

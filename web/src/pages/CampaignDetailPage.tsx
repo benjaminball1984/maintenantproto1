@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type ReactElement } from 'react';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 
+import Breadcrumbs from '@/components/Breadcrumbs';
 import {
   IconArrowLeft,
   IconBarChart,
@@ -325,6 +326,13 @@ export default function CampaignDetailPage() {
 
   return (
     <main style={pageStyle}>
+      <Breadcrumbs
+        items={[
+          { label: 'Accueil', to: '/' },
+          { label: 'Campagnes', to: '/campaigns' },
+          { label: campaign.title },
+        ]}
+      />
       <Link to="/campaigns" style={backLinkStyle}>
         <IconArrowLeft /> Toutes les campagnes
       </Link>

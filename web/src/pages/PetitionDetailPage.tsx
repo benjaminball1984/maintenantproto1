@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 
+import Breadcrumbs from '@/components/Breadcrumbs';
 import { IconArrowLeft, IconCheckCircle, IconFlame, IconUsers } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { signPetition, unsignPetition } from '@/lib/petitions';
@@ -241,6 +242,13 @@ export default function PetitionDetailPage() {
 
   return (
     <main style={pageStyle}>
+      <Breadcrumbs
+        items={[
+          { label: 'Accueil', to: '/' },
+          { label: 'Pétitions', to: '/petitions' },
+          { label: petition.title },
+        ]}
+      />
       <Link to="/petitions" style={backLinkStyle}>
         <IconArrowLeft /> Toutes les pétitions
       </Link>

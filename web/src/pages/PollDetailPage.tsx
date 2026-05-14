@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 
+import Breadcrumbs from '@/components/Breadcrumbs';
 import {
   IconArrowLeft,
   IconBarChart,
@@ -392,6 +393,13 @@ export default function PollDetailPage() {
 
   return (
     <main style={pageStyle}>
+      <Breadcrumbs
+        items={[
+          { label: 'Accueil', to: '/' },
+          { label: 'Sondages', to: '/polls' },
+          { label: poll.question },
+        ]}
+      />
       <Link to="/polls" style={backLinkStyle}>
         <IconArrowLeft /> Tous les sondages
       </Link>
