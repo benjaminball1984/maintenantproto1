@@ -18,10 +18,38 @@ describe('Footer', () => {
     expect(screen.getByRole('contentinfo', { name: /Pied de page/i })).toBeInTheDocument();
   });
 
-  it('affiche l’année courante', () => {
+  it("affiche l'année courante", () => {
     renderFooter();
     const year = String(new Date().getFullYear());
     expect(screen.getByText(new RegExp(`Maintenant\\s*!.*${year}`))).toBeInTheDocument();
+  });
+
+  it('expose les trois colonnes Mission / Outils / Légal', () => {
+    renderFooter();
+    expect(screen.getByRole('heading', { level: 2, name: /Mission/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: /Outils/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: /^Légal$/i })).toBeInTheDocument();
+  });
+
+  it('expose les liens outils principaux', () => {
+    renderFooter();
+    const toolsHeading = screen.getByRole('heading', { level: 2, name: /Outils/i });
+    const toolsNav = toolsHeading.closest('nav');
+    expect(toolsNav).not.toBeNull();
+    if (!toolsNav) return;
+    const navEl = toolsNav as HTMLElement;
+    expect(within(navEl).getByRole('link', { name: /Pétitions/i })).toHaveAttribute(
+      'href',
+      '/petitions',
+    );
+    expect(within(navEl).getByRole('link', { name: /Mobilisations/i })).toHaveAttribute(
+      'href',
+      '/mobilizations',
+    );
+    expect(within(navEl).getByRole('link', { name: /Services entraide/i })).toHaveAttribute(
+      'href',
+      '/services',
+    );
   });
 
   it('expose les liens légaux + transparence requis', () => {
@@ -46,6 +74,14 @@ describe('Footer', () => {
     expect(within(legalNav).getByRole('link', { name: /Transparence/i })).toHaveAttribute(
       'href',
       '/transparence',
+    );
+  });
+
+  it('expose un CTA Rejoindre depuis la colonne Mission', () => {
+    renderFooter();
+    expect(screen.getByRole('link', { name: /Rejoindre le mouvement/i })).toHaveAttribute(
+      'href',
+      '/join',
     );
   });
 
