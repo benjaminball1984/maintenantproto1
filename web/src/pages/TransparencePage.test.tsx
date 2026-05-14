@@ -286,4 +286,60 @@ describe('TransparencePage', () => {
     resolveT99cp({ data: 42, error: null });
     await new Promise((r) => setTimeout(r, 0));
   });
+
+  // Étape 37 — polish /transparence.
+  it('affiche les microcopies « comment c\'est calculé » sous chaque compteur', async () => {
+    fetchTransparencyCountsMock.mockResolvedValueOnce({
+      data: {
+        members: 10,
+        publishedPetitions: 1,
+        publishedMobilizations: 1,
+        publishedCampaigns: 1,
+        publishedCommunes: 1,
+        signatures: 5,
+      },
+      error: null,
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('list', { name: /Compteurs publics/i })).toBeInTheDocument();
+    });
+    // Chaque compteur expose son explication (count(*) sur la table…).
+    expect(screen.getByText(/count\(\*\) sur public\.users/i)).toBeInTheDocument();
+    expect(screen.getByText(/count\(\*\) sur public\.signatures/i)).toBeInTheDocument();
+    // Les 4 tables filtrées par status (petitions, mobilizations, campaigns, communes).
+    const publishedHints = screen.getAllByText(/status = « published »/);
+    expect(publishedHints.length).toBe(4);
+  });
+
+  it('agrandit le graphique mensuel via minHeight 360 px (étape 37)', async () => {
+    fetchTransparencyCountsMock.mockResolvedValueOnce({ data: ZERO_COUNTS, error: null });
+    fetchMonthlySignupsMock.mockReset();
+    fetchMonthlySignupsMock.mockResolvedValueOnce({
+      data: [{ monthIso: '2026-05-01', count: 3 }],
+      error: null,
+    });
+    renderPage();
+    const chart = await screen.findByTestId('monthly-signups-chart');
+    // `style.minHeight` reflète la prop minHeight (360 px) — réactif au resize.
+    expect(chart.style.minHeight).toBe('360px');
+  });
+
+  it('affiche un lien vers /decouvrir en bas de page (étape 37)', async () => {
+    fetchTransparencyCountsMock.mockResolvedValueOnce({ data: ZERO_COUNTS, error: null });
+    renderPage();
+    const link = screen.getByRole('link', { name: /Découvrir Maintenant/i });
+    expect(link).toHaveAttribute('href', '/decouvrir');
+  });
+
+  it('met en avant la carte T99CP via fond contrasté (étape 37)', async () => {
+    fetchTransparencyCountsMock.mockResolvedValueOnce({ data: ZERO_COUNTS, error: null });
+    fetchT99cpTotalMock.mockReset();
+    fetchT99cpTotalMock.mockResolvedValueOnce({ data: 100, error: null });
+    renderPage();
+    const card = await screen.findByTestId('t99cp-total-card');
+    // Le fond utilise `--mn-brand-light` (et non `--mn-surface-2` comme les
+    // autres cartes) pour distinguer visuellement le compteur T99CP.
+    expect(card.style.background).toMatch(/mn-brand-light/);
+  });
 });

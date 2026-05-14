@@ -16,9 +16,15 @@ interface Props {
   buckets: MonthlySignupBucket[];
   /** Titre lisible pour les lecteurs d'écran (`aria-label` racine). */
   ariaLabel?: string;
+  /**
+   * Hauteur minimale (px) du conteneur SVG. Le viewBox conserve son ratio,
+   * mais le wrapper réserve la hauteur visuelle souhaitée — étape 37 :
+   * /transparence agrandit à 360 px (responsive width: 100% inchangé).
+   */
+  minHeight?: number;
 }
 
-const wrapperStyle: CSSProperties = {
+const baseWrapperStyle: CSSProperties = {
   background: 'var(--mn-surface-2)',
   border: '1px solid var(--mn-border)',
   borderRadius: 12,
@@ -32,7 +38,7 @@ const emptyStyle: CSSProperties = {
   margin: 0,
 };
 
-const svgStyle: CSSProperties = {
+const baseSvgStyle: CSSProperties = {
   display: 'block',
   width: '100%',
   height: 'auto',
@@ -48,7 +54,18 @@ const PADDING_BOTTOM = 32;
 export default function MonthlySignupsChart({
   buckets,
   ariaLabel = 'Inscriptions par mois sur les 12 derniers mois',
+  minHeight,
 }: Props) {
+  const wrapperStyle: CSSProperties = minHeight
+    ? { ...baseWrapperStyle, minHeight }
+    : baseWrapperStyle;
+  // `width: 100%` est préservé. `height: auto` reste valable, mais on impose
+  // une hauteur minimale au SVG quand le wrapper en a une — sinon le SVG
+  // collapserait au ratio viewBox dans Safari.
+  const svgStyle: CSSProperties = minHeight
+    ? { ...baseSvgStyle, minHeight: Math.max(minHeight - 40, 0) }
+    : baseSvgStyle;
+
   const total = buckets.reduce((s, b) => s + b.count, 0);
   if (total === 0) {
     return (
@@ -68,7 +85,7 @@ export default function MonthlySignupsChart({
   const yScale = (count: number) => (count / max) * innerHeight;
 
   return (
-    <div style={wrapperStyle}>
+    <div style={wrapperStyle} data-testid="monthly-signups-chart">
       <svg
         style={svgStyle}
         viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}

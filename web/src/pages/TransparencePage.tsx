@@ -69,6 +69,23 @@ const cardLabelStyle: CSSProperties = {
   margin: '0.25rem 0 0',
 };
 
+const cardHintStyle: CSSProperties = {
+  color: 'var(--mn-text-3)',
+  fontSize: 12,
+  margin: '0.5rem 0 0',
+  lineHeight: 1.4,
+};
+
+// La carte T99CP reçoit un fond légèrement contrasté pour la mettre en
+// avant (cf. étape 37 — l'indicateur monnaie solidaire est la donnée la
+// plus différenciante de la transparence Maintenant ! par rapport aux
+// dashboards classiques d'asso).
+const t99cpCardStyle: CSSProperties = {
+  ...cardStyle,
+  background: 'var(--mn-brand-light)',
+  borderColor: 'var(--mn-brand)',
+};
+
 const errorStyle: CSSProperties = {
   background: 'var(--mn-surface-2)',
   border: '1px solid var(--mn-border)',
@@ -81,15 +98,46 @@ const errorStyle: CSSProperties = {
 interface MetricDef {
   key: keyof TransparencyCounts;
   label: string;
+  /**
+   * Microcopie « comment c'est calculé » affichée sous chaque valeur
+   * (étape 37). Reflète la docstring `fetchTransparencyCounts` côté lib :
+   * count(*) sur la table, RLS publique, pas de PII, filtre status='published'
+   * pour les contenus éditoriaux.
+   */
+  hint: string;
 }
 
 const METRICS: MetricDef[] = [
-  { key: 'members', label: 'Comptes créés' },
-  { key: 'publishedPetitions', label: 'Pétitions publiées' },
-  { key: 'signatures', label: 'Signatures cumulées' },
-  { key: 'publishedMobilizations', label: 'Mobilisations publiées' },
-  { key: 'publishedCampaigns', label: 'Campagnes publiées' },
-  { key: 'publishedCommunes', label: 'Communes libres' },
+  {
+    key: 'members',
+    label: 'Comptes créés',
+    hint: 'count(*) sur public.users — RLS publique, aucune PII exposée.',
+  },
+  {
+    key: 'publishedPetitions',
+    label: 'Pétitions publiées',
+    hint: 'count(*) sur public.petitions où status = « published ».',
+  },
+  {
+    key: 'signatures',
+    label: 'Signatures cumulées',
+    hint: 'count(*) sur public.signatures — cumulé toutes pétitions.',
+  },
+  {
+    key: 'publishedMobilizations',
+    label: 'Mobilisations publiées',
+    hint: 'count(*) sur public.mobilizations où status = « published ».',
+  },
+  {
+    key: 'publishedCampaigns',
+    label: 'Campagnes publiées',
+    hint: 'count(*) sur public.campaigns où status = « published ».',
+  },
+  {
+    key: 'publishedCommunes',
+    label: 'Communes libres',
+    hint: 'count(*) sur public.communes où status = « published ».',
+  },
 ];
 
 function formatNumber(n: number): string {
@@ -215,12 +263,17 @@ export default function TransparencePage() {
             <li key={metric.key} style={cardStyle}>
               <p style={cardValueStyle}>{formatNumber(state.counts[metric.key])}</p>
               <p style={cardLabelStyle}>{metric.label}</p>
+              <p style={cardHintStyle}>{metric.hint}</p>
             </li>
           ))}
           {t99cpState.kind === 'success' && (
-            <li style={cardStyle} data-testid="t99cp-total-card">
+            <li style={t99cpCardStyle} data-testid="t99cp-total-card">
               <p style={cardValueStyle}>{formatNumber(t99cpState.total)}</p>
               <p style={cardLabelStyle}>T99CP émis (cumulé)</p>
+              <p style={cardHintStyle}>
+                sum(amount) sur t99cp_transactions où kind = « credit » (RPC
+                publique, SECURITY DEFINER).
+              </p>
             </li>
           )}
         </ul>
@@ -243,7 +296,7 @@ export default function TransparencePage() {
         </div>
       )}
       {chartState.kind === 'success' && (
-        <MonthlySignupsChart buckets={chartState.buckets} />
+        <MonthlySignupsChart buckets={chartState.buckets} minHeight={360} />
       )}
 
       <h2 style={h2Style}>Ce que vous ne verrez pas ici</h2>
@@ -267,6 +320,10 @@ export default function TransparencePage() {
         Vous voyez une donnée qui vous semble incorrecte ?
         {' '}
         <Link to="/legal/contact">Contactez-nous</Link>.
+      </p>
+      <p style={{ marginTop: '0.75rem', fontSize: 14 }}>
+        En savoir plus sur le mouvement →{' '}
+        <Link to="/decouvrir">Découvrir Maintenant !</Link>
       </p>
     </main>
   );

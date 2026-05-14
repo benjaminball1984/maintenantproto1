@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useId,
   useMemo,
   useRef,
@@ -7,12 +8,17 @@ import {
   type CSSProperties,
   type FormEvent,
 } from 'react';
+import { Link } from 'react-router-dom';
 
 import {
   IconBadge,
+  IconCalendar,
   IconCheck,
+  IconCheckCircle,
   IconClose,
   IconEdit,
+  IconList,
+  IconPen,
   IconUpload,
   IconUser,
 } from '@/components/icons';
@@ -21,7 +27,12 @@ import { postgrestErrorMessage } from '@/lib/postgrestError';
 import {
   AVATAR_ACCEPTED_TYPES,
   AVATAR_MAX_BYTES,
+  fetchProfileActivity,
+  fetchProfileStats,
   uploadAvatar,
+  type ProfileActivityItem,
+  type ProfileActivityKind,
+  type ProfileStats,
   type UserUpdate,
 } from '@/lib/profile';
 import { useProfile } from '@/hooks/useProfile';
@@ -267,6 +278,105 @@ const badgeStyle: CSSProperties = {
   fontWeight: 700,
 };
 
+// Étape 37 — Badges contribution + historique d'activité.
+const statsGridStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+  gap: 12,
+  margin: 0,
+  padding: 0,
+  listStyle: 'none',
+};
+
+const statCardStyle: CSSProperties = {
+  background: 'var(--mn-surface-2)',
+  border: '1px solid var(--mn-border)',
+  borderRadius: 12,
+  padding: '14px 16px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 4,
+};
+
+const statValueStyle: CSSProperties = {
+  fontFamily: "'Sora', sans-serif",
+  fontSize: 24,
+  fontWeight: 800,
+  letterSpacing: '-0.02em',
+  color: 'var(--mn-text-1)',
+  margin: 0,
+  lineHeight: 1.1,
+};
+
+const statLabelStyle: CSSProperties = {
+  fontSize: 13,
+  color: 'var(--mn-text-2)',
+  margin: 0,
+};
+
+const activityListStyle: CSSProperties = {
+  margin: 0,
+  padding: 0,
+  listStyle: 'none',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 10,
+};
+
+const activityItemStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: 12,
+  padding: '12px 14px',
+  borderRadius: 10,
+  background: 'var(--mn-surface-2)',
+  border: '1px solid var(--mn-border)',
+};
+
+const activityIconStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 32,
+  height: 32,
+  borderRadius: 8,
+  background: 'var(--mn-brand-light)',
+  color: 'var(--mn-brand-dark)',
+  flexShrink: 0,
+};
+
+const activityBodyStyle: CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 2,
+};
+
+const activityKindStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: 'var(--mn-text-3)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+  margin: 0,
+};
+
+const activityLabelStyle: CSSProperties = {
+  fontSize: 14,
+  color: 'var(--mn-text-1)',
+  margin: 0,
+  lineHeight: 1.4,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+};
+
+const activityDateStyle: CSSProperties = {
+  fontSize: 12,
+  color: 'var(--mn-text-3)',
+  margin: 0,
+};
+
 interface ProfileFormState {
   display_name: string;
   bio: string;
@@ -298,6 +408,62 @@ function badgesFromJson(raw: unknown): string[] {
   return raw.filter((entry): entry is string => typeof entry === 'string');
 }
 
+function formatActivityDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return iso;
+  }
+}
+
+const ACTIVITY_KIND_LABEL: Record<ProfileActivityKind, string> = {
+  signature: 'Pétition signée',
+  participation: 'Mobilisation rejointe',
+  vote: 'Vote émis',
+  post: 'Publication',
+};
+
+function ActivityKindIcon({ kind }: { kind: ProfileActivityKind }) {
+  switch (kind) {
+    case 'signature':
+      return <IconCheckCircle width={16} height={16} />;
+    case 'participation':
+      return <IconCalendar width={16} height={16} />;
+    case 'vote':
+      return <IconList width={16} height={16} />;
+    case 'post':
+      return <IconPen width={16} height={16} />;
+  }
+}
+
+function activityHref(item: ProfileActivityItem): string | null {
+  if (!item.slug) return null;
+  switch (item.kind) {
+    case 'signature':
+      return `/petitions/${item.slug}`;
+    case 'participation':
+      return `/mobilisations/${item.slug}`;
+    case 'vote':
+      return `/sondages/${item.slug}`;
+    case 'post':
+      return null;
+  }
+}
+
+type StatsState =
+  | { kind: 'loading' }
+  | { kind: 'success'; stats: ProfileStats }
+  | { kind: 'error' };
+
+type ActivityState =
+  | { kind: 'loading' }
+  | { kind: 'success'; items: ProfileActivityItem[] }
+  | { kind: 'error' };
+
 export default function ProfilePage() {
   const { user } = useAuth();
   const { profile, status, error: loadError, update, refresh } = useProfile();
@@ -311,6 +477,52 @@ export default function ProfilePage() {
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [pendingAvatarUrl, setPendingAvatarUrl] = useState<string | null>(null);
   const formErrorId = useId();
+  const [statsState, setStatsState] = useState<StatsState>({ kind: 'loading' });
+  const [activityState, setActivityState] = useState<ActivityState>({ kind: 'loading' });
+
+  const userId = user?.id ?? null;
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    fetchProfileStats(userId)
+      .then((result) => {
+        if (cancelled) return;
+        if (result.error || !result.data) {
+          setStatsState({ kind: 'error' });
+        } else {
+          setStatsState({ kind: 'success', stats: result.data });
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStatsState({ kind: 'error' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    fetchProfileActivity(userId, 10)
+      .then((result) => {
+        if (cancelled) return;
+        if (result.error || !result.data) {
+          setActivityState({ kind: 'error' });
+        } else {
+          setActivityState({ kind: 'success', items: result.data });
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setActivityState({ kind: 'error' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   // Synchronise le formulaire avec le profil en mode lecture (pattern
   // « set state during render » : compatible react-hooks/set-state-in-effect).
@@ -641,6 +853,85 @@ export default function ProfilePage() {
         <p style={{ marginTop: 8, color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>
           T99CP — monnaie solidaire du mouvement.
         </p>
+      </section>
+
+      <section style={sectionStyle} aria-labelledby="profile-stats-title">
+        <h2 id="profile-stats-title" style={sectionTitleStyle}>
+          Contributions
+        </h2>
+        {statsState.kind === 'loading' && (
+          <p style={{ color: 'var(--mn-text-3)', margin: 0 }} role="status">
+            Chargement des compteurs…
+          </p>
+        )}
+        {statsState.kind === 'error' && (
+          <p style={{ color: 'var(--mn-text-3)', margin: 0 }} role="status">
+            Compteurs indisponibles pour le moment.
+          </p>
+        )}
+        {statsState.kind === 'success' && (
+          <ul style={statsGridStyle} aria-label="Mes contributions">
+            <li style={statCardStyle}>
+              <p style={statValueStyle}>{statsState.stats.signatures}</p>
+              <p style={statLabelStyle}>Pétitions signées</p>
+            </li>
+            <li style={statCardStyle}>
+              <p style={statValueStyle}>{statsState.stats.participations}</p>
+              <p style={statLabelStyle}>Mobilisations rejointes</p>
+            </li>
+            <li style={statCardStyle}>
+              <p style={statValueStyle}>{statsState.stats.votes}</p>
+              <p style={statLabelStyle}>Votes émis</p>
+            </li>
+            <li style={statCardStyle}>
+              <p style={statValueStyle}>{statsState.stats.posts}</p>
+              <p style={statLabelStyle}>Publications</p>
+            </li>
+          </ul>
+        )}
+      </section>
+
+      <section style={sectionStyle} aria-labelledby="profile-activity-title">
+        <h2 id="profile-activity-title" style={sectionTitleStyle}>
+          Activité récente
+        </h2>
+        {activityState.kind === 'loading' && (
+          <p style={{ color: 'var(--mn-text-3)', margin: 0 }} role="status">
+            Chargement de l’historique…
+          </p>
+        )}
+        {activityState.kind === 'error' && (
+          <p style={{ color: 'var(--mn-text-3)', margin: 0 }} role="status">
+            Historique indisponible pour le moment.
+          </p>
+        )}
+        {activityState.kind === 'success' && activityState.items.length === 0 && (
+          <p style={{ color: 'var(--mn-text-3)', margin: 0 }}>
+            Aucune action enregistrée pour l’instant. Vos signatures, RSVP,
+            votes et publications apparaîtront ici dès la première contribution.
+          </p>
+        )}
+        {activityState.kind === 'success' && activityState.items.length > 0 && (
+          <ul style={activityListStyle} aria-label="10 dernières actions">
+            {activityState.items.map((item) => {
+              const href = activityHref(item);
+              return (
+                <li key={`${item.kind}-${item.id}`} style={activityItemStyle}>
+                  <span style={activityIconStyle} aria-hidden="true">
+                    <ActivityKindIcon kind={item.kind} />
+                  </span>
+                  <div style={activityBodyStyle}>
+                    <p style={activityKindStyle}>{ACTIVITY_KIND_LABEL[item.kind]}</p>
+                    <p style={activityLabelStyle}>
+                      {href ? <Link to={href}>{item.label}</Link> : item.label}
+                    </p>
+                    <p style={activityDateStyle}>{formatActivityDate(item.createdAt)}</p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
     </div>
   );

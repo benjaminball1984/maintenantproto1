@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+import type { Database } from '@/types/database';
 
 const mocks = vi.hoisted(() => {
   const updateChain = {
@@ -37,7 +40,14 @@ vi.mock('@/lib/supabase', () => ({
   },
 }));
 
-import { AVATAR_MAX_BYTES, getProfile, updateProfile, uploadAvatar } from '@/lib/profile';
+import {
+  AVATAR_MAX_BYTES,
+  fetchProfileActivity,
+  fetchProfileStats,
+  getProfile,
+  updateProfile,
+  uploadAvatar,
+} from '@/lib/profile';
 import { postgrestErrorMessage } from '@/lib/postgrestError';
 
 const sampleRow = {
@@ -176,5 +186,269 @@ describe('uploadAvatar', () => {
     expect(postgrestErrorMessage(error)).toBe(
       'Vous n’avez pas les droits pour effectuer cette action.',
     );
+  });
+});
+
+// =====================================================================================
+// Tests pour `fetchProfileStats` et `fetchProfileActivity` (étape 37).
+//
+// On stubbe directement la chaîne fluide PostgREST par table — pattern
+// identique à `transparency.test.ts` (`buildClient`). Chaque appel `.from(t)`
+// renvoie sa propre chain (state isolé), pour que les 4 queries parallèles
+// ne se polluent pas.
+// =====================================================================================
+
+interface CountStubResult {
+  count: number | null;
+  error: { message: string } | null;
+}
+
+interface ListStubResult {
+  data: unknown[] | null;
+  error: { message: string } | null;
+}
+
+interface FromStubConfig {
+  count?: CountStubResult;
+  list?: ListStubResult;
+}
+
+function buildProfileClient(
+  perTable: Record<string, FromStubConfig>,
+): SupabaseClient<Database> {
+  const fromMock = vi.fn((table: string) => {
+    const cfg = perTable[table] ?? {};
+    // Branche "count" : .select(_, { count, head: true }).eq(col, val) thenable.
+    // Branche "list"  : .select(...).eq(...).order(...).limit(...) thenable.
+    interface Chain {
+      select: (..._args: unknown[]) => Chain;
+      eq: (..._args: unknown[]) => Chain;
+      order: (..._args: unknown[]) => Chain;
+      limit: (..._args: unknown[]) => Chain;
+      then: (
+        onFulfilled: (v: CountStubResult | ListStubResult) => unknown,
+      ) => Promise<unknown>;
+    }
+    let mode: 'count' | 'list' = 'list';
+    const chain: Chain = {
+      select: (_cols: unknown, opts?: unknown) => {
+        if (
+          opts &&
+          typeof opts === 'object' &&
+          (opts as { head?: boolean }).head === true
+        ) {
+          mode = 'count';
+        }
+        return chain;
+      },
+      eq: (..._args: unknown[]) => chain,
+      order: (..._args: unknown[]) => chain,
+      limit: (..._args: unknown[]) => chain,
+      then: (onFulfilled) => {
+        const value =
+          mode === 'count'
+            ? cfg.count ?? { count: 0, error: null }
+            : cfg.list ?? { data: [], error: null };
+        return Promise.resolve(onFulfilled(value));
+      },
+    };
+    return chain;
+  });
+  return { from: fromMock } as unknown as SupabaseClient<Database>;
+}
+
+describe('fetchProfileStats', () => {
+  it('retourne les 4 compteurs (signatures, participations, votes, posts)', async () => {
+    const client = buildProfileClient({
+      signatures: { count: { count: 3, error: null } },
+      participations: { count: { count: 2, error: null } },
+      votes: { count: { count: 5, error: null } },
+      posts: { count: { count: 1, error: null } },
+    });
+    const { data, error } = await fetchProfileStats('u1', client);
+    expect(error).toBeNull();
+    expect(data).toEqual({
+      signatures: 3,
+      participations: 2,
+      votes: 5,
+      posts: 1,
+    });
+  });
+
+  it('normalise count: null → 0 (RLS sans accès)', async () => {
+    const client = buildProfileClient({
+      signatures: { count: { count: null, error: null } },
+      participations: { count: { count: null, error: null } },
+      votes: { count: { count: null, error: null } },
+      posts: { count: { count: null, error: null } },
+    });
+    const { data, error } = await fetchProfileStats('u1', client);
+    expect(error).toBeNull();
+    expect(data).toEqual({
+      signatures: 0,
+      participations: 0,
+      votes: 0,
+      posts: 0,
+    });
+  });
+
+  it('propage la première erreur rencontrée', async () => {
+    const client = buildProfileClient({
+      signatures: { count: { count: null, error: { message: 'rls_denied' } } },
+      participations: { count: { count: 1, error: null } },
+      votes: { count: { count: 1, error: null } },
+      posts: { count: { count: 1, error: null } },
+    });
+    const { data, error } = await fetchProfileStats('u1', client);
+    expect(data).toBeNull();
+    expect(error?.message).toBe('rls_denied');
+  });
+});
+
+describe('fetchProfileActivity', () => {
+  it('merge et trie les 4 sources par created_at desc, limite à `limit`', async () => {
+    const client = buildProfileClient({
+      signatures: {
+        list: {
+          data: [
+            {
+              id: 's1',
+              created_at: '2026-05-10T08:00:00Z',
+              petitions: { title: 'Pétition A', slug: 'petition-a' },
+            },
+          ],
+          error: null,
+        },
+      },
+      participations: {
+        list: {
+          data: [
+            {
+              id: 'p1',
+              created_at: '2026-05-12T10:00:00Z',
+              mobilizations: { title: 'Mobilisation B', slug: 'mobilisation-b' },
+            },
+          ],
+          error: null,
+        },
+      },
+      votes: {
+        list: {
+          data: [
+            {
+              id: 'v1',
+              created_at: '2026-05-09T09:00:00Z',
+              polls: { question: 'Sondage C ?', slug: 'sondage-c' },
+            },
+          ],
+          error: null,
+        },
+      },
+      posts: {
+        list: {
+          data: [
+            {
+              id: 'po1',
+              created_at: '2026-05-11T11:00:00Z',
+              body: 'Mon premier post du mouvement',
+            },
+          ],
+          error: null,
+        },
+      },
+    });
+    const { data, error } = await fetchProfileActivity('u1', 10, client);
+    expect(error).toBeNull();
+    expect(data).not.toBeNull();
+    // Ordre attendu : participation (12) > post (11) > signature (10) > vote (09).
+    expect(data?.map((it) => it.kind)).toEqual([
+      'participation',
+      'post',
+      'signature',
+      'vote',
+    ]);
+    expect(data?.[0]?.label).toBe('Mobilisation B');
+    expect(data?.[0]?.slug).toBe('mobilisation-b');
+    expect(data?.[2]?.label).toBe('Pétition A');
+  });
+
+  it('limite à `limit` items après merge (5 sur 8 sources)', async () => {
+    const sigRows = Array.from({ length: 4 }, (_, i) => ({
+      id: `s${i}`,
+      created_at: `2026-05-0${i + 1}T08:00:00Z`,
+      petitions: { title: `P${i}`, slug: `p${i}` },
+    }));
+    const postRows = Array.from({ length: 4 }, (_, i) => ({
+      id: `po${i}`,
+      created_at: `2026-05-1${i}T08:00:00Z`,
+      body: `Body ${i}`,
+    }));
+    const client = buildProfileClient({
+      signatures: { list: { data: sigRows, error: null } },
+      participations: { list: { data: [], error: null } },
+      votes: { list: { data: [], error: null } },
+      posts: { list: { data: postRows, error: null } },
+    });
+    const { data } = await fetchProfileActivity('u1', 5, client);
+    expect(data?.length).toBe(5);
+  });
+
+  it('propage l\'erreur si une des 4 queries échoue', async () => {
+    const client = buildProfileClient({
+      signatures: {
+        list: { data: null, error: { message: 'rls_denied' } },
+      },
+      participations: { list: { data: [], error: null } },
+      votes: { list: { data: [], error: null } },
+      posts: { list: { data: [], error: null } },
+    });
+    const { data, error } = await fetchProfileActivity('u1', 10, client);
+    expect(data).toBeNull();
+    expect(error?.message).toBe('rls_denied');
+  });
+
+  it('gère les embeds en forme tableau (FK 1-to-N PostgREST)', async () => {
+    const client = buildProfileClient({
+      signatures: {
+        list: {
+          data: [
+            {
+              id: 's1',
+              created_at: '2026-05-10T08:00:00Z',
+              // Forme tableau (FK indirect, ex. select non typé)
+              petitions: [{ title: 'Pétition X', slug: 'petition-x' }],
+            },
+          ],
+          error: null,
+        },
+      },
+      participations: { list: { data: [], error: null } },
+      votes: { list: { data: [], error: null } },
+      posts: { list: { data: [], error: null } },
+    });
+    const { data } = await fetchProfileActivity('u1', 10, client);
+    expect(data?.[0]?.label).toBe('Pétition X');
+    expect(data?.[0]?.slug).toBe('petition-x');
+  });
+
+  it('tronque les bodies de post longs avec ellipse', async () => {
+    const longBody = 'a'.repeat(200);
+    const client = buildProfileClient({
+      signatures: { list: { data: [], error: null } },
+      participations: { list: { data: [], error: null } },
+      votes: { list: { data: [], error: null } },
+      posts: {
+        list: {
+          data: [
+            { id: 'po1', created_at: '2026-05-10T08:00:00Z', body: longBody },
+          ],
+          error: null,
+        },
+      },
+    });
+    const { data } = await fetchProfileActivity('u1', 10, client);
+    expect(data?.[0]?.kind).toBe('post');
+    expect(data?.[0]?.label.length).toBeLessThan(longBody.length);
+    expect(data?.[0]?.label.endsWith('…')).toBe(true);
   });
 });
