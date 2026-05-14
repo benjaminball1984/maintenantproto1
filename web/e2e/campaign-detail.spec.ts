@@ -120,7 +120,11 @@ test.describe('Campagnes — fiche /campaigns/:slug stubée', () => {
     ).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(campaignFixture.summary)).toBeVisible();
     await expect(page.getByText(campaignFixture.body)).toBeVisible();
-    await expect(page.getByText(/Campagne citoyenne/i)).toBeVisible();
+    // `exact: true` indispensable : le résumé du fixture contient
+    // « Une campagne citoyenne pour accélérer… » qui matcherait aussi
+    // une regex /Campagne citoyenne/i. Le tag span contient exactement
+    // « Campagne citoyenne » (l'IconMegaphone SVG n'ajoute pas de texte).
+    await expect(page.getByText('Campagne citoyenne', { exact: true })).toBeVisible();
 
     // Heading de la section actions : compteur dynamique « 3 actions … ».
     // Le pluriel est ajouté quand `actions.length > 1` (CampaignDetailPage.tsx:317).
