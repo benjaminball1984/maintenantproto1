@@ -29,6 +29,8 @@ import {
   AVATAR_MAX_BYTES,
   fetchProfileActivity,
   fetchProfileStats,
+  profileActivityHref,
+  PROFILE_ACTIVITY_KIND_LABEL,
   uploadAvatar,
   type ProfileActivityItem,
   type ProfileActivityKind,
@@ -409,23 +411,18 @@ function badgesFromJson(raw: unknown): string[] {
 }
 
 function formatActivityDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
+  // Janitor JAN37-R3 — `new Date('garbage').toLocaleDateString()` ne throw
+  // pas mais retourne `'Invalid Date'`. On valide explicitement avant
+  // formatage et on retombe sur un fallback neutre plutôt que de polluer
+  // l'UI avec « Invalid Date » ou l'ISO brut.
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 }
-
-const ACTIVITY_KIND_LABEL: Record<ProfileActivityKind, string> = {
-  signature: 'Pétition signée',
-  participation: 'Mobilisation rejointe',
-  vote: 'Vote émis',
-  post: 'Publication',
-};
 
 function ActivityKindIcon({ kind }: { kind: ProfileActivityKind }) {
   switch (kind) {
@@ -437,20 +434,6 @@ function ActivityKindIcon({ kind }: { kind: ProfileActivityKind }) {
       return <IconList width={16} height={16} />;
     case 'post':
       return <IconPen width={16} height={16} />;
-  }
-}
-
-function activityHref(item: ProfileActivityItem): string | null {
-  if (!item.slug) return null;
-  switch (item.kind) {
-    case 'signature':
-      return `/petitions/${item.slug}`;
-    case 'participation':
-      return `/mobilisations/${item.slug}`;
-    case 'vote':
-      return `/sondages/${item.slug}`;
-    case 'post':
-      return null;
   }
 }
 
@@ -914,14 +897,14 @@ export default function ProfilePage() {
         {activityState.kind === 'success' && activityState.items.length > 0 && (
           <ul style={activityListStyle} aria-label="10 dernières actions">
             {activityState.items.map((item) => {
-              const href = activityHref(item);
+              const href = profileActivityHref(item);
               return (
                 <li key={`${item.kind}-${item.id}`} style={activityItemStyle}>
                   <span style={activityIconStyle} aria-hidden="true">
                     <ActivityKindIcon kind={item.kind} />
                   </span>
                   <div style={activityBodyStyle}>
-                    <p style={activityKindStyle}>{ACTIVITY_KIND_LABEL[item.kind]}</p>
+                    <p style={activityKindStyle}>{PROFILE_ACTIVITY_KIND_LABEL[item.kind]}</p>
                     <p style={activityLabelStyle}>
                       {href ? <Link to={href}>{item.label}</Link> : item.label}
                     </p>

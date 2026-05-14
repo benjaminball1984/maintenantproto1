@@ -238,6 +238,38 @@ export interface ProfileActivityResult {
   error: PostgrestError | null;
 }
 
+/**
+ * Libellés FR par type d'action (factorisé hors `ProfilePage` — janitor
+ * JAN37-A1) — la table appartient au domaine `profile`, pas à la
+ * présentation.
+ */
+export const PROFILE_ACTIVITY_KIND_LABEL: Record<ProfileActivityKind, string> = {
+  signature: 'Pétition signée',
+  participation: 'Mobilisation rejointe',
+  vote: 'Vote émis',
+  post: 'Publication',
+};
+
+/**
+ * Construit l'URL interne d'une action profil. Retourne `null` pour les
+ * actions sans page dédiée (posts du réseau social). Factorisé hors
+ * `ProfilePage` (janitor JAN37-A1) — la connaissance des routes vit ici, à
+ * côté du type `ProfileActivityKind`.
+ */
+export function profileActivityHref(item: ProfileActivityItem): string | null {
+  if (!item.slug) return null;
+  switch (item.kind) {
+    case 'signature':
+      return `/petitions/${item.slug}`;
+    case 'participation':
+      return `/mobilisations/${item.slug}`;
+    case 'vote':
+      return `/sondages/${item.slug}`;
+    case 'post':
+      return null;
+  }
+}
+
 interface Embedded {
   title?: string | null;
   slug?: string | null;
@@ -262,6 +294,10 @@ function excerpt(raw: string, max = 80): string {
   if (trimmed.length <= max) return trimmed;
   return `${trimmed.slice(0, max - 1)}…`;
 }
+
+// Fallback de label pour un post sans body utilisable (janitor JAN37-R9 —
+// `excerpt('')` retourne `''` ce qui produirait un libellé visuel vide).
+const POST_FALLBACK_LABEL = 'Publication';
 
 /**
  * Charge les 10 dernières actions de l'utilisateur courant (signatures,
@@ -340,15 +376,21 @@ export async function fetchProfileActivity(
   }
   for (const row of posts.data ?? []) {
     const body = (row as { body?: string | null }).body ?? '';
+    // Janitor JAN37-R9 — `excerpt` retourne `''` si `body` est whitespace
+    // pur après trim. Le `||` retombe alors sur le fallback générique.
     items.push({
       kind: 'post',
       id: row.id,
       createdAt: row.created_at,
       slug: null,
-      label: body ? excerpt(body) : 'Publication',
+      label: excerpt(body) || POST_FALLBACK_LABEL,
     });
   }
 
-  items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  // Janitor JAN37-R1 — tri sur `getTime()` plutôt que comparaison
+  // lexicographique de strings ISO : robuste si Postgres sérialise un
+  // offset non-UTC sur certaines lignes (`+02:00` vs `Z`). Sur le format
+  // canonique actuel l'ordre est identique.
+  items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   return { data: items.slice(0, limit), error: null };
 }

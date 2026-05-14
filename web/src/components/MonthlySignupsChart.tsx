@@ -69,7 +69,7 @@ export default function MonthlySignupsChart({
   const total = buckets.reduce((s, b) => s + b.count, 0);
   if (total === 0) {
     return (
-      <div style={wrapperStyle} role="status">
+      <div style={wrapperStyle} role="status" data-testid="monthly-signups-chart">
         <p style={emptyStyle}>
           Aucune inscription enregistrée sur la période. Le graphique
           apparaîtra dès la première inscription publique.
