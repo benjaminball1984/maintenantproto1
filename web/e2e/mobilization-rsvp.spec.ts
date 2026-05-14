@@ -5,7 +5,7 @@ import { installAuthenticatedSession, installSupabaseStubs } from './utils/mockS
 // Étape 32 — 9e itération du pattern « +1 test mock E2E ciblé » (suggérée
 // explicitement par le prompt étape 32 §2 : « mobilization-detail attend/leave,
 // symétrique poll vote/unvote, exerce `useMobilization` + `rsvpMobilization
-// /cancelRsvp` »). 6e et 7e call-sites de `installAuthenticatedSession`
+// /cancelRsvp` »). 7e et 8e call-sites de `installAuthenticatedSession`
 // (helper extrait étape 31).
 //
 // Couvre la fiche `/mobilizations/:slug` (`MobilizationDetailPage.tsx:243-264
@@ -156,7 +156,7 @@ test.describe('Mobilisations — flow RSVP / cancel stubé', () => {
     //   `true`, `[]` après DELETE.
     // - DELETE (`cancelRsvp .delete().eq(...).eq(...)`) : renvoie 204 No
     //   Content (comportement PostgREST par défaut sans `.select()`, cf.
-    //   mobilizations.ts:268 qui ne chaîne pas `.select()`) et bascule
+    //   mobilizations.ts:271 qui ne chaîne pas `.select()`) et bascule
     //   `hasRsvp = false`.
     const existingParticipationRow = {
       id: 'participation-stub-existing',
