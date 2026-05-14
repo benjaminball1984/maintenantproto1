@@ -10547,6 +10547,435 @@ janitor étape 31 :
 
 ---
 
+## Étape 33 — Post-go-live (matrice E2E /campaigns/:slug — 10e itération du pattern)
+
+**Branche** : `claude/review-project-rules-5Vzqk`
+**PR principale** : à ouvrir.
+
+### Contexte d'ouverture
+
+À l'ouverture de la session, les conditions externes restent
+strictement inchangées vs étape 32 :
+
+- 🔲 Lighthouse réel sur Netlify : binaire Chromium toujours
+  indisponible côté sandbox. Run E2E réel via CI GitHub Actions
+  sur le PR.
+- 🔲 Migrations Supabase staging (étapes 20 + 22 + 23 + 24 + 30) :
+  toujours en file d'attente. Carte T99CP étape 30 reste masquée
+  silencieusement en staging tant que la RPC §23 n'est pas
+  appliquée — non bloquant côté front.
+- 🔲 Sentry SaaS / Stripe live / projet Supabase de test :
+  toujours non provisionnés.
+- 🔲 M2-sec-policy + M1-RGPD : décisions tranchées 2026-05-13,
+  pas de validation explicite par PR cette session → différé
+  étape 34.
+
+Le prompt étape 33 §2 suggère la **10e itération du pattern « +1
+test mock E2E ciblé »** avec plusieurs cibles candidates :
+campagnes `/campaigns/:slug` flow soutenir/retirer (sous réserve
+qu'une fonction `supportCampaign` existe), profil `/profile`
+authentifié, ou état transparence non encore couvert.
+
+**Décision retenue** : cible **`/campaigns/:slug`** (fiche
+détaillée) — couvre `useCampaign(slug)` + `getCampaign(slug)`
++ le résolveur `resolveAction` (CampaignDetailPage.tsx:198-237)
+non couverts E2E jusqu'ici. Le pattern stateful POST/DELETE-flag-
+flip est **NON applicable** ici : aucune fonction `supportCampaign`
+/ `withdrawSupport` n'existe côté backend (vérifié par grep
+exhaustif sur `src/lib/campaigns.ts`, `src/hooks/*.ts`,
+`src/pages/*.tsx` — aucune occurrence). La 10e itération est donc
+une **extension du périmètre mock E2E** vers une route encore
+muette, sans réutiliser le pattern stateful — la dette
+`L9-arch-stateful-mock` reste à 6 call-sites duplicateurs (vs
+8 si on avait pu réutiliser le pattern), aucune nouvelle
+duplication.
+
+### Livré
+
+#### 1. Nouveau spec `campaign-detail.spec.ts` (+2 tests E2E)
+
+Nouveau fichier : `web/e2e/campaign-detail.spec.ts`.
+
+2 tests dans le `test.describe('Campagnes — fiche /campaigns/:slug
+stubée')` :
+
+- **rend l'entête (titre + résumé + corps) et les 3 cartes
+  d'action typées avec leurs liens** — exerce `useCampaign(slug)`
+  → `getCampaign(slug)` qui enchaîne deux GETs :
+  1. `/rest/v1/campaigns?slug=eq.<slug>&select=*` (maybeSingle).
+  2. `/rest/v1/campaign_actions?campaign_id=eq.<id>&select=*&order=position.asc`.
+  Override `/rest/v1/campaign_actions**` avec 3 actions typées
+  (petition + mobilization + poll). Le test vérifie le rendu de
+  l'en-tête (titre h1, résumé, corps, tag « Campagne citoyenne »),
+  le compteur dynamique « 3 actions dans cette campagne »
+  (pluriel), et que `resolveAction` (CampaignDetailPage.tsx:198-237)
+  mappe chaque action sur la route attendue :
+  - petition_id → `<a href="/petitions/<id>">`
+  - mobilization_id → `<a href="/mobilizations/<id>">`
+  - poll_id → `<a href="/polls/<id>">`
+  Le back-link « Toutes les campagnes » (href=`/campaigns`) est
+  également validé.
+- **rend la fallback « Action sans cible (lien rompu) » pour une
+  action orpheline (tous ids null)** — exerce la branche
+  fallback `unknown` de `resolveAction`
+  (CampaignDetailPage.tsx:228-235) : action avec petition_id =
+  mobilization_id = poll_id = crowdfunding_id = null →
+  `route.kind: 'unknown'`, `route.href: null` → rendu en `<div>`
+  non cliquable avec `aria-label="Action sans cible (lien
+  rompu)"` (CampaignDetailPage.tsx:340). Le test vérifie le
+  compteur singulier « 1 action » (sans `s`), la présence de
+  l'élément aria-label, et l'absence totale de `<a>` (link role)
+  dans la liste d'actions.
+
+Aucun `installAuthenticatedSession` : `/campaigns/:slug` est
+publique (pas de RequireAuth). 8 call-sites totaux du helper
+auth (inchangé vs étape 32).
+
+#### 2. Mock REST `campaigns`
+
+Le `test.beforeEach` intercepte `/rest/v1/campaigns**` (1 fiche,
+slug `transition-energie-2030`, status `published`, body non-vide
+pour valider le rendu conditionnel `{campaign.body && <p…>}`)
+en plus d'`installSupabaseStubs` (défaut 200 `[]` sur les autres
+tables, dont `/rest/v1/campaign_actions` qui est ensuite override
+par-test).
+
+### Tests
+
+- **vitest** : 883 verts (inchangé — aucune modification de logique
+  métier ou de composant React, tous les changements vivent dans
+  `web/e2e/**`).
+- **E2E Playwright** : 41 → 43 (+2 sur `campaign-detail.spec.ts`).
+  Run réel en CI GitHub Actions ; sandbox local ne peut pas
+  télécharger le binaire Chromium.
+
+### Bundle
+
+Entry inchangé (47.34 kB / gzip 13.32 kB). Tous les lazy chunks
+inchangés. Aucun ajout côté runtime.
+
+### Hygiène
+
+- Pas de modification du prototype `app/Maintenant.html`.
+- Pas de modification du design system `T.*` (CSS vars `--mn-*`).
+- Pas de migration DB.
+- Pas de breaking change visible utilisateur (ajout E2E
+  exclusivement).
+- Pas de nouvelle dépendance npm.
+- TS strict + no `any` (vérifié — `Route` typé via
+  `@playwright/test`, fixtures inline en object literal avec
+  inférence stricte).
+- Aucun emoji dans le code TS / commits / titre PR.
+
+### Checks finaux (étape 33)
+
+```
+> npm run typecheck && npm run lint && npx vitest run && npm run build
+
+✓ typecheck   (tsc -b + e2e/tsconfig.json)
+✓ lint        (eslint .)
+✓ vitest      (128 files, 883 tests passed, ~76s)
+✓ build       (entry 47.34 kB / gzip 13.32 kB ; tous les lazy
+              chunks inchangés)
+```
+
+### Décisions
+
+- **Cible 10e itération** : `/campaigns/:slug` retenu car (a) route
+  jamais couverte E2E (`/campaigns` listing seul dans
+  `public-pages.spec.ts:13`), (b) pas de `supportCampaign` côté
+  backend → pattern stateful POST/DELETE-flag-flip inapplicable,
+  (c) le résolveur `resolveAction` est une logique non-triviale
+  (4 branches typées + 1 fallback) avec 0 couverture E2E.
+- **Pas d'extraction `installStatefulToggleRoute` à l'étape 33** :
+  la dette `L9-arch-stateful-mock` (6 call-sites duplicateurs)
+  aurait pu être close si on avait ajouté un 7e/8e call-site.
+  L'étape 33 ne le fait pas (campaigns sans toggle natif). La
+  dette mûrit mais reste à 6 call-sites ; l'extraction peut
+  attendre une 11e itération du pattern OU une étape refacto
+  mock-helper dédiée.
+- **Pas d'`installAuthenticatedSession`** : `/campaigns/:slug` est
+  publique (cf. router.tsx:108, hors `RequireAuth`). Bug volontaire
+  d'oublier le helper auth serait détecté par un `useAuth.status`
+  défaut `'anonymous'` cohérent côté UI.
+
+### Goulots externes — état au 2026-05-14 (inchangé étape 32)
+
+- ✅ Hébergement HTTPS Netlify (goulot 1 débloqué étape 26).
+- ✅ Décisions produit / RGPD (goulot 4 débloqué étape 29 —
+  M2-sec-policy, T99CP cumul public CONSOMMÉE étape 30, M1-RGPD).
+- 🔲 Migrations Supabase staging (étapes 20 + 22 + 23 + 24 + 30 à
+  appliquer).
+- 🔲 Sentry SaaS / projet Supabase de test / Stripe live (goulots
+  3, 5, 6).
+
+---
+
+## Prompt pour la session N+28 (étape 34)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
+> typiquement `claude/<auto>`).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`,
+>    camelCase TS / snake_case DB, SVG via `ICONS.*` pas d'emojis,
+>    RLS, RGPD, Lighthouse ≥ 95, axe-core ≥ 95, `prefers-reduced-
+>    motion`). Note la section « Politique de PR » qui t'autorise à
+>    enchaîner ouverture + merge des PR sans confirmation jusqu'à
+>    la session 50 incluse. Note aussi la section « Recopie
+>    systématique du prompt de la session suivante » : **à la
+>    clôture de cette étape, recopier le prompt étape 35 à la fois
+>    dans `HANDOFF-PROGRESS.md` ET dans la réponse de chat finale**.
+>    Et enfin la section « Audit récurrent vibe janitor de fin
+>    d'étape » : **après le merge de la PR principale de l'étape 34,
+>    tu dois enchaîner une PR janitor séparée
+>    `chore(janitor): post-step 34 — …` et inclure cette même
+>    instruction janitor dans le prompt étape 35**.
+> 2. `HANDOFF.md` §11 (Points d'attention) + §12 (Suivi) + §13
+>    (Sécurité).
+> 3. `HANDOFF-PROGRESS.md` — journal (étape 33 ✅ — étape 34 à
+>    faire).
+> 4. `docs/PROD-RUNBOOK.md` — runbook de provisionnement (§1.2
+>    mis à jour étape 30 avec sanity checks 5+6 pour
+>    `transparency_t99cp_total`).
+> 5. `docs/MODERATION.md` — procédure modération.
+> 6. `docs/USER-GUIDE.md` — FAQ utilisateur·rice.
+>
+> **État actuel à la fin de l'étape 33 + janitor post-step 33** :
+>
+> - Étape 33 livrable principal : 10e itération du pattern « +1
+>   test mock E2E », `/campaigns/:slug` (fiche campagne). Nouveau
+>   spec `web/e2e/campaign-detail.spec.ts` (+2 tests) qui exerce
+>   `useCampaign` + `getCampaign` + résolveur `resolveAction`
+>   (3 cartes typées petition/mobilization/poll + fallback orphan
+>   `Action sans cible (lien rompu)`). **Pattern stateful
+>   POST/DELETE-flag-flip NON applicable** ici (pas de
+>   `supportCampaign` côté backend) — la dette
+>   `L9-arch-stateful-mock` reste à 6 call-sites duplicateurs
+>   (inchangée). Aucun nouveau call-site `installAuthenticatedSession`
+>   (`/campaigns/:slug` publique) — toujours 8 call-sites.
+> - Tests : **883 vitest inchangés**. **41 → 43 E2E Playwright**
+>   (CI) — +2 sur `campaign-detail.spec.ts`.
+> - Bundle : entry inchangé (47.34 kB / gzip 13.32 kB). Tous les
+>   lazy chunks inchangés. Aucun changement runtime.
+> - Janitor post-step 33 : [à compléter à la clôture de l'étape 33]
+>   findings (... critical / ... high / ... medium / ... low). ...
+>   fixes safe-first appliqués. ... fixes déférés.
+> - Tous les autres items différés en bloc (Lighthouse réel, E2E
+>   happy path réel, monitoring Sentry / Supabase, M2-sec-policy,
+>   H4-deploy-deno, M1-RGPD, retours utilisateur·rices, job
+>   réconciliation Stripe) : conditions externes inchangées vs
+>   étape 32/33.
+> - Aucune nouvelle dépendance npm.
+>
+> **Provisionnement externe — état au 2026-05-14 (inchangé
+> étape 33)** :
+>
+> - ✅ Hébergement HTTPS Netlify (goulot 1 débloqué).
+> - ✅ Décisions produit / RGPD (goulot 4 débloqué — M2-sec-policy,
+>   T99CP cumul public CONSOMMÉE étape 30, M1-RGPD).
+> - 🔲 Migrations Supabase staging (étapes 20 + 22 + 23 + 24 + 30 à
+>   appliquer).
+> - 🔲 Sentry SaaS / projet Supabase de test / Stripe live (goulots
+>   3, 5, 6).
+>
+> **CONTEXTE D'OUVERTURE — à exécuter avant toute autre action** :
+>
+> 1. Vérifier qu'on est bien dans un workspace contenant `web/`.
+>    Si non, `git fetch origin main && git merge --ff-only origin/main`.
+> 2. `cd web && npm ci` (fallback : `npm install --legacy-peer-deps`).
+> 3. `npm run typecheck && npm run lint && npx vitest run && npm
+>    run build` pour vérifier le compteur de tests au point de
+>    départ (≥ 883 verts vitest à incrémenter à chaque étape ;
+>    43 verts E2E Playwright en CI).
+> 4. Demander à l'équipe humaine :
+>    - Les migrations étape 20 + étape 22 + étape 23 + étape 24 +
+>      étape 30 (db/schema.sql §23 RPC `transparency_t99cp_total`)
+>      ont-elles été appliquées à Supabase staging ?
+>    - Audit Lighthouse réel sur https://maintenant-le-mouvement.netlify.app
+>      a-t-il été lancé (par un dev humain ou par re-essai côté
+>      sandbox) ?
+>    - Le provisionnement Sentry / Stripe live / projet Supabase de
+>      test décrit dans `docs/PROD-RUNBOOK.md` est-il fait ?
+>    - Souhaitent-ils enchaîner sur M2-sec-policy (durcissement
+>      `signatures_select_public` — RLS visible côté client →
+>      demande confirmation à chaque PR de cette transition) ?
+>    - Souhaitent-ils enchaîner sur M1-RGPD (purge auto
+>      `stripe_events.payload` TTL 90j — touche table critique
+>      `stripe_events` → demande confirmation à chaque PR) ?
+>
+> **PRÉREQUIS OPÉRATIONNEL — gate avant tout redéploiement front** :
+>
+> Identique étapes 26-33. Aucun call-site UI nouveau côté étape 33
+> ne dépend de migration DB. Toute migration peut être appliquée au
+> rythme de l'équipe ops, sans bloquer le redéploiement front.
+>
+> Pour les migrations antérieures (24 — `signatures_count_for_petition`),
+> le gate reste : tant qu'aucun call-site UI ne l'appelle (toujours
+> 0 à fin étape 33), aucun impact utilisateur ; mais dès qu'un
+> call-site sera ajouté (chantier M2-sec-policy si validation
+> reçue), la migration devient bloquante.
+>
+> Procédure (cf. PROD-RUNBOOK §1.2) :
+>
+> 1. `pg_dump` staging vers bucket privé.
+> 2. `psql < db/schema.sql` (idempotent `CREATE OR REPLACE`).
+> 3. Sanity checks décrits par migration dans §1.2.
+> 4. Redéployer Netlify / front si nécessaire (pas obligatoire — la
+>    carte T99CP se débloque dès que la RPC est dispo, le bundle
+>    front est inchangé).
+>
+> **ÉTAPE 34 à exécuter — Post-go-live (audit réel + monitoring +
+> chantier M2-sec-policy / M1-RGPD si validés OU 11e itération du
+> pattern « +1 test mock E2E ciblé », par défaut sur un autre flow
+> non couvert)** :
+>
+> 1. **Audit Lighthouse réel** (priorité 1, site live sur Netlify) :
+>    `npx unlighthouse --site https://maintenant-le-mouvement.netlify.app`
+>    si binaire Chromium dispo, sinon DevTools manuel par un dev
+>    humain sur 6 pages clés. Documenter les scores. Corriger les
+>    blocages < 95. Si pas faisable : différer étape 35.
+> 2. **E2E « happy path » réel** (priorité 2 si projet Supabase de
+>    test prêt) : `web/e2e/happy-path.spec.ts` qui signe anonymement
+>    une pétition + vérifie le compteur. Sinon ajouter encore un
+>    test mock non-vide (réutiliser `installSupabaseStubs(page, {
+>    rest: ..., rpc: ... })` et `installAuthenticatedSession(page,
+>    { userId, email })`) — par exemple : extraire enfin le helper
+>    `installStatefulToggleRoute` de la dette
+>    `L9-arch-stateful-mock` (6 call-sites duplicateurs à
+>    consolider) **SI** une 11e cible naturelle existe pour
+>    re-tester le helper ; sinon profil authentifié (/profile),
+>    OU un état transparence non encore couvert, OU une carte
+>    transparence dépendante d'une nouvelle RPC. La dette
+>    `L8-arch-authsession` est close (helper extrait étape 31).
+> 3. **Monitoring Sentry runtime** (si DSN câblé) : test canary +
+>    documenter taux d'erreur 7 j + top 5 issues. Si erreurs
+>    récurrentes `stripe-webhook` → prioriser job de
+>    réconciliation.
+> 4. **Monitoring Supabase** : quotas API / DB CPU / DB memory sur
+>    7 j, alertes Slack actives ?, top requêtes lentes.
+> 5. **M2-sec-policy** — durcissement `signatures_select_public` :
+>    remplacer la policy actuelle (`for select using (true)`) par
+>    une policy qui n'expose `user_id` qu'à `auth.uid() = user_id
+>    OR public.is_admin(auth.uid())`. Migrer les call-sites UI qui
+>    dépendent encore de la projection `signatures.user_id`. Migrer
+>    les call-sites « combien de signatures » vers
+>    `getPetitionSignatureCount`. **CHANGEMENT RLS visible côté
+>    client** → demander confirmation à chaque PR de cette
+>    transition. Si pas le moment → différer étape 35.
+> 6. **M1-RGPD** (purge auto `stripe_events.payload` TTL 90j) :
+>    migration DB additive (`stripe_events_payload_ttl_trigger` ou
+>    job Edge Function périodique). Toucher à `stripe_events` =
+>    demande confirmation (table critique du webhook). Sinon
+>    différer.
+> 7. **H4-deploy-deno** (dette low low) : si pipeline CI Supabase
+>    réel disponible, ajouter `supabase functions deploy --dry-run`
+>    sur PR. Sinon différer.
+> 8. **Retours utilisateur·rices** (si trafic réel) : compiler
+>    fixes prioritaires étape 35.
+> 9. **Job de réconciliation Stripe** (dette différée étape 20) :
+>    décider si on l'implémente. Critère : erreurs récurrentes
+>    Sentry sur `stripe-webhook`.
+> 10. **Tests** : suite vitest ≥ 883 + E2E Playwright ≥ 43 verts
+>     en CI.
+> 11. **HANDOFF-PROGRESS.md** : étape 34 ✅ détaillée.
+> 12. **Recopier le prompt étape 35** à la fois dans
+>     `HANDOFF-PROGRESS.md` ET dans la réponse de chat finale
+>     (règle récursive). Inclure dans le prompt étape 35 la même
+>     instruction de recopie pour la session N+29, **ET
+>     l'instruction d'audit vibe janitor pour N+29**.
+>
+> **PHASE 1 — Clôture de l'étape principale (workflow auto-merge)** :
+>
+> Conformément à `CLAUDE.md § « Politique de PR »`, autorisation
+> permanente d'enchaîner les étapes ci-dessous sans confirmation :
+>
+> 1. Vérifier les 4 checks locaux verts : `npm run typecheck &&
+>    npm run lint && npx vitest run && npm run build`. Si échec
+>    → corriger, ne pas commit.
+> 2. Commit : `chore(prod): step 34 — post-go-live (lighthouse +
+>    e2e réel + monitoring + chantier M2-sec-policy/M1-RGPD si
+>    validés)` ou `feat(...)/chore(...)` selon le livrable
+>    principal. Pas d'emojis.
+> 3. Push sur la branche imposée par l'harness (retry exponentiel
+>    2/4/8/16 s).
+> 4. Ouvrir la PR vers `main` via
+>    `mcp__github__create_pull_request` (titre = commit, body
+>    Summary + Décisions + Test plan).
+> 5. Attendre les checks GitHub Actions (les DEUX checks
+>    **Typecheck + Lint + Vitest + Build** ET **Playwright E2E +
+>    axe-core a11y** doivent être verts). Si rouges → autofix +
+>    re-push.
+> 6. Merger la PR via `mcp__github__merge_pull_request`.
+>
+> **PHASE 2 — Audit vibe janitor (après le merge de la PR
+> principale)** :
+>
+> Conformément à `CLAUDE.md § « Audit récurrent vibe janitor de
+> fin d'étape »` :
+>
+> 1. Sync : `git checkout main && git pull --ff-only origin main`,
+>    puis `git checkout -b claude/janitor-post-step34`.
+> 2. Audit en parallèle via 2-3 subagents `general-purpose` :
+>    architecture / robustesse / sécurité. Chaque agent produit un
+>    rapport ; **aucune modification**.
+> 3. Synthétiser findings par sévérité + risque régression.
+> 4. Appliquer UNIQUEMENT les fixes safe-first (« primum non
+>    nocere ») : aucun fix qui casse un test, aucun nouveau
+>    problème, design system `T.*` intouchable, pas de migration
+>    DB, pas de breaking change, fixes risque medium/high
+>    reportés en dette.
+> 5. Vérifier les 4 checks locaux verts avant push.
+> 6. PR janitor séparée : titre `chore(janitor): post-step 34 —
+>    <résumé court>`. Body : Summary + Findings (sévérité +
+>    risque) + Fixes appliqués + Fixes déférés + Test plan.
+> 7. Merger la PR janitor (même workflow auto-merge).
+> 8. Documenter dans `HANDOFF-PROGRESS.md § Audit vibe janitor
+>    étape 34` : findings totaux, fixes appliqués (chacun avec
+>    risque évalué), dette ajoutée, compteur de tests final.
+>
+> **Phase 3 — Recopie du prompt étape 35 (toujours obligatoire)** :
+>
+> Recopier le prompt étape 35 dans la **réponse de chat finale**,
+> en plus de l'avoir écrit dans `HANDOFF-PROGRESS.md`. Le prompt
+> étape 35 doit lui-même inclure les Phases 1, 2, 3 récursives
+> pour la session N+29.
+>
+> **Conditions d'arrêt malgré l'autorisation permanente** :
+>
+> 1. Migration DB risquée non listée. **L'étape 34 LISTE
+>    explicitement** :
+>    - Durcissement `signatures_select_public` (M2-sec-policy) SI
+>      pertinent → autorisé MAIS demander confirmation à chaque PR
+>      car CHANGEMENT RLS visible côté client.
+>    - Purge `stripe_events.payload` (M1-RGPD) SI pertinent →
+>      demander confirmation car table critique.
+>    - Toute autre migration → demander confirmation.
+> 2. Changement RGPD non listé.
+> 3. Breaking change visible utilisateur.
+> 4. Erreur Netlify / Supabase impossible à debugger en < 3
+>    tentatives.
+> 5. Review humaine ou commentaire GitHub avant le merge.
+> 6. En phase janitor : un fix touche au design system `T.*`,
+>    casse un test sans rollback possible, ou nécessite un bump
+>    majeur.
+>
+> **Contraintes générales** :
+>
+> - Ne pas toucher au prototype.
+> - TS strict + no `any`.
+> - Conserver les checks verts à chaque étape.
+> - Pas d'emojis dans le code TS ni dans les commits / PR.
+> - Tokens `T.*` intouchables sans validation designer.
+> - Sauvegarder la DB AVANT toute migration prod (pg_dump → bucket
+>   privé Supabase Storage).
+>
+> Tu peux lancer la session 34 quand tu veux — le prompt ci-dessus
+> est aussi consigné dans `HANDOFF-PROGRESS.md`.
+
+---
+
 ## Prompt pour la session N+27 (étape 33)
 
 > Repo : `/home/user/maintenantproto1` (branche imposée par l'harness —
