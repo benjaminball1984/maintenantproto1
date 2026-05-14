@@ -11108,6 +11108,94 @@ existant. PR janitor exclusivement documentaire ce coup-ci (3e
   (pétitions signées, mobilisations rsvp, votes, posts) +
   historique des 10 dernières actions.
 
+### Audit vibe janitor étape 36
+
+Trois subagents `general-purpose` lancés en parallèle (architecture
+/ élégance, robustesse / edge cases, sécurité / cohérence handoff)
+sur le périmètre étape 36 (`DecouvrirPage.tsx` + tests + router +
+bascule HomePage CTA + Footer + E2E PUBLIC_ROUTES + section étape 36
+du journal).
+
+**Findings totaux** : 14 findings — 0 critical / 0 high / 0 medium /
+14 low (incluant 4 « info / RAS » sans action). **Fixes appliqués :
+0** (4e épisode consécutif de janitor doc-only).
+
+Raison du « 0 fix » : l'unique candidat safe-first proposé par
+l'agent architecture (JAN36-A1 : suppression de `id="mission"`
+orphelin sur HomePage) a un risque de régression « low » mais une
+valeur fonctionnelle marginale — l'anchor est inoffensif, conservé
+intentionnellement pour permettre un deep-link externe vers la
+section mission de la home (ex. partage sur Mastodon, RSS). Le
+trade-off « primum non nocere » penche en faveur de la
+conservation. Les autres findings sont tous low / info / RAS.
+
+**Dette ajoutée** (à reprendre lors d'étapes dédiées) :
+
+- **JAN36-A1 / low / régression low** — `id="mission"` sur
+  `HomePage.tsx:485` orphelin après la bascule du CTA Découvrir.
+  Conservé volontairement pour deep-link externe. À documenter
+  dans un commentaire JSX la prochaine fois qu'on touche cette
+  section.
+- **JAN36-A2 / low / régression medium** — Duplication
+  `pageStyle / h1Style / subtitleStyle` éditoriaux entre
+  PrivacyPage, LegalNoticePage, CookiesPage, TransparencePage,
+  ContactPage et désormais DecouvrirPage. Une factorisation
+  `lib/editorialStyles.ts` économiserait ~30 LOC/page mais
+  touche 6 pages testées — risque régression visuelle non
+  négligeable. À traiter dans une étape dédiée « design system
+  éditorial ».
+- **JAN36-A3 / low / régression low** — DecouvrirPage : ~300 LOC
+  de styles inline avant le JSX (ratio styles/JSX ~60/40).
+  Pattern aligné sur HomePage. Dette accumulée à traiter avec
+  JAN36-A2.
+- **JAN36-A4 / low / régression low** — Naming hybride « Découvre »
+  (H1, tutoiement) vs « Découvrir » (CTA, infinitif d'action) vs
+  « Découvrir » (Footer). Choix éditorial cohérent (action vs
+  contenu) mais à valider produit. Pas de fix immédiat.
+- **JAN36-A5 (= JAN34-F2)** — Confirmation : `<h2 className="sr-only">`
+  redondant sur HomePage compteurs (mécanisme inline `position
+  absolute, left -9999` + classe inerte). Déjà tracée janitor 34
+  (JAN34-A4).
+- **JAN36-R1 (= JAN36-A5)** — Badge `<span>Témoignage démo` sans
+  `role`/`aria` explicite. Lu comme texte plain par SR —
+  sémantique acceptable mais perfectible. Différé.
+- **JAN36-R2 / info / régression none** — Page DecouvrirPage est
+  `lazy()`-loadée, chunk dédié modeste. Bundle initial inchangé.
+  OK.
+- **JAN36-R3 / info / régression low** — Test « 3 témoignages »
+  strict (`toHaveLength(3)`). Fragile si on ajoute un témoignage.
+  Acceptable (intentionnel — limite la dérive du contenu démo).
+  À ajuster quand des vrais témoignages remplacent les fictifs
+  (étape 42 launch).
+- **JAN36-F1 / low / régression low** — 2 NBSP brut U+00A0 dans
+  des string constants TS (`STEPS[2].description`,
+  `TESTIMONIALS[0].quote`). Non flaggés ESLint
+  (`no-irregular-whitespace` JSX-only) mais incohérent avec la
+  convention « tout `&nbsp;` en JSX text » documentée par la
+  bascule lint étape 36. À harmoniser lors d'une passe i18n /
+  typographie dédiée.
+- **JAN36-F2 (= JAN34-A5)** — `rgba(225, 29, 116, 0.08)`
+  hardcodée dans `ctaSectionStyle` DecouvrirPage. Réutilisation
+  cohérente de la couleur radial gradient hero HomePage. Dette
+  déjà tracée JAN34-A5.
+
+**Halluciné non-finding** : l'agent robustesse a signalé un
+« doublon de lien `/decouvrir` dans Footer » (P4) — vérification
+par grep : un seul `NavLink to="/decouvrir"` dans Footer.tsx
+(ligne 104). Hallucination de l'agent, ignorée.
+
+**Compteur de tests final post-janitor étape 36** : 907 vitest
+verts (inchangé — aucun fix appliqué) + 41 E2E Playwright locaux
+verts (+ 1 nouveau smoke `/decouvrir` validé en CI).
+
+**Conditions d'arrêt janitor non déclenchées** : aucune migration
+DB, aucun touch tokens `T.*`, aucun fix qui aurait cassé un test
+existant. **4e épisode consécutif de janitor doc-only** — le
+pattern « PR principale propre → janitor pur documentaire » est
+maintenant l'état stable du projet sur les livraisons frontend
+plan visible-first (étapes 32, 34, 35, 36 toutes terminées sur ce
+mode).
+
 ---
 
 ## Prompt pour la session N+31 (étape 37)
