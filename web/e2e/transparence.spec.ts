@@ -185,3 +185,104 @@ test.describe('Page /transparence — carte T99CP cumulée (étape 30)', () => {
     await expect(page.getByText('T99CP émis (cumulé)')).toHaveCount(0);
   });
 });
+
+// Étape 33 — 10e itération du pattern « +1 test mock E2E ciblé » (suggérée
+// explicitement par le prompt étape 33 §2 : « un état transparence non
+// encore couvert »). Couvre les deux branches d'erreur du composant
+// `TransparencePage.tsx` jusqu'ici testées uniquement en unit
+// (cf. `TransparencePage.test.tsx`) :
+// - `chartState.kind === 'error'` (TransparencePage.tsx:240-244) — la RPC
+//   `users_signups_monthly` échoue (RLS, rate limit, RPC manquante en
+//   staging tant que la migration étape 23 n'est pas appliquée).
+// - `state.kind === 'error'` (TransparencePage.tsx:206-210) —
+//   `fetchTransparencyCounts` voit un `error` sur l'un des 6 counts
+//   parallèles (`countTable` users / petitions / mobilizations /
+//   campaigns / communes / signatures).
+//
+// Aucun call-site `installAuthenticatedSession` ici : la page
+// /transparence est publique (anonymous), aucune session à seeder.
+test.describe('Page /transparence — états d\'erreur (étape 33)', () => {
+  test('affiche l\'état d\'erreur du graphique quand la RPC users_signups_monthly échoue', async ({
+    page,
+  }) => {
+    // Stub global anonyme + override ciblé : la RPC users_signups_monthly
+    // renvoie 500 (« permission denied » côté DB simulé). Le useEffect
+    // dédié au chartState (TransparencePage.tsx:149-167) bascule sur
+    // `kind: 'error'`, qui rend un <div role="alert"> avec « Graphique
+    // indisponible pour le moment. ». Les autres états (compteurs,
+    // T99CP) restent indépendants du chartState — couverts par les
+    // autres specs.
+    await installSupabaseStubs(page);
+    await page.route(
+      '**/rest/v1/rpc/users_signups_monthly*',
+      async (route) => {
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: '42501',
+            message: 'permission denied for relation users',
+          }),
+        });
+      },
+    );
+    await page.goto('/transparence');
+    // Le message d'erreur du graphique doit apparaître.
+    await expect(
+      page.getByText(/Graphique indisponible pour le moment/i),
+    ).toBeVisible({ timeout: 10_000 });
+    // Le SVG (`role="img"` avec name « Inscriptions par mois… ») NE doit
+    // PAS être rendu (état error ≠ état success).
+    await expect(
+      page.getByRole('img', { name: /Inscriptions par mois/i }),
+    ).toHaveCount(0);
+    // L'état vide « Aucune inscription enregistrée… » NE doit pas non
+    // plus apparaître — c'est l'état success avec buckets[].count tous
+    // à 0, distinct de l'état error.
+    await expect(
+      page.getByText(/Aucune inscription enregistrée/i),
+    ).toHaveCount(0);
+    await expectNoCriticalAxeViolations(page);
+  });
+
+  test('affiche l\'état d\'erreur des compteurs quand un count REST échoue', async ({
+    page,
+  }) => {
+    // Stub global anonyme + override ciblé sur `/rest/v1/users` qui
+    // renvoie 500. `fetchTransparencyCounts` lance les 6 counts en
+    // parallèle (Promise.all), trouve `firstError` non null, retourne
+    // `{ data: null, error }`. Le useEffect bascule sur `state.kind:
+    // 'error'`, qui rend `<div role="alert">` avec « Impossible de
+    // charger les compteurs (…). Réessayez plus tard. ».
+    //
+    // Le chart fait une RPC séparée (`users_signups_monthly`) qui passe
+    // par le stub par défaut → buckets[].count = 0 → état vide rendu en
+    // parallèle. C'est le comportement attendu : les états des 3 cards
+    // (compteurs, chart, T99CP) sont indépendants côté UI.
+    await installSupabaseStubs(page);
+    await page.route('**/rest/v1/users**', async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: '42501',
+          message: 'permission denied for relation users',
+        }),
+      });
+    });
+    await page.goto('/transparence');
+    // Le message d'erreur des compteurs doit apparaître.
+    await expect(
+      page.getByText(/Impossible de charger les compteurs/i),
+    ).toBeVisible({ timeout: 10_000 });
+    // La liste « Compteurs publics » NE doit PAS être rendue (branche
+    // `state.kind === 'success'` mutuellement exclusive de la branche
+    // `error`).
+    await expect(
+      page.getByRole('list', { name: /Compteurs publics/i }),
+    ).toHaveCount(0);
+    // La carte T99CP n'apparaît pas non plus (elle vit DANS la liste
+    // des compteurs, conditionnée à `state.kind === 'success'`).
+    await expect(page.getByTestId('t99cp-total-card')).toHaveCount(0);
+  });
+});

@@ -41,6 +41,7 @@
 | 30. Post-go-live — T99CP cumul public (décision produit débloquée 2026-05-13) : RPC additive `transparency_t99cp_total()` + carte dédiée sur `/transparence` |   ✅   |
 | 31. Post-go-live — conditions externes inchangées : +2 E2E mock (poll-detail vote/unvote, symétrique sign/unsign étape 28/29) + extraction helper `installAuthenticatedSession` (clôture `L8-arch-authsession`) — tous les autres items différés |   ✅   |
 | 32. Post-go-live — conditions externes inchangées : +2 E2E mock (mobilization-detail rsvp/cancel, symétrique poll vote/unvote étape 31) — tous les autres items différés |   ✅   |
+| 33. Post-go-live — conditions externes inchangées : +2 E2E mock (transparence états d'erreur — chart RPC + counters REST, 10e itération du pattern, symétrique additive sans toucher aux specs existants) — tous les autres items différés |   ✅   |
 
 ---
 
@@ -10544,6 +10545,215 @@ janitor étape 31 :
   retenue. Le pattern janitor « 4 fixes doc-only safe-first »
   continue d'être un vecteur sain de progrès incrémental sans
   risque de régression.
+
+---
+
+## Étape 33 — Post-go-live (états d'erreur transparence — 10e itération du pattern)
+
+**Branche** : `claude/resume-session-33-Sbgx9`
+**PR principale** : à ouvrir.
+
+### Contexte d'ouverture
+
+À l'ouverture de la session, les conditions externes restent
+strictement inchangées vs étapes 31/32 :
+
+- 🔲 Lighthouse réel sur Netlify : binaire Chromium toujours
+  indisponible côté sandbox. Run E2E réel via CI GitHub Actions
+  sur le PR.
+- 🔲 Migrations Supabase staging (étapes 20 + 22 + 23 + 24 + 30) :
+  toujours en file d'attente. Carte T99CP étape 30 reste masquée
+  silencieusement en staging tant que la RPC §23 n'est pas
+  appliquée — non bloquant côté front.
+- 🔲 Sentry SaaS / Stripe live / projet Supabase de test :
+  toujours non provisionnés.
+- 🔲 M2-sec-policy + M1-RGPD : décisions tranchées 2026-05-13 mais
+  pas de validation explicite par PR cette session → différé étape
+  34.
+
+Le prompt étape 33 §2 suggère 3 cibles pour le fallback safe-first :
+campagnes `/campaigns/:slug` (mais `supportCampaign` n'existe pas
+dans le codebase — la suggestion s'appuyait sur un nom de fonction
+qui n'a pas été implémenté), profil `/profile` authentifié, OU **un
+état transparence non encore couvert**. La troisième cible est
+retenue : les deux branches d'erreur `chartState.kind === 'error'`
+et `state.kind === 'error'` de `TransparencePage.tsx` sont
+testées en unit (`TransparencePage.test.tsx`) mais jamais en E2E à
+ce jour. Ajouter 2 tests E2E mock symétriques couvre ces branches
+sans toucher aux specs existants — option safe-first qui réduit
+le risque de régression CI à zéro tout en accomplissant la 10e
+itération du pattern « +1 test mock E2E ciblé ».
+
+### Livré
+
+#### 1. Nouveau describe « États d'erreur (étape 33) » dans `transparence.spec.ts` (+2 tests E2E)
+
+Fichier modifié : `web/e2e/transparence.spec.ts` (ajout d'un 4e
+`test.describe(...)` à la fin du fichier, après celui de l'étape
+30 sur la carte T99CP).
+
+2 tests dans `test.describe('Page /transparence — états d\'erreur (étape 33)')` :
+
+- **chart-error: la RPC `users_signups_monthly` échoue → message
+  « Graphique indisponible pour le moment. »** — couvre la branche
+  `TransparencePage.tsx:240-244`. Override de la route
+  `/rest/v1/rpc/users_signups_monthly*` avec status 500 + body
+  `{ code: '42501', message: 'permission denied for relation
+  users' }`. Le `useEffect` dédié au chartState
+  (`TransparencePage.tsx:149-167`) bascule sur `kind: 'error'`,
+  qui rend `<div role="alert">` avec le message d'erreur. Le test
+  vérifie : (a) le message d'erreur est visible, (b) le SVG
+  `role="img"` n'est pas rendu (état error ≠ état success), (c)
+  l'état vide « Aucune inscription enregistrée… » n'est pas non
+  plus rendu (mutuellement exclusif de l'état error). axe-core
+  vérifié critique = 0.
+- **counters-error: l'un des counts REST échoue → message
+  « Impossible de charger les compteurs… »** — couvre la branche
+  `TransparencePage.tsx:206-210`. Override de
+  `/rest/v1/users**` avec status 500. `fetchTransparencyCounts`
+  lance les 6 counts en parallèle (`Promise.all`), trouve un
+  `firstError` non null, retourne `{ data: null, error }`. Le
+  `useEffect` dédié à `state` (`TransparencePage.tsx:123-147`)
+  bascule sur `kind: 'error'`, qui rend `<div role="alert">` avec
+  le message. Le test vérifie : (a) le message d'erreur est
+  visible, (b) la liste `aria-label="Compteurs publics"` n'est
+  pas rendue (branche `kind: 'success'` mutuellement exclusive),
+  (c) la carte `data-testid="t99cp-total-card"` n'est pas rendue
+  non plus (elle vit DANS la liste, conditionnée à `success`).
+
+Les deux tests utilisent `installSupabaseStubs(page)` puis un
+`page.route('**/rest/v1/<endpoint>**', ...)` override — pattern
+identique aux tests T99CP étape 30 (qui override
+`/rest/v1/rpc/transparency_t99cp_total*` après le stub global).
+Aucun `installAuthenticatedSession` ici : la page `/transparence`
+est publique.
+
+### Tests
+
+- **vitest** : 883 verts (inchangé — aucune modification de logique
+  métier ou de composant React).
+- **E2E Playwright** : 41 → 43 (+2 sur `transparence.spec.ts`).
+  En pratique le run réel a lieu en CI GitHub Actions ; le sandbox
+  local ne peut pas télécharger le binaire Chromium.
+
+### Bundle
+
+Entry inchangé (47.34 kB / gzip 13.32 kB). Tous les lazy chunks
+inchangés. Aucun ajout côté runtime — toutes les modifications
+vivent dans `web/e2e/**`.
+
+### Hygiène
+
+- Pas de modification du prototype.
+- Pas de modification du design system `T.*` (CSS vars `--mn-*`).
+- Pas de migration DB.
+- Pas de breaking change visible utilisateur (zéro change runtime
+  — uniquement specs E2E).
+- Pas de nouvelle dépendance npm.
+- Pas de bump majeur.
+- TS strict + no `any` (vérifié sur le nouveau describe).
+
+### Items différés (conditions externes inchangées vs étapes 31/32)
+
+- **Audit Lighthouse réel** sur Netlify : à exécuter par un dev
+  humain ou dès que `npx playwright install chromium` redevient
+  utilisable côté sandbox.
+- **E2E happy path réel** : nécessite un projet Supabase de test
+  seedé (goulot 5).
+- **Monitoring Sentry runtime** : nécessite DSN câblé (goulot 3).
+- **Monitoring Supabase** : nécessite accès dashboard Supabase
+  staging.
+- **M2-sec-policy** (durcissement `signatures_select_public`) :
+  décision tranchée 2026-05-13 mais validation explicite par PR
+  pas encore donnée pour cette session. Différé étape 34.
+- **M1-RGPD** (purge auto `stripe_events.payload` TTL 90j) : idem.
+- **H4-deploy-deno** : nécessite pipeline CI Supabase réel.
+- **Retours utilisateur·rices** : pas encore de trafic réel.
+- **Job de réconciliation Stripe** : pas encore d'erreurs
+  récurrentes Sentry.
+
+### Décisions étape 33
+
+- **Cible « états d'erreur transparence »** plutôt que campagnes
+  ou profil : la suggestion campagnes du prompt étape 33 §2 (« exerce
+  `useCampaign` + `supportCampaign` ») ne pouvait pas être implémentée
+  — `supportCampaign` n'existe pas dans le codebase (les campagnes
+  sont des fiches read-only avec un bouton « Partager » uniquement,
+  pas de toggle stateful comme petition sign/poll vote/mobilization
+  rsvp). Le pattern stateful POST/DELETE-flag-flip est donc **épuisé
+  fonctionnellement** dans le codebase actuel — les 3 specs qui le
+  contiennent (petition-signature, poll-vote, mobilization-rsvp)
+  couvrent tous les flows toggle existants. La transparence offre
+  2 branches d'erreur non couvertes en E2E qui constituent la
+  10e itération naturelle du pattern « +1 test mock E2E ciblé »
+  sans recyclage de pattern (les états d'erreur sont distincts des
+  toggles stateful).
+- **+2 tests symétriques** (chart error + counters error) plutôt
+  qu'un seul : symétrie pédagogique parfaite avec les 4 doubles
+  déjà livrés (petition signed/unsigned étapes 26/27, sign/unsign
+  étapes 28/29, poll vote/unvote étape 31, mobilization rsvp/cancel
+  étape 32 — 4 paires de 2 tests). Chacune des 2 branches d'erreur
+  étant indépendante côté React (`useEffect` séparés, `state` vs
+  `chartState`), les couvrir ensemble est plus rapide que de réserver
+  l'une pour l'étape 34.
+- **Override sur `/rest/v1/users**` plutôt qu'une autre table**
+  pour counters-error : le glob `users` ne collisionne PAS avec
+  `users_signups_monthly` (RPC qui passe par `/rest/v1/rpc/...`, pas
+  `/rest/v1/users*`). On aurait pu choisir n'importe laquelle des
+  6 tables (users, petitions, mobilizations, campaigns, communes,
+  signatures) — `users` est la première dans le `Promise.all` de
+  `fetchTransparencyCounts` ce qui rend l'intention explicite mais
+  ne change pas le comportement (l'ordre des erreurs n'est pas
+  important dans la branche `firstError`).
+- **Pas d'`installStatefulToggleRoute` helper extrait** : la dette
+  `L9-arch-stateful-mock` reste ouverte (6 call-sites duplicateurs,
+  ~120 lignes). L'extraction du helper deviendrait pertinente si
+  une 4e spec utilisait le même pattern POST/DELETE-flag-flip —
+  mais aucune nouvelle telle spec n'a été ajoutée cette étape. Le
+  refacto cross-spec reste **non safe-first applicable** par défaut
+  (risque medium d'ouvrir un edge case sur ordre Playwright /
+  closure de flag — cf. J31-R2). À traiter dans une étape refacto
+  mock-helper dédiée si l'équipe le décide.
+- **`installSupabaseStubs(page)` sans overrides** + `page.route`
+  spécifique sur `/rest/v1/rpc/users_signups_monthly*` OU
+  `/rest/v1/users**` : ordre identique aux 2 call-sites étape 30
+  (override T99CP RPC après stub global). Convention émergente
+  cohérente avec le test T99CP-error de l'étape 30 qui sert de
+  template direct.
+- **axe-core uniquement sur le 1er test (chart-error)** : le 2nd
+  test (counters-error) ne l'appelle pas — le branche d'erreur des
+  compteurs rend un `role="alert"` simple, dont l'accessibilité est
+  déjà validée par les tests T99CP-error étape 30 + tous les
+  smoke axe étape 30. Réduire le scope axe-core évite de surcharger
+  la suite sans valeur ajoutée — pattern cohérent avec les autres
+  describes (axe-core appelé ~1× par describe, pas par test).
+
+### Prochaines étapes (étape 34)
+
+- Lighthouse mesuré dès qu'un binaire Chromium est disponible
+  côté sandbox OU exécution manuelle par un dev humain.
+- Monitoring Sentry canary + 7 j observations dès DSN câblé
+  (goulot 3).
+- Chantiers M2-sec-policy / M1-RGPD : prêts à enchaîner dès que
+  validation explicite par PR est donnée.
+- Si conditions externes encore bloquées : **épuisement complet
+  du pattern fonctionnellement** côté toggles stateful. Pistes
+  possibles pour étape 34 :
+  - +1 E2E mock sur **ProfilePage** (`/profile`) — formulaire
+    PATCH du `display_name`/`bio`, exerce `useAuth().profile` +
+    `updateUserProfile`. Différent du pattern toggle (form
+    submit, pas POST/DELETE-flag-flip).
+  - +1 E2E mock sur **Home page** (CTA d'adhésion, lien vers
+    JoinPage stubbé Stripe).
+  - +1 E2E mock sur **TransparencePage T99CP-loading** (cas
+    edge où la RPC répond après un délai > 100 ms — pertinent
+    si on veut détecter une régression de l'état loading).
+  - Extraction du helper `installStatefulToggleRoute` pour fermer
+    `L9-arch-stateful-mock` — non safe-first applicable en mode
+    janitor mais possible en étape principale.
+  - Refactoring documentation des dettes (`L8-arch-authsession`
+    est fermée mais sa doc traîne encore en référence dans 4
+    specs et l'audit progress — nettoyage léger possible).
 
 ---
 
