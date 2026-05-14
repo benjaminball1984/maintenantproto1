@@ -118,4 +118,48 @@ describe('ReseauPage', () => {
     renderPage();
     expect(await screen.findByText(/Aucun post pour le moment/i)).toBeInTheDocument();
   });
+
+  // Étape 38 — câblage <FollowButton> sur les cards posts.
+  it('rend un bouton « Suivre » sur les posts d’un autre user quand authentifié', async () => {
+    authMocks.getSession.mockResolvedValue({ data: { session: fakeSession }, error: null });
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: fakeSession.user as never,
+      session: fakeSession as never,
+    });
+    // Post d'un autre user (author_id distinct de fakeSession.user.id 'u1').
+    const otherPost: PostRow = { ...post1, id: 'p2', author_id: 'u2', body: 'Post d’un autre' };
+    socialMocks.listPosts.mockResolvedValueOnce({ data: [otherPost], error: null });
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByText(/Post d’un autre/)).toBeInTheDocument(),
+    );
+    // Le composer expose un bouton « Publier » qu'il ne faut pas matcher
+    // ici — on cible exactement « Suivre » (regex ancré).
+    expect(screen.getByRole('button', { name: /^Suivre$/i })).toBeInTheDocument();
+  });
+
+  it('ne rend PAS le bouton Suivre quand l’utilisateur est anonyme', async () => {
+    const otherPost: PostRow = { ...post1, id: 'p3', author_id: 'u2', body: 'Anonyme view' };
+    socialMocks.listPosts.mockResolvedValueOnce({ data: [otherPost], error: null });
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/Anonyme view/)).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /^Suivre$/i })).not.toBeInTheDocument();
+  });
+
+  it('ne rend PAS le bouton Suivre sur ses propres posts (auto-suivi interdit)', async () => {
+    authMocks.getSession.mockResolvedValue({ data: { session: fakeSession }, error: null });
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: fakeSession.user as never,
+      session: fakeSession as never,
+    });
+    // Post du user courant (author_id = fakeSession.user.id = 'u1').
+    socialMocks.listPosts.mockResolvedValueOnce({ data: [post1], error: null });
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByText(/Communiqué : grève reconductible./)).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('button', { name: /^Suivre$/i })).not.toBeInTheDocument();
+  });
 });

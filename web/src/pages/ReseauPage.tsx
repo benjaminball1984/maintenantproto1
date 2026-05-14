@@ -1,5 +1,6 @@
 import { useMemo, useState, type CSSProperties, type FormEvent } from 'react';
 
+import FollowButton from '@/components/FollowButton';
 import { IconMegaphone, IconPen, IconSpark, IconUsers } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { postgrestErrorMessage } from '@/lib/postgrestError';
@@ -228,7 +229,20 @@ function formatDate(iso: string): string {
   });
 }
 
-function PostCard({ post }: { post: PostRow }) {
+interface PostCardProps {
+  post: PostRow;
+  /** uid de l'utilisateur courant (null si anonyme). */
+  viewerId: string | null;
+  /** True si le viewer suit déjà l'auteur du post. */
+  followingAuthor: boolean;
+}
+
+function PostCard({ post, viewerId, followingAuthor }: PostCardProps) {
+  // Le bouton « Suivre » ne s'affiche que si :
+  //  - viewer authentifié (sinon redirect auth nécessaire ailleurs),
+  //  - viewer ≠ auteur du post (auto-suivi interdit côté DB CHECK +
+  //    UI ne montre pas le bouton).
+  const showFollow = Boolean(viewerId) && viewerId !== post.author_id;
   return (
     <article style={cardStyle}>
       <header style={cardHeaderStyle}>
@@ -236,6 +250,15 @@ function PostCard({ post }: { post: PostRow }) {
         <time dateTime={post.created_at}>{formatDate(post.created_at)}</time>
       </header>
       <p style={cardBodyStyle}>{post.body}</p>
+      {showFollow && (
+        <footer style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <FollowButton
+            followerId={viewerId}
+            followeeId={post.author_id}
+            initiallyFollowing={followingAuthor}
+          />
+        </footer>
+      )}
     </article>
   );
 }
@@ -255,6 +278,11 @@ export default function ReseauPage() {
   const followingIds = useMemo(
     () => (tab === 'following' ? following.map((f) => f.followee_id) : undefined),
     [tab, following],
+  );
+  // Set indexé pour O(1) lookup côté PostCard (évite un includes() par card).
+  const followingSet = useMemo(
+    () => new Set(following.map((f) => f.followee_id)),
+    [following],
   );
 
   const { posts, status, error, refresh } = usePosts({ authorIds: followingIds });
@@ -416,7 +444,11 @@ export default function ReseauPage() {
           <ul aria-label="Fil de posts" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {posts.map((post) => (
               <li key={post.id} style={{ marginBottom: 14 }}>
-                <PostCard post={post} />
+                <PostCard
+                  post={post}
+                  viewerId={user?.id ?? null}
+                  followingAuthor={followingSet.has(post.author_id)}
+                />
               </li>
             ))}
           </ul>

@@ -78,7 +78,9 @@ describe('CommuneDetailPage', () => {
     communeMocks.getCommuneBySlug.mockResolvedValueOnce({ data: sample, error: null });
     communeMocks.listCommuneMembers.mockResolvedValueOnce({ data: [memberOther], error: null });
     renderPage();
-    await waitFor(() => expect(screen.getByText(sample.name)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: sample.name })).toBeInTheDocument(),
+    );
     expect(screen.getByText(sample.description ?? '')).toBeInTheDocument();
     expect(screen.getByText(/1 membre/i)).toBeInTheDocument();
   });
@@ -128,10 +130,15 @@ describe('CommuneDetailPage', () => {
     communeMocks.getCommuneBySlug.mockResolvedValueOnce({ data: sample, error: null });
     communeMocks.listCommuneMembers.mockResolvedValueOnce({ data: [memberOther], error: null });
     renderPage();
-    await waitFor(() => expect(screen.getByText(sample.name)).toBeInTheDocument());
-    const list = screen.getByRole('list');
-    expect(list).toBeInTheDocument();
-    expect(list.textContent ?? '').toMatch(/Membre/);
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: sample.name })).toBeInTheDocument(),
+    );
+    // Plusieurs `role="list"` désormais sur la page (breadcrumb + membres) ;
+    // on cible explicitement la liste membres par aria-label / fallback testid.
+    const lists = screen.getAllByRole('list');
+    const memberList = lists.find((l) => l.textContent?.includes('Membre')) ?? lists[0];
+    expect(memberList).toBeDefined();
+    expect(memberList?.textContent ?? '').toMatch(/Membre/);
   });
 
   it('affiche "Quitter" quand l’utilisateur est déjà membre', async () => {

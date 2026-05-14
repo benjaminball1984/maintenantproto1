@@ -1,9 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { createMemoryRouter, RouterProvider, useLocation } from 'react-router-dom';
 import RootLayout from './layouts/RootLayout';
 import HomePage from './pages/HomePage';
 import PetitionsPage from './pages/PetitionsPage';
+
+function SearchProbe() {
+  // Page stub : utilise `useLocation` (createMemoryRouter ne touche pas
+  // `window.location`). Affiche le pathname + query courant pour
+  // permettre l'assertion sur la navigation déclenchée par le form de
+  // recherche (RootLayout).
+  const loc = useLocation();
+  return <div data-testid="search-probe">{`${loc.pathname}${loc.search}`}</div>;
+}
 
 function renderAt(path: string) {
   const router = createMemoryRouter(
@@ -14,6 +23,7 @@ function renderAt(path: string) {
         children: [
           { index: true, element: <HomePage /> },
           { path: 'petitions', element: <PetitionsPage /> },
+          { path: 'recherche', element: <SearchProbe /> },
         ],
       },
     ],
@@ -31,5 +41,35 @@ describe('routing skeleton', () => {
   it('renders the petitions page at /petitions', () => {
     renderAt('/petitions');
     expect(screen.getByRole('heading', { name: /Pétitions/i })).toBeInTheDocument();
+  });
+});
+
+// Étape 38 — header sticky + recherche globale placeholder.
+describe('RootLayout — header recherche globale (étape 38)', () => {
+  it('expose un form role="search" avec input + bouton submit', () => {
+    renderAt('/');
+    const form = screen.getByRole('search', { name: /Recherche globale/i });
+    expect(form).toBeInTheDocument();
+    // L'input search a un placeholder « Rechercher… ».
+    expect(screen.getByPlaceholderText(/Rechercher/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Lancer la recherche/i })).toBeInTheDocument();
+  });
+
+  it('le bouton submit est disabled tant que la query est vide', () => {
+    renderAt('/');
+    const submit = screen.getByRole('button', { name: /Lancer la recherche/i });
+    expect(submit).toBeDisabled();
+  });
+
+  it('submit avec une query non vide navigue vers /recherche?q=…', () => {
+    renderAt('/');
+    fireEvent.change(screen.getByPlaceholderText(/Rechercher/i), {
+      target: { value: 'climat' },
+    });
+    const submit = screen.getByRole('button', { name: /Lancer la recherche/i });
+    expect(submit).not.toBeDisabled();
+    fireEvent.submit(submit.closest('form') as HTMLFormElement);
+    // La SearchProbe est rendue avec le query échappé.
+    expect(screen.getByTestId('search-probe')).toHaveTextContent('/recherche?q=climat');
   });
 });
