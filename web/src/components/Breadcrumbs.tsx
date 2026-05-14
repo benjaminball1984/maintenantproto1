@@ -54,12 +54,16 @@ const separatorStyle: CSSProperties = {
 };
 
 export default function Breadcrumbs({ items }: BreadcrumbsProps) {
-  if (items.length === 0) return null;
+  // Janitor JAN38-R5 — filtre les labels vides : sinon le span/Link
+  // produit un trou visuel + un `aria-current="page"` vide (lu par les
+  // SR comme un node sans nom).
+  const visibleItems = items.filter((item) => item.label.trim().length > 0);
+  if (visibleItems.length === 0) return null;
   return (
     <nav aria-label="Fil d'Ariane" style={wrapperStyle}>
       <ol style={listStyle}>
-        {items.map((item, idx) => {
-          const isLast = idx === items.length - 1;
+        {visibleItems.map((item, idx) => {
+          const isLast = idx === visibleItems.length - 1;
           return (
             <Fragment key={`${item.label}-${idx}`}>
               <li>

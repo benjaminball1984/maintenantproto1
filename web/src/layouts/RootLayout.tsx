@@ -194,11 +194,22 @@ export default function RootLayout() {
   };
 
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchSubmitting, setSearchSubmitting] = useState<boolean>(false);
   const handleSearchSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // Janitor JAN38-R3 — gate sur le double-submit : un double-clic
+    // rapide ou un Enter + clic rapproché déclencherait deux
+    // navigate(). React Router déduplique en pratique, mais l'edge
+    // case « query change entre les deux » existe. Reset après tick.
+    if (searchSubmitting) return;
     const q = searchQuery.trim();
     if (!q) return;
+    setSearchSubmitting(true);
     navigate(`/recherche?q=${encodeURIComponent(q)}`);
+    // Reset au prochain tick — la navigation est synchrone côté
+    // memory router, asynchrone côté browser, mais dans tous les cas
+    // le re-render se fait avant la prochaine interaction utilisateur.
+    queueMicrotask(() => setSearchSubmitting(false));
   };
 
   const navItems =
