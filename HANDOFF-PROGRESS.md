@@ -10275,6 +10275,276 @@ vivent dans `web/e2e/**`.
   `petition-signature.spec.ts`, `poll-vote.spec.ts` et
   `mobilization-rsvp.spec.ts`).
 
+### Audit vibe janitor étape 32
+
+**Branche** : `claude/janitor-post-step32`
+
+Audit en parallèle via 3 subagents `general-purpose` après le merge
+de la PR principale #45 (commit
+`chore(prod): step 32 …`) : architecture / élégance,
+robustesse / edge cases, sécurité / RGPD / cohérence handoff.
+
+#### Findings par sévérité
+
+| Axe | Total | critical | high | medium | low | Fixable safe-first | Déférés / non-findings |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Architecture | 12 | 0 | 0 | 0 | 12 | 3 retenus (A1, A3, A8, A10) | 2 rétractés (A6, A7) + 6 différés (A2, A4, A9, A11, A12) |
+| Robustesse | 18 | 0 | 0 | 1 (R10) | 17 | 0 retenu | 12 non-findings + 5 différés en doc-only (R1, R2, R3, R5, R13, R17) |
+| Sécurité / Handoff | 2 | 0 | 0 | 0 | 2 | 1 retenu (HC1, doublon avec A3) | 1 différé (HC2 — en-tête historique) |
+| **Total** | **32** | **0** | **0** | **1** | **31** | **4 retenus** | **12 non-findings + 13 différés** |
+
+#### Fixes appliqués (safe-first, primum non nocere)
+
+**4 fixes appliqués** sur 32 findings (12%) — tous strictement
+doc-only ou commentaire-only, zéro impact runtime, zéro test
+modifié.
+
+**J32-A3 + J32-HC1** (low / low-risk, doublon confirmé par 2
+audits) — **Alignement comptage call-sites** dans le commentaire
+de tête de `web/e2e/mobilization-rsvp.spec.ts:8`. Le commentaire
+indiquait « 6e et 7e call-sites » alors que le narratif
+`HANDOFF-PROGRESS.md`, le commit message et le prompt étape 33
+disent tous « 7e et 8e call-sites » (et le compteur global réel
+vérifié par grep = 8). Correction : `6e et 7e` → `7e et 8e`.
+Pure cohérence éditoriale, aucun impact technique.
+
+**J32-A8** (low / low-risk) — **Correction de la référence de
+ligne `mobilizations.ts:268`** dans le commentaire DELETE du
+spec. La ligne 268 est la signature `export async function
+cancelRsvp(...)` ; le `.delete()` qui ne chaîne pas `.select()`
+est en réalité en ligne 271. Correction : `:268` → `:271`.
+Commentaire pédagogique uniquement.
+
+**J32-A1** (low / low-risk) — **Mise à jour du narratif de la
+dette `L9-arch-stateful-mock`** dans la nouvelle sous-section
+« Dette technique consolidée — fin étape 32 » : le pattern
+stateful POST/DELETE-flag-flip est désormais dupliqué **6×**
+(vs 4 à fin étape 31). La dette mûrit mais reste **non
+safe-first applicable** en mode janitor (refacto cross-spec
+risque medium).
+
+**J32-A10** (low / low-risk) — **Ajout d'une sous-section
+« Dette technique consolidée — fin étape 32 »** à l'entrée
+étape 32 du journal. Reproduisait le symptôme J31-H2 (absence
+de section dette consolidée fin d'étape), corrigé via fold dans
+le présent janitor. Documenter L9 qui mûrit + rappeler les
+24 dettes inchangées.
+
+#### Fixes déférés (dette nouvelle ou existante)
+
+**J32-A2** (low / low-risk) — **Compteurs « 9e itération » +
+« 7e et 8e call-sites » figés** dans les commentaires
+`mobilization-rsvp.spec.ts:5,9`. Symétrique J31-A7 (déféré) :
+3 specs E2E ont maintenant ce pattern de numérotation figée
+qui dérive mécaniquement. **Déféré** : un fix cohérent doit
+toucher les 3 specs simultanément avec un schéma de
+référencement vers `HANDOFF-PROGRESS.md §étape N` (refacto
+cross-spec, hors scope janitor « primum non nocere »).
+
+**J32-A4** (low / low-risk) — **Pas d'interface explicite
+`MobilizationFixture`** dans le spec. **Déféré** comme
+J31-A4 (cohérence cross-spec, à grouper dans refacto typage
+fixtures E2E).
+
+**J32-A9** (low / low-risk) — **Référence à `useMobilization`
+dans commentaire spec non re-vérifiée**. **Déféré** : relire
+le hook = expansion de scope janitor, et le code marche.
+
+**J32-A11** (low / low-risk) — **Ratio commentaire/code élevé
+(~1.5:1)**. **Déféré** : style choisi, cohérent cross-spec.
+
+**J32-A12** (low / low-risk) — **`cover_url: null` fixture
+documentaire jamais consommé**. **Déféré** : cohérence fixture
+complète (idem A5/A6 janitor étape 31).
+
+**J32-R1** (low / low-risk) — **Branches d'erreur réseau / RLS
+non couvertes en E2E** sur `useMobilization`. **Déféré** :
+pattern de couverture incomplet, parité avec petition-signature
+et poll-vote. À ajouter dans une étape de robustesse E2E dédiée.
+
+**J32-R2** (low / low-risk) — **Mock REST sans `content-range`**
+sur l'override `/rest/v1/mobilizations**` (court-circuite la
+branche par défaut de `installSupabaseStubs`). **Déféré** : sans
+impact (`getMobilization` n'utilise pas `count: 'exact'`).
+
+**J32-R3** (low / low-risk) — **Glob trop large
+`**/rest/v1/mobilizations**` + `**/rest/v1/participations**`**.
+**Déféré** : convention « ne pas créer de tables suffixées
+`mobilizations_*` / `participations_*` sans réviser les mocks ».
+À grouper avec J31-R2 dans refacto mock-helper.
+
+**J32-R5** (low / low-risk) — **Pluriel singulier `inscrit·s`
+non testé**. **Déféré** : `participation_count: 42` → branche
+pluriel toujours. Pour exercer le singulier, fixture
+`participation_count: 0` ou `1`. À grouper avec J32-R17.
+
+**J32-R9** (low / low-risk) — **Race `setState` sur composant
+démonté** dans `useMobilization.fetchMobilization`. **Déféré** :
+pattern identique à `usePoll` / `usePetition`. Dette commune
+aux 3 hooks à traiter une seule fois.
+
+**J32-R10** (medium / medium-risk) — **Mock REST
+`/rest/v1/mobilizations**` ne distingue PAS la méthode HTTP**.
+Si une mutation PATCH/POST/DELETE atterrissait sur
+`mobilizations` (ex. édition future), le mock répondrait
+`200 + payload list-fixture` → comportement surprenant. **Déféré**
+**non safe-first applicable** : filtrer par méthode introduirait
+un risque de régression. Documenter, ne pas modifier.
+
+**J32-R13** (low / low-risk) — **Timeout `10_000` ms juste sur
+CI lent**. **Déféré** : marge ≈ 5 s suffisante. À monitorer.
+
+**J32-R17** (low / low-risk) — **Compteur `participation_count`
+statique** (pas d'incrément après POST). **Déféré** : décision
+explicite (cohérent poll-vote / petition-signature étape 31).
+
+**J32-HC2** (low / low-risk) — **En-tête « Goulots externes —
+état au 2026-05-13 »** non mise à jour. **Déféré** : trace
+historique correcte (post-étape 29), pas censée tracker l'état
+courant. Le prompt étape 33 a, lui, la bonne date 2026-05-14.
+
+#### Non-findings explicites (confirmation par 3 subagents)
+
+Architecture (2 rétractations) : A5 (commentaire « pas d'observation
+compteur » existe déjà L47-49), A6 (numérotation « N+27 (étape 33) »
+correcte après vérification).
+
+Robustesse (12) : race `getMobilization → hasUserRsvp` au boot
+sérialisée par `await` ; race POST → `refresh()` → re-GET
+sérialisée par `await` côté UI ; `isPast` sûr en 2026 sur
+`starts_at: 2030` (marge 4 ans) ; `expires_at = now + 24h`
+gigantesque vs run E2E ; `Date.parse('2030-06-01T14:00:00Z')`
+ISO 8601 sûr ; headers HTTP mock OK ; cohérence inter-tests
+parfaite ; closure `hasRsvp` privée à chaque test ; DELETE 204
++ body vide conforme PostgREST ; `useMobilization` sans cleanup
+identique à `usePoll`/`usePetition` ; mock body `[row]` (array)
+accepté par `.maybeSingle()` ; `installSupabaseStubs` filet de
+sécurité intentionnel.
+
+Sécurité / RGPD / Handoff (18 non-findings explicites) : CSP /
+netlify.toml inchangé ; package.json / lock inchangé ;
+db/schema.sql inchangé ; .gitignore inchangé ; aucun pattern
+JWT / Stripe / service_role / password dans le spec ; aucun
+`console.log/error` ; emails `@example.org` IANA RFC 2606
+reserved ; aucune IP ; « Place de la République » publique
+générique ; tous IDs préfixés `stub-` ; RLS `participations`
+correctement caractérisée par `db/schema.sql:1116-1122`
+(`auth.uid() = user_id`, server-side only) ; ligne 43 État global
+cohérente ; compteurs 39 → 41 E2E cohérents ; 883 vitest
+inchangé ; 8 call-sites total vérifié par grep ; récursivité
+prompt étape 33 OK (Phases 1/2/3 + recopie N+28 + janitor N+28
++ conditions d'arrêt + contraintes générales) ; date 2026-05-14
+mise à jour ; dette `L8-arch-authsession` ✅ FERMÉE rappel ;
+dettes `L9-arch-stateful-mock` + `L10-e2e-storagekey-env`
+toujours documentées ; `stripe_events` non touché ; design
+system `T.*` non touché ; prototype `app/Maintenant.html` non
+touché.
+
+#### Hygiène (janitor étape 32)
+
+- Pas de modification du prototype.
+- Pas de modification du design system `T.*` (CSS vars `--mn-*`).
+- Pas de migration DB.
+- Pas de breaking change visible utilisateur (4 fixes : 2 corrections
+  de commentaire spec + 2 mises à jour doc dans
+  `HANDOFF-PROGRESS.md`).
+- Pas de nouvelle dépendance npm.
+- Pas de bump majeur.
+- TS strict + no `any` (vérifié — aucun changement de type).
+- Aucun fix qui casse un test existant (883 tests vitest +
+  41 E2E Playwright attendus en CI inchangés).
+- Aucun fix qui ouvre un risque B.
+
+#### Checks finaux (janitor étape 32)
+
+```
+> npm run typecheck && npm run lint && npx vitest run && npm run build
+
+✓ typecheck   (tsc -b + e2e/tsconfig.json)
+✓ lint        (eslint .)
+✓ vitest      (128 files, 883 tests passed, ~60s)
+✓ build       (entry 47.34 kB / gzip 13.32 kB ; tous les lazy
+              chunks inchangés)
+```
+
+Compteur de tests **inchangé** (883 vitest + 41 E2E Playwright
+attendus en CI) : aucun changement de code runtime, les 4 fixes
+préservent strictement le comportement (corrections de
+commentaire + doc).
+
+#### Dette technique consolidée — fin étape 32
+
+Aucune dette fermée ni ouverte par l'étape 32 elle-même. **Mais
+la dette `L9-arch-stateful-mock` mûrit** (compteur de call-sites
+duplicateurs passe de **4 → 6**) :
+
+- **`L9-arch-stateful-mock`** (J31-A3, low / medium-risk) —
+  Pattern stateful toggle mock POST/DELETE-flag-flip dupliqué
+  désormais **6×** (vs 4 à fin étape 31) : 2 dans
+  `petition-signature.spec.ts` (étapes 28/29) + 2 dans
+  `poll-vote.spec.ts` (étape 31) + 2 dans
+  `mobilization-rsvp.spec.ts` (étape 32). ~20 lignes × 6 =
+  ~120 lignes dupliquées au total. Helper
+  `installStatefulToggleRoute(page, { urlGlob, methodOn,
+  methodOff, rowOn, rowOff })` extrairait proprement le pattern.
+  À traiter dans une étape refacto mock-helper dédiée si le
+  pattern continue à se reproduire (10e itération évoquée
+  prompt étape 33). **Non safe-first applicable** en mode
+  janitor : nécessite design API + refacto 3 specs, risque
+  medium d'ouvrir un edge case sur ordre LIFO Playwright /
+  closure de flag (J31-R2 noté).
+
+Toutes les autres dettes (24 ouvertes) sont **inchangées** vs
+janitor étape 31 :
+
+- **Dette fermée à l'étape 31** : `L8-arch-authsession` ✅
+  (rappel, pas ré-ouverte).
+- **Nouvelles dettes janitor étape 31** : `L9-arch-stateful-mock`
+  (mûrit cf. ci-dessus), `L10-e2e-storagekey-env` (inchangée).
+- **Dettes existantes inchangées** : H3-sec, M2-sec-policy,
+  M5-rob, M1-RGPD, M6-rob, M7-e2e-storagekey, L1-a11y, L3-arch,
+  L4-sec, L5-arch, L6-arch-progress, L7-arch-loginhref, L1-rob,
+  H4-deploy-deno, L-sec-webhook-body, L-arch-useasyncfetch,
+  L-arch-helper-contract, L-arch-format-number, L-e2e-rpc-scalar,
+  L-rpc-adhesions-count, L-rpc-helpers-robust,
+  L-test-articledetail-act, L-rpc-t99cp-reason-scope.
+
+#### Décisions janitor
+
+- **4 fixes safe-first appliqués** sur 32 findings (12%) —
+  pattern similaire au janitor étape 31 (2 fixes safe-first
+  sur 28 findings). Diff : 2 corrections de commentaire spec
+  (A3/HC1, A8) + 2 mises à jour doc HANDOFF (A1, A10). Zéro
+  impact runtime, zéro test modifié.
+- **13 nouvelles dettes / déférés** consolidés (J32-A2, A4,
+  A9, A11, A12 + R1, R2, R3, R5, R9, R10, R13, R17 + HC2) —
+  la PR étape 32 introduit un nouveau spec qui ouvre
+  naturellement de la surface d'audit, mais aucune des dettes
+  différées n'est nouvelle au sens fort : la plupart sont des
+  variantes / extensions de dettes étape 31 (notamment
+  `L9-arch-stateful-mock` qui mûrit). Toutes les dettes
+  différées sont **safe-first non applicables** (medium risque
+  ou hors scope refacto cross-spec).
+- **12 non-findings explicites** confirment que la PR étape 32
+  est fonctionnellement saine : RLS server-side correctement
+  caractérisée, zéro fuite secret, prompt étape 33 conforme
+  aux règles récursives, spec E2E type-strict, parité parfaite
+  avec poll-vote / petition-signature.
+- **Toutes les dettes high (H3-sec) + medium-high (M2-sec-policy,
+  M5-rob, M1-RGPD, L1-a11y, M6-rob, M7-e2e-storagekey, L9-arch-
+  stateful-mock)** restent ouvertes, à traiter dans des étapes
+  dédiées.
+- **Conclusion** : l'étape 32 reproduit fidèlement le pattern
+  étape 31 (9e itération du pattern « +1 test mock E2E
+  ciblé »). Aucune nouvelle dette structurelle ; la dette
+  `L9-arch-stateful-mock` mûrit clairement (4 → 6 call-sites,
+  ~120 lignes dupliquées) — recommandation forte de prioriser
+  l'extraction du helper `installStatefulToggleRoute` à
+  l'étape 33 OU étape 34 si la 10e itération du pattern est
+  retenue. Le pattern janitor « 4 fixes doc-only safe-first »
+  continue d'être un vecteur sain de progrès incrémental sans
+  risque de régression.
+
 ---
 
 ## Prompt pour la session N+27 (étape 33)
