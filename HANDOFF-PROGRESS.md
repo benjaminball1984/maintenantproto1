@@ -11390,6 +11390,157 @@ mode).
   enfin la dette `L9-arch-stateful-mock` en extrayant
   `installStatefulToggleRoute`.
 
+### Audit vibe janitor étape 37
+
+Trois subagents `general-purpose` lancés en parallèle (architecture
+/ élégance, robustesse / edge cases, sécurité / cohérence handoff)
+sur le périmètre étape 37 (`lib/profile.ts` ajouts +
+`TransparencePage.tsx` polish + `MonthlySignupsChart.tsx` prop
+minHeight + `ProfilePage.tsx` sections contributions / activité +
+tests associés + section étape 37 du journal).
+
+**Findings totaux** : 25 findings — 0 critical / 0 high / 1 medium
+/ 18 low / 6 info. Le seul medium est `JAN37-R5` (tests
+`getByText('7')`/`getByText('3')`/`getByText('12')` ambigus si un
+autre compteur tombe à la même valeur) — **fix déféré** car
+durcir les assertions risque medium de casser les autres tests
+ProfilePage en chaîne. **5 fixes appliqués** (safe-first uniquement,
+chacun ≤ 5 LOC, aucun test cassé, aucun fix qui crée un risque B).
+
+**Fixes appliqués** :
+
+- **JAN37-A1 / low / régression low** — `activityHref` +
+  `ACTIVITY_KIND_LABEL` déplacés de `ProfilePage.tsx` vers
+  `lib/profile.ts` (renommés `profileActivityHref` et
+  `PROFILE_ACTIVITY_KIND_LABEL`). La connaissance des routes vit
+  désormais à côté du type `ProfileActivityKind`, pas dans la
+  présentation. Tests existants intacts (assertions sur les
+  `<Link>` rendus, pas sur le helper).
+- **JAN37-A5 / info / régression low** — `data-testid="monthly-signups-chart"`
+  ajouté aussi sur la branche « empty state » du
+  `MonthlySignupsChart`. Cohérence : un test qui cible le chart
+  par testid trouve maintenant les deux états (success ET
+  empty), pas seulement success.
+- **JAN37-R1 / low / régression low** — Tri JS sur `getTime()`
+  (millisecondes numériques) au lieu de comparaison
+  lexicographique de strings ISO 8601. Robuste si Postgres
+  sérialise un offset non-UTC sur certaines lignes (`+02:00` vs
+  `Z`). Comportement identique sur le format canonique actuel
+  → aucun test impacté.
+- **JAN37-R3 / low / régression low** — `formatActivityDate(iso)`
+  valide explicitement `Number.isNaN(d.getTime())` avant
+  `toLocaleDateString` et retombe sur `'—'` au lieu de
+  `'Invalid Date'` ou de l'ISO brut. Le `try/catch` n'attrapait
+  rien (Date n'a pas throw, juste retourné NaN). Aucun test
+  n'expose une date invalide.
+- **JAN37-R9 / low / régression low** — Fallback `excerpt(body) || POST_FALLBACK_LABEL`
+  pour les posts à body whitespace-pur (après trim → ''). Cas
+  rare mais empêche un libellé visuellement vide dans la
+  timeline. Constante nommée `POST_FALLBACK_LABEL = 'Publication'`
+  exportée implicite (locale au module).
+
+**Dette ajoutée** (à reprendre lors d'étapes dédiées) :
+
+- **JAN37-A2 / info / régression low** — Duplication
+  `toLocaleDateString('fr-FR', …)` répandue (≥ 11 pages dont
+  `NotificationsPage`, `ReseauPage`, `MediaPage`, etc.). Helper
+  `lib/date.ts` (`formatDateFr({ style: 'short'|'long' })`)
+  candidat mais touche 11+ pages testées — risque régression non
+  trivial. À traiter dans une étape « cleanup transverse i18n /
+  dates ».
+- **JAN37-A3 / low / régression medium** — `countSelf` (profile)
+  ≈ `countTable` (transparency) : même pattern (`select('id', {
+  count:'exact', head:true }).eq(col, val)`), même cast
+  `column: string`. Factorisation `lib/supabaseCount.ts`
+  candidate mais touche deux fichiers testés strict — risque
+  medium pour zéro gain produit. À reporter.
+- **JAN37-A4 / low / régression low** — `pickEmbedded` cast
+  `value as Embedded` sans narrowing sur clés (`title`,
+  `question`). PostgREST garantit la forme en pratique ; un
+  narrowing minimal (`'title' in obj || 'question' in obj`)
+  améliorerait la robustesse formelle. Sans impact prod.
+- **JAN37-A6 / info / régression low** — Microcopie T99CP en
+  littéral inline dans `TransparencePage.tsx` (vs `METRICS[].hint`
+  pour les 6 autres). Petite incohérence de niveau
+  d'abstraction. À uniformiser quand on factorise les microcopies
+  vers `lib/transparency.ts` (peu probable, doc inline OK).
+- **JAN37-A7 / low / régression low** — 2 `useEffect`
+  indépendants pour stats + activity dans `ProfilePage`. Pas de
+  race condition (déps stable `[userId]`). Si > 3 effects
+  parallèles apparaissent dans le futur, considérer une
+  orchestration via `Promise.all` dans un seul hook.
+- **JAN37-A9 / low / régression low** — `ProfilePage` lance les
+  fetches stats/activity même si `profile === null` (RLS error
+  sur `getProfile`). Côté DB négligeable, légère incohérence
+  d'abstraction. À reporter.
+- **JAN37-R2 / low / régression low** — `excerpt(raw, 80)` peut
+  couper un grapheme Unicode (emoji, paire surrogate, accent
+  décomposé). Fix propre via `Intl.Segmenter`, mais Safari < 14.1
+  incompatible — à différer jusqu'à bump baseline navigateur.
+- **JAN37-R4 / low / régression low** — `formatMemberSince`
+  (préexistant à l'étape 37) a le même problème que R3 sur
+  `new Date('invalid')` → `'Invalid Date'`. Hors périmètre
+  janitor (code préexistant) — à corriger dans la passe i18n /
+  dates (cf. JAN37-A2).
+- **JAN37-R5 / medium / régression medium** — Tests
+  `expect(screen.getByText('7'))` / `'3'` / `'12'` ambigus.
+  Risque medium de casser les autres tests si on bascule sur
+  `getByTestId` partout. À considérer dans une étape
+  « test-hygiene » dédiée. Pas appliqué.
+- **JAN37-R6 / info** — `useEffect` stats/activity ne refetch
+  pas après mutation profil (`update(patch)`). Comportement
+  attendu pour l'étape 37 (compteurs read-only post-load). À
+  documenter si on ajoute des mutations depuis ProfilePage.
+- **JAN37-R8 / low / régression low** — Si `minHeight < 40`,
+  le SVG fallback `Math.max(minHeight - 40, 0)` collapse à 0.
+  Cas réaliste : aucun (caller passe 360). À documenter.
+- **JAN37-R10 / info** — `fetchProfileStats` propage la première
+  erreur et perd les 3 autres. Choix produit (cohérence >
+  partial) défendable. À noter.
+- **JAN37-S1 / info / régression low** — `fetchProfileStats`
+  accepte un `userId` arbitraire. RLS publique
+  (`signatures_select_public using true`, etc.) permet de
+  compter les contributions de tout user. Connu, tracé en dette
+  **M2-sec-profile** (extension de M2-sec aux 3 tables
+  `signatures` / `participations` / `votes`). Durcissement RLS
+  hors-janitor (changement RGPD potentiel — exiger confirmation
+  explicite).
+- **JAN37-S2 / low / régression low** — `fetchProfileActivity`
+  permet la reconstruction d'une timeline d'un autre user via
+  les `created_at` des actions. Même cause que S1 (RLS
+  publique). Documenté dans **M2-sec-profile**.
+- **JAN37-S3 / info / régression low** — `pickEmbedded` cast
+  sans narrowing — couvert par JAN37-A4.
+- **JAN37-S4 / low / régression medium** — `URL.createObjectURL`
+  jamais révoqué (pendingAvatarUrl). **Préexistant à l'étape 37**
+  (avatar upload, étape 6). Hors périmètre janitor 37 — à tracer
+  dans une étape `chore(profile): cleanup blob URLs`.
+- **JAN37-S5 / info** — Cohérence handoff étape 37 vérifiée
+  (924 tests, sizes bundle plausibles, dette
+  `L11-perf-rpc-activity` correctement déférée). RAS.
+- **JAN37-S6 / info** — Le commentaire `lib/profile.ts` ligne
+  144 ne mentionne que `signatures_select_public` durcissement
+  futur, pas `participations_select_public` ni
+  `votes_select_public`. Cohérence dette M2-sec-profile —
+  ajouter mention dans la prochaine passe sur la lib.
+
+**Halluciné non-finding** : aucun cette fois. Les 3 agents ont
+distingué proprement les findings préexistants (JAN37-R4,
+JAN37-S4) des findings étape 37 et n'ont pas signalé de
+contradiction inventée.
+
+**Compteur de tests final post-janitor étape 37** : 924 vitest
+verts (inchangé — les fixes A1/A5/R1/R3/R9 préservent toutes les
+assertions existantes) + 41 E2E Playwright locaux verts.
+
+**Conditions d'arrêt janitor non déclenchées** : aucune migration
+DB, aucun touch tokens `T.*`, aucun fix qui aurait cassé un test
+existant. **Fin du pattern « janitor doc-only »** : 4 étapes
+consécutives (32, 34, 35, 36) sans aucun fix appliqué, étape 37
+réintroduit 5 fixes safe-first sur un périmètre plus large
+(lib + 3 pages + 1 composant). Pattern à reconduire si la PR
+principale ajoute > 200 LOC de lib + page.
+
 ---
 
 ## Prompt pour la session N+32 (étape 38)
