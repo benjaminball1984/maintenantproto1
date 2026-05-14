@@ -100,6 +100,11 @@ export default function Footer() {
             <NavLink to="/join" style={{ ...linkStyle, fontWeight: 600, color: 'var(--mn-brand)' }}>
               Rejoindre le mouvement →
             </NavLink>
+            <div style={{ marginTop: '0.5rem' }}>
+              <NavLink to="/decouvrir" style={linkStyle}>
+                Découvrir
+              </NavLink>
+            </div>
           </section>
 
           <nav aria-labelledby="footer-tools-title">

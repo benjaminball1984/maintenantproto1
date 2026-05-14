@@ -8,6 +8,7 @@ import { installSupabaseStubs } from './utils/mockSupabase';
 // des assertions spécifiques (graphique, lien footer, état vide).
 const PUBLIC_ROUTES: { path: string; heading: RegExp }[] = [
   { path: '/', heading: /Maintenant !/i },
+  { path: '/decouvrir', heading: /Découvre le mouvement/i },
   { path: '/petitions', heading: /Pétitions/i },
   { path: '/mobilizations', heading: /Mobilisations/i },
   { path: '/campaigns', heading: /Campagnes/i },

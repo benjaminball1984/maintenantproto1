@@ -68,6 +68,7 @@ const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 const LegalNoticePage = lazy(() => import('./pages/LegalNoticePage'));
 const CookiesPage = lazy(() => import('./pages/CookiesPage'));
 const TransparencePage = lazy(() => import('./pages/TransparencePage'));
+const DecouvrirPage = lazy(() => import('./pages/DecouvrirPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 export const router = createBrowserRouter([
@@ -277,6 +278,7 @@ export const router = createBrowserRouter([
       { path: 'auth/reset-password', element: <ResetPasswordPage /> },
       { path: 'auth/callback', element: <AuthCallbackPage /> },
       { path: 'transparence', element: <TransparencePage /> },
+      { path: 'decouvrir', element: <DecouvrirPage /> },
       {
         path: 'legal',
         children: [

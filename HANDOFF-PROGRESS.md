@@ -44,6 +44,7 @@
 | 33. Post-go-live — conditions externes inchangées : 10e itération du pattern E2E mock sur `/campaigns/:slug` (PR #47, ramène à 883 vitest + 43 E2E Playwright verts en CI) |   ✅   |
 | 34. Bascule plan visible-first (cf. `PLAN-VISIBLE-FIRST.md`) — Home renouvelée : hero refondu + dual CTA Adhérer/Découvrir + 4 compteurs live (signataires, mobilisations, communes, T99CP) + 3 cards d'action (pétitions, mobilisations, services) + section mission + Footer 3 colonnes (mission / outils / légal) |   ✅   |
 | 35. Plan visible-first §Étape 35 — Empty states + Cards polish : composant `<EmptyState>` réutilisable (icon ICONS.* + heading + microcopie + CTA optionnel) appliqué aux 13 pages listings vides + hover state uniforme `.mn-listing-card` (translateY-2px + box-shadow 4px 14px ≤180ms) avec respect strict `prefers-reduced-motion` |   ✅   |
+| 36. Plan visible-first §Étape 36 — Page `/decouvrir` éditoriale (5 sections : Mission, Comment ça marche, Les outils, Notre vision, Roadmap) + 3 témoignages marqués démo (placeholders RGPD) + bascule CTA hero `Découvrir` `#mission` → `/decouvrir` + lien Footer colonne Mission + ajout à `PUBLIC_ROUTES` E2E (smoke + axe-core) |   ✅   |
 
 ---
 
@@ -10882,6 +10883,223 @@ existant. PR janitor exclusivement documentaire ce coup-ci.
 - Lien depuis le Footer (colonne Mission ou Outils).
 - 3 témoignages **marqués démo** (placeholders explicites).
 - ≥ 4 tests page + 1 E2E mock.
+
+---
+
+## Étape 36 — Page `/decouvrir` éditoriale ✅
+
+### Contexte d'ouverture
+
+- Plan visible-first §Étape 36. PR janitor post-step 35 mergée
+  (compteurs : 901 vitest + 41 E2E locaux).
+- CTA hero « Découvrir » de la HomePage pointait sur ancre
+  `#mission` (placeholder étape 34) : bascule vers la nouvelle
+  route `/decouvrir` au programme.
+
+### Livré
+
+- **Nouvelle page `web/src/pages/DecouvrirPage.tsx`** (entièrement
+  statique, 0 fetch, 0 backend touché) :
+  - Hero éditorial : eyebrow « La voix des 99 % » + H1
+    « Découvre le mouvement Maintenant ! » + paragraphe lead.
+  - **5 sections** (`<section aria-labelledby="…">`) :
+    1. **Notre mission** — paragraphe de positionnement + 2 liens
+       internes (transparence + mentions légales).
+    2. **Comment ça marche** — 3 étapes en cards (badges
+       « Étape 1/2/3 » avec micro-description chacune).
+    3. **Les outils** — 6 outils en grille avec icône `ICONS.*`
+       (IconPen, IconFlame, IconBarChart, IconMegaphone, IconHome,
+       IconUsers) et lien interne vers chaque hub.
+    4. **Notre vision** — 2 paragraphes positionnement « bien
+       commun numérique » + **3 témoignages marqués démo** dans
+       une grille de cards. Chaque témoignage porte un badge
+       `<span data-testid="decouvrir-demo-badge">Témoignage démo`
+       et la phrase fictive est suivie de « Témoignage fictif —
+       démo (remplacé à T+3 mois) » pour conformité loyauté/RGPD.
+    5. **Roadmap publique** — 4 jalons (2026 S1 / 2026 S2 / 2027 /
+       2028) en liste verticale avec date-badge.
+  - **CTA final** : section centrée « Prêt·e à rejoindre ? » avec
+    bouton gradient `<Link to="/join">` + lien secondaire vers
+    `/transparence`.
+  - Mise en page éditoriale : `max-width: 880`, padding
+    `clamp(2.5rem, 5vw, 4rem) 1.5rem 4rem`, Sora pour titres.
+  - 0 token `T.*` modifié, uniquement variables `--mn-*`
+    existantes.
+- **Router** (`web/src/router.tsx`) : ajout `{ path: 'decouvrir',
+  element: <DecouvrirPage /> }` en `lazy()` comme les autres
+  pages.
+- **HomePage** (`web/src/pages/HomePage.tsx`) : CTA hero
+  « Découvrir » passe de `<a href="#mission">` à
+  `<Link to="/decouvrir">`. Le `id="mission"` sur la section
+  mission de la home reste en place (anchor utile pour deep-link
+  futur, inoffensif).
+- **Footer** (`web/src/components/Footer.tsx`) : ajout d'un
+  `<NavLink to="/decouvrir">Découvrir</NavLink>` dans la colonne
+  Mission, juste après le CTA Rejoindre.
+- **E2E `web/e2e/public-pages.spec.ts`** : ajout
+  `{ path: '/decouvrir', heading: /Découvre le mouvement/i }`
+  dans `PUBLIC_ROUTES` — le smoke + l'audit axe-core couvrent
+  automatiquement la nouvelle route.
+
+### Tests
+
+- **+6 tests `DecouvrirPage.test.tsx`** : H1 « Découvre le
+  mouvement », présence des 5 H2 sections, 6 liens outils avec
+  href correct, 3 badges « Témoignage démo » + texte « fictif »,
+  CTA final « Rejoindre » → `/join`, lien Transparence dans
+  section mission.
+- `HomePage.test.tsx` adapté : le test « expose les deux CTA »
+  passe d'assert `href === '#mission'` à `href === '/decouvrir'`
+  (1 ligne de regex modifiée).
+- **Total : 901 → 907 vitest verts (+6)**. E2E locaux 41 verts
+  (+1 attendu en CI sur `/decouvrir` smoke).
+
+### Bundle
+
+- `DecouvrirPage-*.js` : ~7-8 KB / gzip ~3 KB (estimation,
+  composant statique). Cohérent avec les autres pages
+  éditoriales (PrivacyPage à 7.5 KB).
+- Pas de nouvelle dépendance npm.
+
+### Décisions étape 36
+
+- **Témoignages marqués démo de manière redondante** : badge
+  visible `<span>Témoignage démo</span>` ET phrase « Témoignage
+  fictif — démo (remplacé à T+3 mois) » en bas. Le double signal
+  évite toute ambiguïté pour les utilisateur·rices qui survolent
+  rapidement la section avant le launch (étape 42). À retirer
+  quand de vrais témoignages d'adhérent·es sont collectés (avec
+  consentement écrit).
+- **`id="mission"` de la HomePage conservé** : la nouvelle CTA
+  Découvrir pointe vers `/decouvrir`, mais l'anchor `#mission`
+  reste utilisable pour un futur deep-link interne ou un partage
+  ciblé. Pas de coût de maintenance.
+- **Étape « Comment ça marche » en 3 étapes plutôt que 5** :
+  cohérent avec le hero Home « 3 cards d'action ». La
+  cohérence numérique évite un sentiment d'overflow éditorial.
+- **Roadmap en 4 jalons (2026 S1 → 2028)** : volontairement
+  vague au-delà de 2026 — les jalons concrets sont co-construits
+  avec les adhérent·es. Maintenable sans toucher au code à
+  chaque session.
+- **Pas de nouveau token `T.*`** : la couleur radial gradient
+  hero (`rgba(225, 29, 116, 0.08)`) est reprise telle quelle
+  d'`HomePage.tsx` pour la section CTA finale, en accord avec
+  la dette `JAN34-A5` documentée.
+- **No NBSP en JSX text** : lint `no-irregular-whitespace`
+  imposait de remplacer 2 espaces insécables (U+00A0) entre
+  texte et `:` par `&nbsp;` HTML entity. Conventions typographie
+  française respectées via entity HTML, lint conforme.
+
+### Items différés
+
+- Loading skeletons, toasts, onboarding modal → étape 40.
+- Vrais témoignages d'adhérent·es à T+3 mois → étape 42
+  (launch).
+- Dette consolidée janitor étapes 34/35 toujours différée.
+
+### Prochaines étapes (étape 37)
+
+- `/transparence` polish : microcopie « comment c'est calculé »
+  sur chaque compteur, graphique agrandi, lien vers
+  `/decouvrir`.
+- `/profile` enrichi : avatar + bio + badges contribution
+  (pétitions signées, mobilisations rsvp, votes, posts) +
+  historique des 10 dernières actions.
+
+---
+
+## Prompt pour la session N+31 (étape 37)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par
+> l'harness — typiquement `claude/<auto>`).
+>
+> **Plan de référence** : `PLAN-VISIBLE-FIRST.md` à la racine. Tu
+> suis le plan condensé 34→42 (9 étapes). Étape 36 ✅ mergée :
+> page `/decouvrir` éditoriale (907 vitest verts, 41 E2E
+> locaux + 1 nouveau smoke `/decouvrir` à valider en CI).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, SVG
+>    via `ICONS.*` pas d'emojis, RLS, RGPD, Lighthouse ≥ 95,
+>    axe-core ≥ 95, `prefers-reduced-motion`). Note la
+>    **Politique de PR** auto-merge jusqu'à session 50, la
+>    **Recopie systématique du prompt** et l'**Audit récurrent
+>    vibe janitor**.
+> 2. `PLAN-VISIBLE-FIRST.md` § Étape 37 — `/transparence` polish
+>    + Profil enrichi.
+> 3. `HANDOFF-PROGRESS.md` — journal (dernière entrée : étape
+>    36 ✅).
+>
+> **ÉTAPE 37 à exécuter — `/transparence` polish + Profil enrichi** :
+>
+> 1. **`/transparence` polish** dans `TransparencePage.tsx` :
+>    - Sous chaque compteur, microcopie « comment c'est calculé »
+>      (tooltip ou texte sous la valeur) — réutiliser la
+>      docstring de `fetchTransparencyCounts` dans
+>      `lib/transparency.ts`.
+>    - Carte T99CP déjà en place (étape 30) : mettre en avant
+>      avec un fond légèrement contrasté.
+>    - Agrandir le graphique mensuel `MonthlySignupsChart`
+>      (hauteur 280 px → 360 px ?), conserver responsive.
+>    - Ajouter en bas un lien interne vers `/decouvrir` :
+>      « En savoir plus sur le mouvement → Découvrir ».
+> 2. **Profil enrichi** dans `ProfilePage.tsx` (RequireAuth déjà
+>    en place) :
+>    - Avatar + bio + display_name déjà gérés — vérifier.
+>    - **Badges contribution** : nombre de pétitions signées,
+>      mobilisations RSVP, votes émis, posts créés. Compteurs
+>      lecture-seule via queries `head: true, count: 'exact'`
+>      sur les tables RLS-publiques (pattern identique à
+>      `fetchTransparencyCounts`).
+>    - **Historique 10 dernières actions** : query
+>      `created_at DESC LIMIT 10` sur les tables
+>      `signatures`, `mobilization_rsvps`, `poll_votes`,
+>      `posts` (UNION en lib `lib/profile.ts` ou via
+>      multiple fetches en parallèle).
+>    - Si RLS interdit lecture cross-user des `signatures`
+>      (par exemple `policy signatures_select_public` filtre
+>      par `auth.uid()`), limiter au scope de l'utilisateur
+>      courant (`auth.uid() = user_id`).
+> 3. **Risque** : 0 backend nouveau, uniquement queries lecture
+>    seule sur tables déjà couvertes par RLS publique ou
+>    self-scope. **Pas de migration DB**.
+> 4. **Tests** :
+>    - ≥ 3 tests `TransparencePage` supplémentaires (microcopie
+>      + agrandissement graphique + lien `/decouvrir`).
+>    - ≥ 3 tests `ProfilePage` supplémentaires (badges +
+>      historique).
+>    - Maintenir 907 vitest verts (+ ≥ 6 nouveaux ⇒ ≥ 913).
+> 5. **4 checks locaux verts AVANT push** : typecheck + lint +
+>    test + build.
+> 6. **Commit** : `feat(transparence,profile): step 37 —
+>    /transparence polish + profil enrichi (badges + historique)`.
+> 7. **PR draft → main**, auto-merge si CI verte (cf. CLAUDE.md
+>    § Politique de PR).
+> 8. **HANDOFF-PROGRESS.md** : ajouter étape 37 ✅ (sections
+>    Contexte / Livré / Tests / Bundle / Décisions / Items
+>    différés / Prochaines étapes 38).
+> 9. **Audit janitor post-step 37** (cf. CLAUDE.md §Audit
+>    récurrent vibe janitor) — 2-3 subagents en parallèle, PR
+>    séparée `chore(janitor): post-step 37 — …`.
+> 10. **Recopier le prompt étape 38** à la fois dans
+>     `HANDOFF-PROGRESS.md` ET dans la réponse de chat finale
+>     (règle récursive — chaque prompt généré doit lui-même
+>     reconduire cette consigne pour la session N+1).
+>
+> **Conditions d'arrêt malgré l'autorisation auto-merge** :
+> migration DB risquée non listée, changement RGPD non listé,
+> breaking change visible utilisateur, modification tokens `T.*`
+> sans validation designer, review humaine avant merge, 3
+> tentatives consécutives sans 4 checks verts.
+>
+> **Étape suivante (38 — Communauté + Navigation polish)** :
+> `/reseau` refondue (timeline visible, `<FollowButton>`
+> réutilisable câblé sur `followUser`/`unfollowUser`), header
+> sticky + recherche globale placeholder, breadcrumbs sous-pages,
+> 11e itération du pattern E2E mock stateful POST/DELETE → close
+> dette `L9-arch-stateful-mock` en extrayant
+> `installStatefulToggleRoute`. Cf. plan §Étape 38.
 
 ---
 

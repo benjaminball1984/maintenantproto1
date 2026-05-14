@@ -411,10 +411,14 @@ export default function HomePage() {
               <IconSpark width={18} height={18} aria-hidden />
               Adhérer
             </Link>
-            <a href="#mission" style={secondaryCtaStyle} aria-label="Découvrir la mission">
+            <Link
+              to="/decouvrir"
+              style={secondaryCtaStyle}
+              aria-label="Découvrir le mouvement Maintenant !"
+            >
               <IconShare width={18} height={18} aria-hidden />
               Découvrir
-            </a>
+            </Link>
           </div>
         </div>
       </section>
