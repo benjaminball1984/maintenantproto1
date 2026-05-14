@@ -1,6 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
+import EmptyState from '@/components/EmptyState';
 import { IconPen, IconPin, IconSearch, IconUsers } from '@/components/icons';
 import { useCommunes } from '@/hooks/useCommunes';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
@@ -146,14 +147,6 @@ const descStyle: CSSProperties = {
   overflow: 'hidden',
 };
 
-const emptyStyle: CSSProperties = {
-  border: '1px dashed var(--mn-border)',
-  borderRadius: 16,
-  padding: '36px 20px',
-  textAlign: 'center',
-  color: 'var(--mn-text-3)',
-  background: 'var(--mn-surface)',
-};
 
 const errorBoxStyle: CSSProperties = {
   background: '#fef2f2',
@@ -166,7 +159,7 @@ const errorBoxStyle: CSSProperties = {
 
 function CommuneCard({ commune }: { commune: CommuneRow }) {
   return (
-    <Link to={`/communes/${commune.slug}`} style={cardStyle}>
+    <Link to={`/communes/${commune.slug}`} style={cardStyle} className="mn-listing-card">
       <span style={cityStyle}>
         <IconPin width={12} height={12} />
         {commune.city}
@@ -243,14 +236,12 @@ export default function CommunesPage() {
       )}
 
       {status === 'ready' && communes.length === 0 && (
-        <div style={emptyStyle} role="note">
-          <p style={{ margin: 0, fontWeight: 700, color: 'var(--mn-text-1)' }}>
-            Aucune commune publiée
-          </p>
-          <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-            La carte des communes libres se construira progressivement. Revenez plus tard.
-          </p>
-        </div>
+        <EmptyState
+          icon={<IconUsers width={22} height={22} />}
+          title="Aucune commune publiée"
+          description="La carte des communes libres se construira progressivement. Revenez plus tard."
+          testId="communes-empty"
+        />
       )}
 
       {status === 'ready' && communes.length > 0 && (

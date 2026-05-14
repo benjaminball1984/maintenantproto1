@@ -43,6 +43,7 @@
 | 32. Post-go-live — conditions externes inchangées : +2 E2E mock (mobilization-detail rsvp/cancel, symétrique poll vote/unvote étape 31) — tous les autres items différés |   ✅   |
 | 33. Post-go-live — conditions externes inchangées : 10e itération du pattern E2E mock sur `/campaigns/:slug` (PR #47, ramène à 883 vitest + 43 E2E Playwright verts en CI) |   ✅   |
 | 34. Bascule plan visible-first (cf. `PLAN-VISIBLE-FIRST.md`) — Home renouvelée : hero refondu + dual CTA Adhérer/Découvrir + 4 compteurs live (signataires, mobilisations, communes, T99CP) + 3 cards d'action (pétitions, mobilisations, services) + section mission + Footer 3 colonnes (mission / outils / légal) |   ✅   |
+| 35. Plan visible-first §Étape 35 — Empty states + Cards polish : composant `<EmptyState>` réutilisable (icon ICONS.* + heading + microcopie + CTA optionnel) appliqué aux 13 pages listings vides + hover state uniforme `.mn-listing-card` (translateY-2px + box-shadow 4px 14px ≤180ms) avec respect strict `prefers-reduced-motion` |   ✅   |
 
 ---
 
@@ -10762,6 +10763,224 @@ ultérieurement — possible 2 tests filtrés par env CI vs local).
 DB, aucun touch tokens `T.*`, aucun fix qui aurait cassé un test
 existant. PR janitor exclusivement documentaire ce coup-ci.
 
+
+---
+
+## Étape 35 — Empty states + Cards polish ✅
+
+### Contexte d'ouverture
+
+- Plan visible-first §Étape 35. Entrée immédiatement après le merge
+  de la PR #49 (étape 34) et de la PR janitor #50 (post-step 34 doc-only).
+- Compteurs entrants : 895 vitest + 41 E2E Playwright (43 en CI) verts.
+- Pas de blocage externe : 13 pages listings vides identifiées avec
+  empty state existant en `<div style={emptyStyle}>` répétitif.
+
+### Livré
+
+- **Composant réutilisable `web/src/components/EmptyState.tsx`** :
+  - Props : `icon: ReactElement` (ICONS.*), `title: string`,
+    `description: string`, `cta?: { to: string; label: string }`,
+    `testId?: string`.
+  - Layout vertical centré : icon wrap brand-light + h3 typographique
+    (en `<p>` pour préserver la hiérarchie de headings de la page hôte)
+    + microcopie + CTA `<Link>` gradient signature.
+  - `role="note"` pour rester compat avec les sélecteurs existants
+    des tests (tous les anciens empty states avaient `role="note"`).
+- **EmptyState appliqué aux 13 pages listings** (titres préservés
+  exactement pour ne pas casser les tests existants qui les
+  asserent par regex) :
+  - `PetitionsPage` → IconPen + CTA `/petitions/new`
+  - `MobilizationsPage` → IconFlame + CTA `/mobilizations/new`
+  - `PollsPage` → IconBarChart + CTA `/polls/new`
+  - `CampaignsPage` → IconMegaphone + CTA `/campaigns/new`
+  - `CommunesPage` → IconUsers (pas de CTA — création admin-gated)
+  - `MediaPage` → IconPen + CTA `/media/new`
+  - `services/HousingPage` → IconHome + CTA `/services/housing/new`
+  - `services/CarpoolingPage` → IconCar + CTA `/services/carpooling/new`
+  - `services/MarketplacePage` → IconCart + CTA `/services/marketplace/new`
+  - `services/LendingPage` → IconList + CTA `/services/lending/new`
+  - `services/GardenPage` → IconSpark + CTA `/services/garden/new`
+  - `services/SelPage` → IconBadge + CTA `/services/sel/new`
+  - `services/CrowdfundingPage` → IconSpark + CTA `/services/crowdfunding/new`
+- **`emptyStyle` (CSSProperties) supprimé** des 13 pages — devenu
+  mort suite à la migration. Pas de surface de regression : la
+  constante n'était utilisée que par le markup remplacé.
+- **Cards polish — classe utility `.mn-listing-card`** dans
+  `web/src/index.css` :
+  - `transition: transform / box-shadow / border-color 180ms ease`.
+  - `:hover` → `translateY(-2px)` + `box-shadow: 0 4px 14px
+    rgba(10,10,10,0.07)` + `border-color: var(--mn-border-dark)`.
+  - `@media (prefers-reduced-motion: reduce)` → `transition: none`
+    et `:hover` neutralisé (`transform: none; box-shadow: none`)
+    — conformité stricte CLAUDE.md §Accessibilité.
+  - Classe appliquée sur les 13 `<Link>` de card de chaque listing.
+
+### Tests
+
+- **+6 tests `EmptyState.test.tsx`** : rend titre + description,
+  rend `role="note"`, n'affiche pas de CTA quand absent, affiche
+  CTA avec href correct, propage testId, SVG icône reste
+  `aria-hidden`.
+- Pages existantes : 0 test modifié. Titres conservés (`Aucune
+  pétition trouvée`, etc.) → les sélecteurs des tests passent
+  inchangés.
+- **Total : 895 → 901 vitest verts (+6)**. 41 E2E Playwright
+  locaux verts (inchangé).
+
+### Bundle
+
+- Aucune nouvelle dépendance npm. `EmptyState` lazy-bundled avec
+  chaque page qui l'importe (chunk par route).
+- `index.css` +~30 lignes (la classe `.mn-listing-card` + media
+  query reduced-motion). Pas d'impact bundle JS.
+
+### Décisions étape 35
+
+- **Titre en `<p>` plutôt que `<h3>`** dans EmptyState : préserve
+  la hiérarchie de headings de la page hôte (qui a déjà un h1
+  page + h2 section) sans introduire un h3 « Aucune … » qui
+  perturberait les audits axe / le sommaire de lecture
+  d'écran.
+- **CommunesPage sans CTA** : la création est admin-gated dans le
+  router (`RequireAuth + RequireAdmin`). Afficher « Créer la
+  première commune » à un utilisateur lambda mènerait à un mur
+  d'auth puis à un mur admin. Mieux : pas de CTA, juste la
+  microcopie « la carte se construira progressivement ».
+- **`.mn-listing-card` plutôt que CSS Modules** : cohérence avec
+  l'approche inline styles du reste du repo + une seule classe
+  utilitaire globale réutilisable. CLAUDE.md §Conventions autorise
+  CSS Modules « ou Tailwind (choix à valider) », pas encore
+  arbitré — on ne tranche pas en mode étape de livraison
+  visible-first.
+- **Tokens `T.*` intouchés** : la nouvelle classe n'utilise que
+  des couleurs `--mn-border-dark` existantes et `rgba()` neutre
+  pour la box-shadow (charte tolère #ffffff dans le gradient CTA
+  et rgba neutres pour shadows).
+- **CTA service-pages sans guard auth UI** : tous les `/new`
+  passent par `RequireAuth` (cf. router.tsx). Un anonyme cliquant
+  sur « Proposer un hébergement » dans l'empty state se retrouve
+  sur l'écran AuthModal du pattern existant — comportement
+  cohérent avec les autres CTA du site (lien direct vers `/new`
+  partout). Pas de duplication de logique.
+
+### Items différés
+
+- Loading skeletons sur listings (remplacent « Chargement… »
+  texte) → étape 40.
+- Toast notifications + onboarding modal → étape 40.
+- Cards polish niveau 2 (animation de stagger / parallax) → hors
+  scope plan visible-first.
+- Dette consolidée janitor étape 34 (formatNumber dup, useEffect
+  pattern dup, etc.) → toujours différée, pas reprise étape 35.
+
+### Prochaines étapes (étape 36)
+
+- Nouvelle route `/decouvrir` (page éditoriale 5 sections).
+- Bascule du CTA hero « Découvrir » de `#mission` → `/decouvrir`.
+- Bascule du lien « Voir nos compteurs » mission band si pertinent.
+- Lien depuis le Footer (colonne Mission ou Outils).
+- 3 témoignages **marqués démo** (placeholders explicites).
+- ≥ 4 tests page + 1 E2E mock.
+
+---
+
+## Prompt pour la session N+30 (étape 36)
+
+> Repo : `/home/user/maintenantproto1` (branche imposée par
+> l'harness — typiquement `claude/<auto>`).
+>
+> **Plan de référence** : `PLAN-VISIBLE-FIRST.md` à la racine. Tu
+> suis le plan condensé 34→42 (9 étapes). Étape 35 ✅ mergée :
+> EmptyState + cards polish (901 vitest verts, 41 E2E locaux
+> verts, 43 attendus CI).
+>
+> **Lis dans cet ordre** :
+>
+> 1. `CLAUDE.md` — règles projet (TS strict, pas de `any`, SVG via
+>    `ICONS.*` pas d'emojis, RLS, RGPD, Lighthouse ≥ 95, axe-core
+>    ≥ 95, `prefers-reduced-motion`). Note la **Politique de PR**
+>    qui autorise auto-merge jusqu'à la session 50, la **Recopie
+>    systématique du prompt** et l'**Audit récurrent vibe
+>    janitor**.
+> 2. `PLAN-VISIBLE-FIRST.md` § Étape 36 — Page `/decouvrir`
+>    éditoriale.
+> 3. `HANDOFF-PROGRESS.md` — journal (dernière entrée : étape 35 ✅).
+>
+> **ÉTAPE 36 à exécuter — `/decouvrir` éditoriale (nouvelle page)** :
+>
+> 1. **Nouvelle page `web/src/pages/DecouvrirPage.tsx`** :
+>    - 5 sections (`<section aria-labelledby="…">`) : Mission,
+>      Comment ça marche, Les outils, Notre vision, Roadmap.
+>    - Mise en page éditoriale : `max-width: 880`, padding aéré
+>      (clamp 1.5rem 4vw 2.5rem), typo Sora pour les titres.
+>    - 3 témoignages **marqués démo** dans une section dédiée
+>      (placeholders explicites « Témoignage fictif — démo —
+>      remplacés à T+3 mois » pour conformité RGPD/loyauté).
+>    - Aucun fetch / 0 backend touché. Page entièrement statique
+>      (perfo idéale).
+> 2. **Router** : ajouter `{ path: 'decouvrir', element:
+>    <DecouvrirPage /> }` dans `web/src/router.tsx`, avec
+>    `lazy()` comme les autres pages.
+> 3. **Bascule des liens existants** :
+>    - `HomePage.tsx` § hero dual CTA : le bouton « Découvrir »
+>      pointe actuellement sur `#mission`. Passer à `/decouvrir`
+>      via `<Link to="/decouvrir">` (et adapter le test
+>      `HomePage.test.tsx` qui assert `href === '#mission'`).
+>    - `HomePage.tsx` § section mission : ajouter un lien
+>      secondaire « En savoir plus → /decouvrir ».
+>    - `Footer.tsx` : ajouter « Découvrir » dans la colonne
+>      Mission ou Outils selon le sens (ouvrir une décision —
+>      probablement Mission, sous le CTA Rejoindre).
+> 4. **Tests** :
+>    - ≥ 4 tests `DecouvrirPage.test.tsx` (h1 visible, présence
+>      des 5 sections, témoignages marqués démo, pas de fetch
+>      réseau).
+>    - 1 E2E mock dans `public-pages.spec.ts` ajouté à
+>      `PUBLIC_ROUTES` (path `/decouvrir`, heading `/Découvrir/i`).
+>    - Adapter `HomePage.test.tsx` « dual CTA » : `href` passe de
+>      `#mission` à `/decouvrir`.
+>    - Maintenir 901 vitest verts (+ ≥ 5 nouveaux ⇒ ≥ 906).
+> 5. **Risque** : 0. Page statique, aucun token `T.*` modifié,
+>    aucun backend.
+> 6. **4 checks locaux verts AVANT push** : `npm run typecheck`,
+>    `npm run lint`, `npm run test`, `npm run build`.
+> 7. **Commit** : `feat(decouvrir): step 36 — page éditoriale
+>    /decouvrir + bascule des CTA Découvrir`.
+> 8. **PR draft → main** (autorisation auto-merge cf.
+>    `CLAUDE.md § Politique de PR` jusqu'à la session 50 incluse).
+>    Body : Summary + Décisions + Test plan.
+> 9. **HANDOFF-PROGRESS.md** : ajouter étape 36 ✅ (sous-sections
+>    Contexte / Livré / Tests / Bundle / Décisions / Items
+>    différés / Prochaines étapes 37).
+> 10. **Audit janitor post-step 36** (cf. `CLAUDE.md § Audit vibe
+>     janitor`) — 2-3 subagents `general-purpose` en parallèle
+>     (archi / robustesse / sécurité), synthèse + priorisation
+>     par sévérité + risque de régression, application safe-first
+>     UNIQUEMENT (primum non nocere), PR séparée `chore(janitor):
+>     post-step 36 — …`, documenter sous-section « ### Audit vibe
+>     janitor étape 36 » dans `HANDOFF-PROGRESS.md`.
+> 11. **Recopier le prompt étape 37** à la fois dans
+>     `HANDOFF-PROGRESS.md` ET dans la réponse de chat finale
+>     (règle récursive — chaque prompt généré doit lui-même
+>     reconduire cette consigne pour la session N+1).
+>
+> **Conditions d'arrêt malgré l'autorisation auto-merge** :
+>
+> - Migration DB risquée non listée explicitement dans le prompt.
+> - Changement RGPD non listé.
+> - Breaking change visible utilisateur (URL changée, suppression
+>   de page).
+> - Modification des tokens `T.*` sans validation designer.
+> - Review humaine ou commentaire GitHub avant le merge.
+> - 3 tentatives consécutives n'ont pas suffi à rendre les 4
+>   checks locaux verts.
+>
+> **Étape suivante (37 — `/transparence` polish + Profil enrichi)** :
+> microcopie « comment c'est calculé » sur compteurs transparence,
+> graphique agrandi, lien vers `/decouvrir` ; et profil enrichi
+> avec badges contribution + historique 10 dernières actions.
+> Cf. plan §Étape 37.
 
 ---
 

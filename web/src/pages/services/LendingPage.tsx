@@ -1,6 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
+import EmptyState from '@/components/EmptyState';
 import { IconBadge, IconList, IconPen, IconPin, IconSearch } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { type LendingRow } from '@/lib/lending';
@@ -166,14 +167,6 @@ const costTagStyle: CSSProperties = {
   marginTop: 'auto',
 };
 
-const emptyStyle: CSSProperties = {
-  border: '1px dashed var(--mn-border)',
-  borderRadius: 16,
-  padding: '36px 20px',
-  textAlign: 'center',
-  color: 'var(--mn-text-3)',
-  background: 'var(--mn-surface)',
-};
 
 const errorBoxStyle: CSSProperties = {
   background: '#fef2f2',
@@ -191,7 +184,7 @@ function formatCost(cost: number): string {
 
 function LendingCard({ lending }: { lending: LendingRow }) {
   return (
-    <Link to={`/services/lending/${lending.id}`} style={cardStyle}>
+    <Link to={`/services/lending/${lending.id}`} style={cardStyle} className="mn-listing-card">
       <span style={tagStyle}>
         <IconList width={12} height={12} />
         {lending.category}
@@ -304,14 +297,13 @@ export default function LendingPage() {
       )}
 
       {status === 'ready' && lending.length === 0 && (
-        <div style={emptyStyle} role="note">
-          <p style={{ margin: 0, fontWeight: 700, color: 'var(--mn-text-1)' }}>
-            Aucun prêt disponible
-          </p>
-          <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-            Soyez le premier à proposer un objet à emprunter.
-          </p>
-        </div>
+        <EmptyState
+          icon={<IconList width={22} height={22} />}
+          title="Aucun prêt disponible"
+          description="Soyez le premier à proposer un objet à emprunter."
+          cta={{ to: '/services/lending/new', label: 'Proposer un prêt' }}
+          testId="lending-empty"
+        />
       )}
 
       {status === 'ready' && lending.length > 0 && (

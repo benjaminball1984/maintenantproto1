@@ -79,3 +79,31 @@ select:focus-visible {
   outline: 2px solid var(--mn-brand);
   outline-offset: 2px;
 }
+
+/* Hover polish pour les cards de listing (étape 35).
+   Appliqué via la classe `.mn-listing-card`. Respect strict de
+   `prefers-reduced-motion` : aucune transition ni transform pour
+   les utilisateur·rices qui ont demandé de réduire les
+   animations. */
+.mn-listing-card {
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.mn-listing-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(10, 10, 10, 0.07);
+  border-color: var(--mn-border-dark);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mn-listing-card {
+    transition: none;
+  }
+  .mn-listing-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
+}

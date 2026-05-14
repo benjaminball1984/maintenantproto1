@@ -1,7 +1,8 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
-import { IconCalendar, IconPen, IconPin, IconSearch, IconUsers } from '@/components/icons';
+import EmptyState from '@/components/EmptyState';
+import { IconCalendar, IconFlame, IconPen, IconPin, IconSearch, IconUsers } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { formatMobilizationDate } from '@/lib/mobilizationFormat';
 import { type MobilizationRow } from '@/lib/mobilizations';
@@ -178,14 +179,6 @@ const tagStyle: CSSProperties = {
   borderRadius: 999,
 };
 
-const emptyStyle: CSSProperties = {
-  border: '1px dashed var(--mn-border)',
-  borderRadius: 16,
-  padding: '36px 20px',
-  textAlign: 'center',
-  color: 'var(--mn-text-3)',
-  background: 'var(--mn-surface)',
-};
 
 const errorBoxStyle: CSSProperties = {
   background: '#fef2f2',
@@ -198,7 +191,7 @@ const errorBoxStyle: CSSProperties = {
 
 function MobilizationCard({ mobilization }: { mobilization: MobilizationRow }) {
   return (
-    <Link to={`/mobilizations/${mobilization.slug}`} style={cardStyle}>
+    <Link to={`/mobilizations/${mobilization.slug}`} style={cardStyle} className="mn-listing-card">
       <span style={tagStyle}>
         <IconCalendar width={14} height={14} />
         {formatMobilizationDate(mobilization.starts_at, 'short')}
@@ -317,14 +310,13 @@ export default function MobilizationsPage() {
       )}
 
       {status === 'ready' && mobilizations.length === 0 && (
-        <div style={emptyStyle} role="note">
-          <p style={{ margin: 0, fontWeight: 700, color: 'var(--mn-text-1)' }}>
-            Aucune mobilisation trouvée
-          </p>
-          <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-            Essayez d&apos;autres filtres, ou organisez la première sur ce sujet.
-          </p>
-        </div>
+        <EmptyState
+          icon={<IconFlame width={22} height={22} />}
+          title="Aucune mobilisation trouvée"
+          description="Essayez d'autres filtres, ou organisez la première sur ce sujet."
+          cta={{ to: '/mobilizations/new', label: 'Organiser une mobilisation' }}
+          testId="mobilizations-empty"
+        />
       )}
 
       {status === 'ready' && mobilizations.length > 0 && (

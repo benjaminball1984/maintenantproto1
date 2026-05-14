@@ -1,6 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
+import EmptyState from '@/components/EmptyState';
 import { IconList, IconPen, IconSearch, IconSpark } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import type { ArticleFormat, ArticleRow } from '@/lib/media';
@@ -160,14 +161,6 @@ const metaStyle: CSSProperties = {
   color: 'var(--mn-text-3)',
 };
 
-const emptyStyle: CSSProperties = {
-  border: '1px dashed var(--mn-border)',
-  borderRadius: 16,
-  padding: '36px 20px',
-  textAlign: 'center',
-  color: 'var(--mn-text-3)',
-  background: 'var(--mn-surface)',
-};
 
 const errorBoxStyle: CSSProperties = {
   background: '#fef2f2',
@@ -193,7 +186,7 @@ function formatDate(iso: string | null): string {
 
 function ArticleCard({ article }: { article: ArticleRow }) {
   return (
-    <Link to={`/media/${article.slug}`} style={cardStyle}>
+    <Link to={`/media/${article.slug}`} style={cardStyle} className="mn-listing-card">
       <span style={tagStyle}>
         <IconList width={12} height={12} />
         {FORMAT_LABELS[article.format as ArticleFormat] ?? article.format}
@@ -293,14 +286,13 @@ export default function MediaPage() {
       )}
 
       {status === 'ready' && articles.length === 0 && (
-        <div style={emptyStyle} role="note">
-          <p style={{ margin: 0, fontWeight: 700, color: 'var(--mn-text-1)' }}>
-            Aucun article publié
-          </p>
-          <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-            Soyez le premier à proposer un article au média militant.
-          </p>
-        </div>
+        <EmptyState
+          icon={<IconPen width={22} height={22} />}
+          title="Aucun article publié"
+          description="Soyez le premier à proposer un article au média militant."
+          cta={{ to: '/media/new', label: 'Proposer un article' }}
+          testId="media-empty"
+        />
       )}
 
       {status === 'ready' && articles.length > 0 && (
