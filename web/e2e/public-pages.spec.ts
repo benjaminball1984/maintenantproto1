@@ -9,6 +9,9 @@ import { installSupabaseStubs } from './utils/mockSupabase';
 const PUBLIC_ROUTES: { path: string; heading: RegExp }[] = [
   { path: '/', heading: /Maintenant !/i },
   { path: '/decouvrir', heading: /Découvre le mouvement/i },
+  { path: '/faq', heading: /Questions fréquentes/i },
+  { path: '/about', heading: /À propos de Maintenant/i },
+  { path: '/roadmap', heading: /Là où on va/i },
   { path: '/petitions', heading: /Pétitions/i },
   { path: '/mobilizations', heading: /Mobilisations/i },
   { path: '/campaigns', heading: /Campagnes/i },

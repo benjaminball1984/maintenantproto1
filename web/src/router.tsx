@@ -69,6 +69,9 @@ const LegalNoticePage = lazy(() => import('./pages/LegalNoticePage'));
 const CookiesPage = lazy(() => import('./pages/CookiesPage'));
 const TransparencePage = lazy(() => import('./pages/TransparencePage'));
 const DecouvrirPage = lazy(() => import('./pages/DecouvrirPage'));
+const FaqPage = lazy(() => import('./pages/FaqPage'));
+const AboutPage = lazy(() => import('./pages/AboutPage'));
+const RoadmapPage = lazy(() => import('./pages/RoadmapPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 export const router = createBrowserRouter([
@@ -279,6 +282,9 @@ export const router = createBrowserRouter([
       { path: 'auth/callback', element: <AuthCallbackPage /> },
       { path: 'transparence', element: <TransparencePage /> },
       { path: 'decouvrir', element: <DecouvrirPage /> },
+      { path: 'faq', element: <FaqPage /> },
+      { path: 'about', element: <AboutPage /> },
+      { path: 'roadmap', element: <RoadmapPage /> },
       {
         path: 'legal',
         children: [
