@@ -1,6 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
+import EmptyState from '@/components/EmptyState';
 import { IconFlame, IconPen, IconSearch } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { PETITION_CATEGORIES, type PetitionRow } from '@/lib/petitions';
@@ -182,14 +183,6 @@ const progressFillStyle: CSSProperties = {
   background: 'var(--mn-gradient)',
 };
 
-const emptyStyle: CSSProperties = {
-  border: '1px dashed var(--mn-border)',
-  borderRadius: 16,
-  padding: '36px 20px',
-  textAlign: 'center',
-  color: 'var(--mn-text-3)',
-  background: 'var(--mn-surface)',
-};
 
 const errorBoxStyle: CSSProperties = {
   background: '#fef2f2',
@@ -203,7 +196,7 @@ const errorBoxStyle: CSSProperties = {
 function PetitionCard({ petition }: { petition: PetitionRow }) {
   const ratio = Math.min(100, Math.round((petition.signature_count / petition.target_count) * 100));
   return (
-    <Link to={`/petitions/${petition.slug}`} style={cardStyle}>
+    <Link to={`/petitions/${petition.slug}`} style={cardStyle} className="mn-listing-card">
       <span style={tagStyle}>{petition.category}</span>
       <h2 style={cardTitleStyle}>{petition.title}</h2>
       <p style={cardSummaryStyle}>{petition.summary}</p>
@@ -323,14 +316,13 @@ export default function PetitionsPage() {
       )}
 
       {status === 'ready' && petitions.length === 0 && (
-        <div style={emptyStyle} role="note">
-          <p style={{ margin: 0, fontWeight: 700, color: 'var(--mn-text-1)' }}>
-            Aucune pétition trouvée
-          </p>
-          <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-            Essayez d&apos;autres filtres, ou lancez la première sur ce sujet.
-          </p>
-        </div>
+        <EmptyState
+          icon={<IconPen width={22} height={22} />}
+          title="Aucune pétition trouvée"
+          description="Essayez d'autres filtres, ou lancez la première sur ce sujet."
+          cta={{ to: '/petitions/new', label: 'Créer une pétition' }}
+          testId="petitions-empty"
+        />
       )}
 
       {status === 'ready' && petitions.length > 0 && (

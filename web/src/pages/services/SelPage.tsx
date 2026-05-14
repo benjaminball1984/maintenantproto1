@@ -1,6 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
+import EmptyState from '@/components/EmptyState';
 import {
   IconBadge,
   IconList,
@@ -172,14 +173,6 @@ const rateTagStyle: CSSProperties = {
   marginTop: 'auto',
 };
 
-const emptyStyle: CSSProperties = {
-  border: '1px dashed var(--mn-border)',
-  borderRadius: 16,
-  padding: '36px 20px',
-  textAlign: 'center',
-  color: 'var(--mn-text-3)',
-  background: 'var(--mn-surface)',
-};
 
 const errorBoxStyle: CSSProperties = {
   background: '#fef2f2',
@@ -192,7 +185,7 @@ const errorBoxStyle: CSSProperties = {
 
 function SelCard({ offer }: { offer: SelOfferRow }) {
   return (
-    <Link to={`/services/sel/${offer.id}`} style={cardStyle}>
+    <Link to={`/services/sel/${offer.id}`} style={cardStyle} className="mn-listing-card">
       <span style={tagStyle}>
         <IconList width={12} height={12} />
         {offer.category}
@@ -305,14 +298,13 @@ export default function SelPage() {
       )}
 
       {status === 'ready' && offers.length === 0 && (
-        <div style={emptyStyle} role="note">
-          <p style={{ margin: 0, fontWeight: 700, color: 'var(--mn-text-1)' }}>
-            Aucune offre SEL disponible
-          </p>
-          <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-            Soyez le premier à proposer un savoir ou un service.
-          </p>
-        </div>
+        <EmptyState
+          icon={<IconBadge width={22} height={22} />}
+          title="Aucune offre SEL disponible"
+          description="Soyez le premier à proposer un savoir ou un service."
+          cta={{ to: '/services/sel/new', label: 'Proposer une offre' }}
+          testId="sel-empty"
+        />
       )}
 
       {status === 'ready' && offers.length > 0 && (

@@ -1,6 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
+import EmptyState from '@/components/EmptyState';
 import { IconBadge, IconCart, IconPen, IconPin, IconSearch } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { type MarketplaceItemRow } from '@/lib/marketplace';
@@ -165,14 +166,6 @@ const priceTagStyle: CSSProperties = {
   marginTop: 'auto',
 };
 
-const emptyStyle: CSSProperties = {
-  border: '1px dashed var(--mn-border)',
-  borderRadius: 16,
-  padding: '36px 20px',
-  textAlign: 'center',
-  color: 'var(--mn-text-3)',
-  background: 'var(--mn-surface)',
-};
 
 const errorBoxStyle: CSSProperties = {
   background: '#fef2f2',
@@ -198,7 +191,7 @@ function formatPrice(item: MarketplaceItemRow): string {
 
 function MarketplaceCard({ item }: { item: MarketplaceItemRow }) {
   return (
-    <Link to={`/services/marketplace/${item.id}`} style={cardStyle}>
+    <Link to={`/services/marketplace/${item.id}`} style={cardStyle} className="mn-listing-card">
       <span style={tagStyle}>
         <IconCart width={12} height={12} />
         {item.category}
@@ -311,14 +304,13 @@ export default function MarketplacePage() {
       )}
 
       {status === 'ready' && items.length === 0 && (
-        <div style={emptyStyle} role="note">
-          <p style={{ margin: 0, fontWeight: 700, color: 'var(--mn-text-1)' }}>
-            Aucune annonce disponible
-          </p>
-          <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-            Publiez la première annonce de votre ville.
-          </p>
-        </div>
+        <EmptyState
+          icon={<IconCart width={22} height={22} />}
+          title="Aucune annonce disponible"
+          description="Publiez la première annonce de votre ville."
+          cta={{ to: '/services/marketplace/new', label: 'Publier une annonce' }}
+          testId="marketplace-empty"
+        />
       )}
 
       {status === 'ready' && items.length > 0 && (

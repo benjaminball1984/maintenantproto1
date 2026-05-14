@@ -1,7 +1,8 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
-import { IconHome, IconPen, IconPin, IconSearch, IconUsers } from '@/components/icons';
+import EmptyState from '@/components/EmptyState';
+import { IconHome, IconPen, IconPin, IconSearch, IconSpark, IconUsers } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { type GardenPlotRow } from '@/lib/garden';
 import { postgrestErrorMessage } from '@/lib/postgrestError';
@@ -174,14 +175,6 @@ const spotsTagStyle: CSSProperties = {
   marginTop: 'auto',
 };
 
-const emptyStyle: CSSProperties = {
-  border: '1px dashed var(--mn-border)',
-  borderRadius: 16,
-  padding: '36px 20px',
-  textAlign: 'center',
-  color: 'var(--mn-text-3)',
-  background: 'var(--mn-surface)',
-};
 
 const errorBoxStyle: CSSProperties = {
   background: '#fef2f2',
@@ -194,7 +187,7 @@ const errorBoxStyle: CSSProperties = {
 
 function GardenCard({ garden }: { garden: GardenPlotRow }) {
   return (
-    <Link to={`/services/garden/${garden.id}`} style={cardStyle}>
+    <Link to={`/services/garden/${garden.id}`} style={cardStyle} className="mn-listing-card">
       <span style={tagStyle}>
         <IconHome width={12} height={12} />
         Jardin partagé
@@ -314,14 +307,13 @@ export default function GardenPage() {
       )}
 
       {status === 'ready' && gardens.length === 0 && (
-        <div style={emptyStyle} role="note">
-          <p style={{ margin: 0, fontWeight: 700, color: 'var(--mn-text-1)' }}>
-            Aucun jardin référencé
-          </p>
-          <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-            Soyez le premier à référencer un jardin partagé.
-          </p>
-        </div>
+        <EmptyState
+          icon={<IconSpark width={22} height={22} />}
+          title="Aucun jardin référencé"
+          description="Soyez le premier à référencer un jardin partagé."
+          cta={{ to: '/services/garden/new', label: 'Référencer un jardin' }}
+          testId="garden-empty"
+        />
       )}
 
       {status === 'ready' && gardens.length > 0 && (

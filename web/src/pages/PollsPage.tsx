@@ -1,6 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
+import EmptyState from '@/components/EmptyState';
 import { IconBarChart, IconPen, IconSearch } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { type PollRow, type PollStatus } from '@/lib/polls';
@@ -173,14 +174,6 @@ const tagStyle: CSSProperties = {
   alignSelf: 'flex-start',
 };
 
-const emptyStyle: CSSProperties = {
-  border: '1px dashed var(--mn-border)',
-  borderRadius: 16,
-  padding: '36px 20px',
-  textAlign: 'center',
-  color: 'var(--mn-text-3)',
-  background: 'var(--mn-surface)',
-};
 
 const errorBoxStyle: CSSProperties = {
   background: '#fef2f2',
@@ -200,7 +193,7 @@ function isClosed(poll: PollRow): boolean {
 function PollCard({ poll }: { poll: PollRow }) {
   const closed = isClosed(poll);
   return (
-    <Link to={`/polls/${poll.slug}`} style={cardStyle}>
+    <Link to={`/polls/${poll.slug}`} style={cardStyle} className="mn-listing-card">
       <span style={tagStyle}>
         <IconBarChart width={12} height={12} />
         {closed ? 'Clôturé' : 'Ouvert'}
@@ -308,14 +301,13 @@ export default function PollsPage() {
       )}
 
       {status === 'ready' && polls.length === 0 && (
-        <div style={emptyStyle} role="note">
-          <p style={{ margin: 0, fontWeight: 700, color: 'var(--mn-text-1)' }}>
-            Aucun sondage trouvé
-          </p>
-          <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-            Essayez d&apos;autres filtres, ou lancez le premier sondage sur ce sujet.
-          </p>
-        </div>
+        <EmptyState
+          icon={<IconBarChart width={22} height={22} />}
+          title="Aucun sondage trouvé"
+          description="Essayez d'autres filtres, ou lancez le premier sondage sur ce sujet."
+          cta={{ to: '/polls/new', label: 'Lancer un sondage' }}
+          testId="polls-empty"
+        />
       )}
 
       {status === 'ready' && polls.length > 0 && (

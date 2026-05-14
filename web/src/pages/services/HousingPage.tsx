@@ -1,6 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
+import EmptyState from '@/components/EmptyState';
 import { IconHome, IconPen, IconPin, IconSearch, IconUsers } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { type HousingRow } from '@/lib/housing';
@@ -178,14 +179,6 @@ const tagStyle: CSSProperties = {
   alignSelf: 'flex-start',
 };
 
-const emptyStyle: CSSProperties = {
-  border: '1px dashed var(--mn-border)',
-  borderRadius: 16,
-  padding: '36px 20px',
-  textAlign: 'center',
-  color: 'var(--mn-text-3)',
-  background: 'var(--mn-surface)',
-};
 
 const errorBoxStyle: CSSProperties = {
   background: '#fef2f2',
@@ -198,7 +191,7 @@ const errorBoxStyle: CSSProperties = {
 
 function HousingCard({ housing }: { housing: HousingRow }) {
   return (
-    <Link to={`/services/housing/${housing.id}`} style={cardStyle}>
+    <Link to={`/services/housing/${housing.id}`} style={cardStyle} className="mn-listing-card">
       <span style={tagStyle}>
         <IconHome width={12} height={12} />
         Hébergement
@@ -319,14 +312,13 @@ export default function HousingPage() {
       )}
 
       {status === 'ready' && housing.length === 0 && (
-        <div style={emptyStyle} role="note">
-          <p style={{ margin: 0, fontWeight: 700, color: 'var(--mn-text-1)' }}>
-            Aucun hébergement trouvé
-          </p>
-          <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-            Essayez d&apos;autres filtres, ou proposez le premier sur votre territoire.
-          </p>
-        </div>
+        <EmptyState
+          icon={<IconHome width={22} height={22} />}
+          title="Aucun hébergement trouvé"
+          description="Essayez d'autres filtres, ou proposez le premier sur votre territoire."
+          cta={{ to: '/services/housing/new', label: 'Proposer un hébergement' }}
+          testId="housing-empty"
+        />
       )}
 
       {status === 'ready' && housing.length > 0 && (

@@ -1,7 +1,8 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
-import { IconCart, IconFlame, IconPen, IconSearch } from '@/components/icons';
+import EmptyState from '@/components/EmptyState';
+import { IconCart, IconFlame, IconPen, IconSearch, IconSpark } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { type CrowdfundingCampaignRow } from '@/lib/crowdfunding';
 import { postgrestErrorMessage } from '@/lib/postgrestError';
@@ -176,14 +177,6 @@ const tagStyle: CSSProperties = {
   alignSelf: 'flex-start',
 };
 
-const emptyStyle: CSSProperties = {
-  border: '1px dashed var(--mn-border)',
-  borderRadius: 16,
-  padding: '36px 20px',
-  textAlign: 'center',
-  color: 'var(--mn-text-3)',
-  background: 'var(--mn-surface)',
-};
 
 const errorBoxStyle: CSSProperties = {
   background: '#fef2f2',
@@ -202,7 +195,7 @@ function CrowdfundingCard({ campaign }: { campaign: CrowdfundingCampaignRow }) {
   const ratio = campaign.goal_eur > 0 ? campaign.raised_eur / campaign.goal_eur : 0;
   const percent = Math.round(Math.min(ratio, 1) * 100);
   return (
-    <Link to={`/services/crowdfunding/${campaign.id}`} style={cardStyle}>
+    <Link to={`/services/crowdfunding/${campaign.id}`} style={cardStyle} className="mn-listing-card">
       <span style={tagStyle}>
         <IconFlame width={12} height={12} />
         Cagnotte
@@ -293,14 +286,13 @@ export default function CrowdfundingPage() {
       )}
 
       {status === 'ready' && campaigns.length === 0 && (
-        <div style={emptyStyle} role="note">
-          <p style={{ margin: 0, fontWeight: 700, color: 'var(--mn-text-1)' }}>
-            Aucune cagnotte en cours
-          </p>
-          <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-            Lancez la première cagnotte solidaire de la plateforme.
-          </p>
-        </div>
+        <EmptyState
+          icon={<IconSpark width={22} height={22} />}
+          title="Aucune cagnotte en cours"
+          description="Lancez la première cagnotte solidaire de la plateforme."
+          cta={{ to: '/services/crowdfunding/new', label: 'Lancer une cagnotte' }}
+          testId="crowdfunding-empty"
+        />
       )}
 
       {status === 'ready' && campaigns.length > 0 && (

@@ -1,6 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
+import EmptyState from '@/components/EmptyState';
 import { IconCar, IconCalendar, IconPen, IconPin, IconSearch, IconUsers } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { type CarpoolingRow } from '@/lib/carpooling';
@@ -166,14 +167,6 @@ const priceTagStyle: CSSProperties = {
   marginTop: 'auto',
 };
 
-const emptyStyle: CSSProperties = {
-  border: '1px dashed var(--mn-border)',
-  borderRadius: 16,
-  padding: '36px 20px',
-  textAlign: 'center',
-  color: 'var(--mn-text-3)',
-  background: 'var(--mn-surface)',
-};
 
 const errorBoxStyle: CSSProperties = {
   background: '#fef2f2',
@@ -202,7 +195,7 @@ function formatPrice(price: number): string {
 
 function CarpoolingCard({ carpooling }: { carpooling: CarpoolingRow }) {
   return (
-    <Link to={`/services/carpooling/${carpooling.id}`} style={cardStyle}>
+    <Link to={`/services/carpooling/${carpooling.id}`} style={cardStyle} className="mn-listing-card">
       <span style={tagStyle}>
         <IconCalendar width={12} height={12} />
         {formatDeparture(carpooling.departs_at)}
@@ -337,14 +330,13 @@ export default function CarpoolingPage() {
       )}
 
       {status === 'ready' && carpooling.length === 0 && (
-        <div style={emptyStyle} role="note">
-          <p style={{ margin: 0, fontWeight: 700, color: 'var(--mn-text-1)' }}>
-            Aucun covoiturage trouvé
-          </p>
-          <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-            Essayez d&apos;autres villes, ou proposez le premier trajet pour cette destination.
-          </p>
-        </div>
+        <EmptyState
+          icon={<IconCar width={22} height={22} />}
+          title="Aucun covoiturage trouvé"
+          description="Essayez d'autres villes, ou proposez le premier trajet pour cette destination."
+          cta={{ to: '/services/carpooling/new', label: 'Proposer un trajet' }}
+          testId="carpooling-empty"
+        />
       )}
 
       {status === 'ready' && carpooling.length > 0 && (
