@@ -11707,6 +11707,110 @@ principale ajoute > 200 LOC de lib + page.
 - `/roadmap` : timeline visuelle 2026-2028 (jalons publics).
 - Risque 0 (pages statiques), ≥ 6 tests.
 
+### Audit vibe janitor étape 38
+
+Trois subagents `general-purpose` lancés en parallèle (architecture
+/ élégance, robustesse / edge cases, sécurité / cohérence handoff)
+sur le périmètre étape 38 (`FollowButton.tsx` + `Breadcrumbs.tsx` +
+`RootLayout.tsx` header sticky + 5 detail pages avec breadcrumb +
+`ReseauPage.tsx` intégration + `installStatefulToggleRoute` helper +
+`follow-unfollow.spec.ts` + section étape 38 du journal).
+
+**Findings totaux** : 27 findings — 0 critical / 0 high / 4 medium
+/ 14 low / 9 info. Les 4 medium sont (A1 : redondance Breadcrumbs +
+back-link, décision UX), (A4 : race FollowButton triple-clic),
+(R2 : `initiallyFollowing` ne resync pas après refetch parent),
+(R7 : doublon de R2 côté ReseauPage). **5 fixes appliqués**
+(safe-first uniquement, chacun ≤ 10 LOC, aucun test cassé).
+
+**Fixes appliqués** :
+
+- **JAN38-R1 / low / régression low** — Garde de unmount dans
+  `FollowButton` via `useRef<boolean>(mounted)` + `useEffect` cleanup.
+  Skip les `setBusy` / `setFollowing` / `setError` post-RPC si le
+  composant a été démonté pendant l'attente. Évite le warning React
+  « setState on unmounted » + leak léger.
+- **JAN38-R3 / low / régression low** — Gate sur le double-submit
+  du form recherche globale (`RootLayout`). Flag `searchSubmitting`
+  + reset via `queueMicrotask` après `navigate`. Empêche un
+  double-clic rapide ou Enter+clic rapproché de déclencher deux
+  navigations consécutives.
+- **JAN38-R5 / low / régression low** — Filtre les items
+  `label.trim() === ''` dans `Breadcrumbs` avant le `map`. Empêche
+  un trou visuel + un span `aria-current="page"` vide lu par les
+  screen readers. Tests existants utilisent des labels non-vides
+  → aucun impact.
+- **JAN38-R8 / low / régression low** — JSDoc note sur
+  `installStatefulToggleRoute` : le state interne `toggled` survit
+  jusqu'à la fin du test, donc utiliser dans `beforeEach`
+  (pas `beforeAll`). Aucun changement de comportement, doc-only.
+- **JAN38-A10 / info / régression low** — JSDoc note sur la prop
+  `onChange` de `FollowButton` : appelée **deux fois** en cas de
+  rollback (state optimiste puis state final). Le caller doit gérer
+  l'idempotence s'il déclenche un side-effect.
+
+**Dette ajoutée** (à reprendre lors d'étapes dédiées) :
+
+- **`L12-nav-detail-backlink-dedupe`** (JAN38-A1, medium /
+  régression low) — Redondance entre `<Breadcrumbs>` (Accueil →
+  Liste → Titre) et le `<Link "Toutes les X">` juste en dessous
+  sur les 5 detail pages. Décision UX hors janitor : soit
+  retirer le back-link, soit le déplacer en bas de page. À
+  trancher avec l'équipe produit.
+- **`L12-backlink-shared-component`** (JAN38-A2, low) —
+  `backLinkStyle` dupliqué 5× (6× avec CommuneDetailPage). Candidat
+  `<BackLink>` shared component, à grouper avec L12 ci-dessus.
+- **`L13-breadcrumbs-builder-helper`** (JAN38-A3, low) — Pattern
+  3-niveaux `[Accueil, Liste, Titre]` dupliqué 5×. Helper
+  `buildDetailBreadcrumbs(listingLabel, listingPath, currentTitle)`
+  candidat. À grouper avec L12.
+- **`L12-followbutton-resync`** (JAN38-R2 = JAN38-R7, medium /
+  régression medium) — `FollowButton` ne resync pas son state
+  local quand `initiallyFollowing` change après refetch
+  `useFollowing`. Désync visible si l'utilisateur clique sur la
+  carte A puis l'auteur X reposte (carte B re-monte avec
+  `initiallyFollowing=true` mais state local resté `false`).
+  Fix propre via `useEffect([initiallyFollowing])` mais risque
+  medium d'écraser un optimistic state en cours. À traiter par
+  derived state + version counter.
+- **`L13-search-focus-mgmt`** (JAN38-R4, low) — Pas de focus
+  management après submit du form recherche. À traiter quand
+  l'étape recherche réelle arrivera (`L11-recherche-fulltext`).
+- **`L14-followbutton-race`** (JAN38-A4, medium / régression
+  medium) — Race condition FollowButton sur triple-clic. Gate
+  `busy` couvre le double-clic mais pas le 3e clic pendant
+  rollback. À traiter avec un AbortController + ref de génération.
+- **`L15-a11y-srOnly-helper`** (JAN38-A8, low) — Pattern sr-only
+  inline (`position: 'absolute', left: -9999`) répandu. Candidat
+  `<VisuallyHidden>` shared component.
+- **`L16-design-system-btn-extract`** (JAN38-A9, info) — `Btn` de
+  CLAUDE.md jamais extrait en TS. Mega-refacto cross-cutting, hors
+  scope janitor. À tracer pour un sprint dédié design-system.
+- **`L17-followbutton-i18n-errors`** (JAN38-S2, low) — `error.message`
+  PostgrestError exposé brut en `role="alert"`. À wrapper avec
+  `postgrestErrorMessage()` (test `rollback erreur RLS` assert sur
+  un message spécifique, risque medium de le casser → reporter).
+- **`L18-fragment-wrapper`** (JAN38-A5, info) — `FollowButton`
+  retourne un Fragment avec 2 nodes (bouton + erreur span). Wrapper
+  `<span style={{ display: 'inline-flex' }}>` plus prévisible. Pas
+  de bug actuel, cosmétique.
+
+**Halluciné non-finding** : aucun. Les 3 agents ont distingué
+proprement le code étape 38 du code préexistant et n'ont pas
+inventé de contradiction.
+
+**Compteur de tests final post-janitor étape 38** : 943 vitest
+verts (inchangé — les 5 fixes safe-first préservent toutes les
+assertions existantes) + 41 E2E Playwright locaux verts + 1 nouveau
+follow-unfollow stateful.
+
+**Conditions d'arrêt janitor non déclenchées** : aucune migration
+DB, aucun touch tokens `T.*`, aucun fix qui aurait cassé un test
+existant. Pattern de janitor « 5 fixes safe-first » reconduit
+depuis l'étape 37 (5 fixes appliqués vs 14 différés cette
+fois-ci). Les findings medium sont tous reportés en dette nommée
+pour traitement dans des étapes dédiées.
+
 ---
 
 ## Prompt pour la session N+33 (étape 39)

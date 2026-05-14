@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
 import { IconCheck, IconUsers } from '@/components/icons';
 import { followUser, unfollowUser } from '@/lib/social';
@@ -24,7 +24,12 @@ import { followUser, unfollowUser } from '@/lib/social';
  * @param initiallyFollowing  état initial connu via lookup côté caller.
  * @param onChange    callback optionnel quand le state local bascule
  *                    (utile pour refetch un compteur followers côté
- *                    parent ou un toast).
+ *                    parent ou un toast). **Janitor JAN38-A10** :
+ *                    `onChange` est rappelé deux fois en cas de
+ *                    rollback erreur (1× avec le state optimiste,
+ *                    1× avec le state final après rollback). Le caller
+ *                    doit donc gérer l'idempotence s'il déclenche un
+ *                    side-effect (ex. refresh d'un compteur).
  */
 export interface FollowButtonProps {
   followerId: string | null;
@@ -75,6 +80,18 @@ export default function FollowButton({
   const [busy, setBusy] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Janitor JAN38-R1 — garde de unmount : si le composant est démonté
+  // pendant la RPC (parent re-render, changement de tab, refresh feed),
+  // les setState ci-dessous sont skippés pour éviter un warning React +
+  // memory leak léger.
+  const mountedRef = useRef<boolean>(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const handleClick = async () => {
     if (busy || !followerId) return;
     const next = !following;
@@ -86,6 +103,7 @@ export default function FollowButton({
     const { error: opError } = next
       ? await followUser(followerId, followeeId)
       : await unfollowUser(followerId, followeeId);
+    if (!mountedRef.current) return;
     setBusy(false);
     if (opError) {
       // Rollback du state local + onChange — l'utilisateur voit revenir

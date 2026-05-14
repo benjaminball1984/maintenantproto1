@@ -59,6 +59,12 @@ export interface StatefulToggleRouteHandle {
 /**
  * Pose un handler de route stateful (POST/DELETE/GET) sur `matchUrl`.
  * Retourne un handle pour inspecter l'état depuis le test.
+ *
+ * @remarks Janitor JAN38-R8 — le state interne `toggled` vit dans la
+ * closure du handler de route et survit jusqu'à la fin du test
+ * Playwright. Pour réinitialiser l'état entre tests, appeler le helper
+ * dans `test.beforeEach` (pas `beforeAll`). Le call-site initial
+ * (`follow-unfollow.spec.ts`) suit déjà ce pattern.
  */
 export async function installStatefulToggleRoute<TRow>(
   page: Page,
