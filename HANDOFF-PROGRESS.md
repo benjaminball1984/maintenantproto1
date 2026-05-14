@@ -10883,6 +10883,108 @@ existant. PR janitor exclusivement documentaire ce coup-ci.
 - 3 témoignages **marqués démo** (placeholders explicites).
 - ≥ 4 tests page + 1 E2E mock.
 
+### Audit vibe janitor étape 35
+
+Trois subagents `general-purpose` lancés en parallèle (architecture
+/ élégance, robustesse / edge cases, sécurité / cohérence handoff)
+sur le périmètre étape 35 (`EmptyState.tsx`/`.test.tsx`, `index.css`
+nouvelle classe `.mn-listing-card`, 13 pages listings migrées,
+section étape 35 de `HANDOFF-PROGRESS.md`).
+
+**Findings totaux** : 11 findings — 0 critical / 0 high / 1 medium
+(F4/D1 sécurité) / 10 low. **Fixes appliqués : 0.**
+
+Raison du « 0 fix » : tous les findings ont un risque de régression
+non nul si appliqués (touchent du DOM testé, de la sémantique a11y,
+ou nécessitent un arbitrage produit/design), et les 3 subagents
+s'accordent unanimement sur « PR janitor doc-only ». Application
+stricte de la doctrine « primum non nocere ».
+
+**Dette ajoutée** :
+
+- **JAN35-A1 / medium / régression medium** — `role="note"` sur
+  `EmptyState` vs `role="status"` (avec `aria-live="polite"`).
+  `note` est cohérent avec 6 autres usages historiques du repo
+  (`MessagingPage`, `ReseauPage`, etc.), mais `status` serait plus
+  juste pour un *résultat de requête vide* (annonce screen-reader
+  utile). Risque si on change : bruit potentiel à l'arrivée sur
+  la page + casse du test `EmptyState.test.tsx > rend un wrapper
+  avec role='note'`. À traiter dans une étape a11y dédiée avec
+  arbitrage UX.
+- **JAN35-A2 / low / régression high** — Duplication résiduelle
+  des 13 invocations `<EmptyState … />`. Factorisation en
+  `<ListingEmpty entity="petitions" />` économiserait ~70 LOC mais
+  casserait la lisibilité éditoriale (microcopie en clair par
+  page) et risquerait des snapshots/i18n futurs. **Duplication
+  intentionnelle**, conservée.
+- **JAN35-A3 / low / régression low** — Cohérence des icônes :
+  `MediaPage` utilise `IconPen` (création) là où `IconList`
+  collerait mieux à un état « 0 article » ; `CrowdfundingPage`
+  utilise `IconSpark` (idée) vs `IconCart`/`IconFlame` déjà
+  importés. Choix éditoriaux — arbitrage product avant tout
+  changement.
+- **JAN35-A4 / low / régression medium** — `.mn-listing-card` non
+  appliquée à `MessagingPage` (et autres pages catalog hors
+  périmètre étape 35). Hors scope plan visible-first §Étape 35.
+  À ajouter dans une étape polish messagerie dédiée.
+- **JAN35-A5 / low / régression medium** — Signature
+  `icon: ReactElement` (verbeux à l'appel : `<IconPen width={22}
+  height={22} />`) vs `icon: ComponentType<{width, height}>` qui
+  rendrait en interne. Compromis défendable, changer casse
+  `EmptyState.test.tsx:12`.
+- **JAN35-R1 / low / régression low** — Double `aria-hidden`
+  redondant : wrapper `<span aria-hidden>` + SVG `IconX`
+  `aria-hidden="true"`. Spec WAI-ARIA tolère, inoffensif. À
+  nettoyer quand `IconX` aura un autre cas d'usage non-décoratif.
+- **JAN35-R2 / low / régression low** — `EmptyState` rend toujours
+  `<p></p>` même si `title`/`description` est une string vide.
+  Pas un risque pour le périmètre actuel (tous les call sites
+  passent des strings non vides hardcodées) mais à documenter
+  pour évolution future.
+- **JAN35-R3 / low / régression low** — Pas de test dédié au cas
+  « CommunesPage sans CTA ». Couvert indirectement par
+  `CommunesPage.test.tsx:82` (assert sur empty state) mais pas
+  d'assert explicite « no link ». À ajouter dans une étape
+  test-hygiene.
+- **JAN35-R4 / low / régression high** — Contraste
+  `--mn-brand-dark` (#b91560) sur `--mn-brand-light` (#fde9f2)
+  ≈ 5.4:1 (AA OK / AAA NOK). Même finding qu'étape 34. Fix
+  interdit janitor (touche tokens `T.*`).
+- **JAN35-F1 / medium / régression low** (Decision Token D1)
+  — `EmptyStateCta.to` typé `string` au lieu de
+  `` `/${string}` ``. Aucun call site actuel ne passe d'URL
+  externe (vérifié exhaustivement), mais durcir le type via
+  template literal éviterait un futur `<a href="https://evil.com">`
+  issu d'un open-redirect dérivé. Reporté en dette technique —
+  durcissement à faire dans une étape securité dédiée avec
+  vérification que `react-router-dom` n'a pas de subtilité sur
+  les paths internes (« `to=`#mission` `» qui est un fragment).
+- **JAN35-F2 / low / régression n/a** — Compteurs et budgets :
+  901 vitest verts confirmés, 13 pages migrées confirmées via
+  `grep -rln 'EmptyState' web/src/pages/`, 0 backend touché
+  confirmé, 0 nouvelle dépendance npm confirmée, `prefers-reduced
+  motion` annule bien `transform` ET `box-shadow` ET `transition`
+  (3 propriétés). Cohérence handoff vs code parfaite.
+- **JAN35-F3 / medium / régression low** — Flakiness CI :
+  `ArticleDetailPage.test.tsx:135` a timeout 5000 ms en CI (run
+  GitHub Actions 25870835973) alors qu'il passe en local. CI runner
+  GitHub Actions Ubuntu plus lent que le devcontainer local sur
+  certains tests asynchrones. Hors périmètre étape 35 (test
+  inchangé), mais à fixer dans une étape test-hygiene dédiée :
+  augmenter `testTimeout` global vitest de 5000 ms → 8000 ms
+  (cf. `vite.config.ts`) ou identifier le `findByText` qui
+  bloque et y ajouter un timeout explicite. Retrigger CI suffi
+  comme work-around immédiat.
+
+**Compteur de tests final post-janitor étape 35** : 901 vitest
+verts (inchangé — aucun fix appliqué) + 41 E2E Playwright verts
+locaux.
+
+**Conditions d'arrêt janitor non déclenchées** : aucune migration
+DB, aucun touch tokens `T.*`, aucun fix qui aurait cassé un test
+existant. PR janitor exclusivement documentaire ce coup-ci (3e
+épisode consécutif après janitor étapes 32 et 34).
+
 ---
 
 ## Prompt pour la session N+30 (étape 36)
