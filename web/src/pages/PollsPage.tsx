@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
 import EmptyState from '@/components/EmptyState';
+import { SkeletonCardList } from '@/components/Skeleton';
 import { IconBarChart, IconPen, IconSearch } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { type PollRow, type PollStatus } from '@/lib/polls';
@@ -295,9 +296,7 @@ export default function PollsPage() {
       )}
 
       {status === 'loading' && (
-        <p style={{ color: 'var(--mn-text-3)' }} role="status" aria-live="polite">
-          Chargement des sondages…
-        </p>
+        <SkeletonCardList label="Chargement des sondages…" testId="polls-loading" />
       )}
 
       {status === 'ready' && polls.length === 0 && (

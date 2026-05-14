@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
 import EmptyState from '@/components/EmptyState';
+import { SkeletonCardList } from '@/components/Skeleton';
 import { IconCalendar, IconFlame, IconPen, IconPin, IconSearch, IconUsers } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { formatMobilizationDate } from '@/lib/mobilizationFormat';
@@ -304,9 +305,7 @@ export default function MobilizationsPage() {
       )}
 
       {status === 'loading' && (
-        <p style={{ color: 'var(--mn-text-3)' }} role="status" aria-live="polite">
-          Chargement des mobilisations…
-        </p>
+        <SkeletonCardList label="Chargement des mobilisations…" testId="mobilizations-loading" />
       )}
 
       {status === 'ready' && mobilizations.length === 0 && (

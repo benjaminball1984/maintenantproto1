@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
 import EmptyState from '@/components/EmptyState';
+import { SkeletonCardList } from '@/components/Skeleton';
 import { IconMegaphone, IconPen, IconSearch } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { type CampaignRow, type CampaignStatus } from '@/lib/campaigns';
@@ -286,9 +287,7 @@ export default function CampaignsPage() {
       )}
 
       {status === 'loading' && (
-        <p style={{ color: 'var(--mn-text-3)' }} role="status" aria-live="polite">
-          Chargement des campagnes…
-        </p>
+        <SkeletonCardList label="Chargement des campagnes…" testId="campaigns-loading" />
       )}
 
       {status === 'ready' && campaigns.length === 0 && (

@@ -107,3 +107,57 @@ select:focus-visible {
     box-shadow: none;
   }
 }
+
+/* Skeleton loading (étape 40) — pulse subtile pour signaler le
+   chargement. Animation désactivée si l'utilisateur·rice a demandé
+   prefers-reduced-motion. */
+.mn-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--mn-surface-2) 0%,
+    var(--mn-border) 50%,
+    var(--mn-surface-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: mn-skeleton-pulse 1400ms ease-in-out infinite;
+  border-radius: 8px;
+}
+
+@keyframes mn-skeleton-pulse {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mn-skeleton {
+    animation: none;
+    background: var(--mn-surface-2);
+  }
+}
+
+/* Toast notifications (étape 40) — entrée discrète depuis le bas
+   droite, durée ≤ 200 ms, suppression d'animation si reduced-motion. */
+.mn-toast {
+  animation: mn-toast-in 180ms ease-out;
+}
+
+@keyframes mn-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mn-toast {
+    animation: none;
+  }
+}

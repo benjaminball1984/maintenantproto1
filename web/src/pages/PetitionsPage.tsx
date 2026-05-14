@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
 import EmptyState from '@/components/EmptyState';
+import { SkeletonCardList } from '@/components/Skeleton';
 import { IconFlame, IconPen, IconSearch } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { PETITION_CATEGORIES, type PetitionRow } from '@/lib/petitions';
@@ -310,9 +311,7 @@ export default function PetitionsPage() {
       )}
 
       {status === 'loading' && (
-        <p style={{ color: 'var(--mn-text-3)' }} role="status" aria-live="polite">
-          Chargement des pétitions…
-        </p>
+        <SkeletonCardList label="Chargement des pétitions…" testId="petitions-loading" />
       )}
 
       {status === 'ready' && petitions.length === 0 && (

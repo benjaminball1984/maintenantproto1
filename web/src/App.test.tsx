@@ -1,9 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router-dom';
 import RootLayout from './layouts/RootLayout';
 import HomePage from './pages/HomePage';
 import PetitionsPage from './pages/PetitionsPage';
+import { markOnboardingSeen } from './lib/onboarding';
+
+beforeEach(() => {
+  // Étape 40 — l'OnboardingModal s'auto-affiche au premier mount. On le
+  // désactive pour ces tests de routing qui ne veulent pas le tester.
+  window.localStorage.clear();
+  markOnboardingSeen();
+});
 
 function SearchProbe() {
   // Page stub : utilise `useLocation` (createMemoryRouter ne touche pas
