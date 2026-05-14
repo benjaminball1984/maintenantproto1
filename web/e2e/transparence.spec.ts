@@ -41,6 +41,22 @@ test.describe('Page /transparence — smoke UI', () => {
   });
 
   test('est accessible depuis le footer (lien « Transparence »)', async ({ page }) => {
+    // Pré-seed du consentement cookies pour cacher la bannière (position:
+    // fixed; bottom:0; z-index:900) qui chevaucherait sinon la colonne
+    // « Légal » du footer 3-colonnes (étape 34) et intercepterait le clic
+    // sur le lien Transparence. Simule un utilisateur revenant sur le site
+    // après avoir déjà choisi « essentiel uniquement ».
+    await page.addInitScript(() => {
+      window.localStorage.setItem(
+        'mn:cookie-consent',
+        JSON.stringify({
+          version: 1,
+          choice: 'essential',
+          categories: { analytics: false },
+          at: new Date().toISOString(),
+        }),
+      );
+    });
     await page.goto('/');
     const footer = page.locator('footer');
     const link = footer.getByRole('link', { name: /Transparence/i });
