@@ -58,25 +58,55 @@ Le but de la session était de débloquer les conditions externes qui
 bridaient les sessions post-go-live (étapes 25-29 toutes
 re-différées pour la même raison).
 
-### Goulot 1 — Hébergement HTTPS public ✅ DÉBLOQUÉ
+### Goulot 1 — Hébergement HTTPS public ⛔ RE-BLOQUÉ (2026-05-14)
 
 - **Avant** : pas de Vercel preview HTTPS / staging public en ligne →
   Lighthouse réel impossible (priorité 1 étapes 25-29 toutes
   re-différées).
-- **Décision** : l'équipe dispose d'un compte Netlify payant (9 €/mois)
-  → bascule Vercel → Netlify avant le premier déploiement (le
-  `vercel.json` était préparé mais jamais utilisé en production,
-  aucun visiteur à migrer).
+- **Décision (2026-05-13)** : l'équipe dispose d'un compte Netlify
+  payant (9 €/mois) → bascule Vercel → Netlify avant le premier
+  déploiement (le `vercel.json` était préparé mais jamais utilisé en
+  production, aucun visiteur à migrer).
 - **Livraison** : PRs #37 (`chore(deploy): switch hosting Vercel →
   Netlify`), #38 (`fix(deploy): netlify build — add --legacy-peer-deps`),
   #39 (`fix(deploy): add web/.npmrc legacy-peer-deps=true`).
-- **Résultat** : site live sur
+- **Résultat (2026-05-13)** : site live sur
   **https://maintenant-le-mouvement.netlify.app** (région team
   Ben/Lilou). Auto-deploy sur push `main`, preview URL par PR.
 - **Hygiène** : un override UI Netlify (Build command / Publish dir /
   Package dir) a été nécessaire pendant le rodage. À nettoyer plus
   tard par un dev (laisser `netlify.toml` comme seule source de
   vérité). Non bloquant pour l'instant.
+- **2026-05-14 — RE-BLOCAGE** : l'équipe n'a plus de crédits Netlify
+  (signalé par Ben pendant la session étape 39). Les checks
+  Netlify (`netlify/maintenant-le-mouvement/deploy-preview`,
+  `Pages changed`, `Header rules`, `Redirect rules`) vont rester en
+  `pending` / erreur sur toutes les PR à venir. **Conséquences
+  pratiques** :
+  - Les **4 checks locaux verts** (typecheck + lint + vitest + build)
+    deviennent la **seule source de vérité** pour valider une
+    livraison. Le job GitHub Actions `Typecheck + Lint + Vitest +
+    Build` reste exécutable et fait foi pour CI.
+  - Ne **pas attendre** les checks Netlify avant de merger une PR —
+    ils ne passeront pas. Si la « Politique de PR » exige « CI verte
+    avant merge », interpréter « CI » = GitHub Actions uniquement
+    (pas Netlify).
+  - L'**audit Lighthouse réel** (priorité 1 étape 41) redevient
+    impossible tant qu'une solution d'hébergement HTTPS publique
+    n'est pas remise en place (Netlify free tier, Vercel, GitHub
+    Pages, OVH, autre).
+  - Les PR n'auront plus de **preview URL** déployable — review
+    visuelle doit se faire en local (`npm run dev`).
+  - Le **site public** `https://maintenant-le-mouvement.netlify.app`
+    risque de tomber dès que les crédits sont épuisés sur le tier
+    payant (à vérifier auprès de Netlify — selon le modèle de
+    facturation, le site bascule en read-only ou est suspendu).
+  - **Action attendue côté équipe** (hors-Claude) : décider du
+    prochain hébergeur (Netlify free tier 100 GB/mois suffisant
+    tant qu'on est en pré-launch ? ou bascule Vercel / GitHub Pages
+    / OVH ?). Ne pas re-toucher `netlify.toml` côté code tant que
+    la décision n'est pas prise — la config Netlify actuelle reste
+    valable si on revient sur Netlify free tier.
 
 ### Goulot 4 — Décisions produit / RGPD ✅ DÉBLOQUÉ
 
@@ -152,6 +182,7 @@ chacune débloquant un chantier technique en attente depuis l'étape 24.
 
 | # | Goulot | Statut | Priorité reco |
 | --- | --- | :---: | --- |
+| 1 | Hébergement HTTPS public (Netlify) | ⛔ **RE-BLOQUÉ 2026-05-14** | **haute** — crédits Netlify épuisés, site preview indisponible, Lighthouse réel impossible. Décision hébergeur à prendre par l'équipe (free tier Netlify / Vercel / GitHub Pages / OVH). |
 | 2 | Migrations Supabase staging (étapes 20 + 22 + 23 + 24 + **30** à appliquer) | 🔲 | basse pour étapes 20-24 (utile seulement APRÈS implémentation call-sites) — moyenne pour étape 30 (débloque la carte T99CP cumulée publique, sinon masquée silencieusement) |
 | 3 | Sentry SaaS (DSN + provisionnement) | 🔲 | moyenne (gratuit, 15 min) |
 | 5 | Projet Supabase de test (E2E happy path réel) | 🔲 | moyenne (gratuit, 15 min) |
@@ -159,15 +190,40 @@ chacune débloquant un chantier technique en attente depuis l'étape 24.
 
 ### Impact session 2026-05-13
 
-- **2 goulots débloqués sur 6** (1 et 4).
+- **2 goulots débloqués sur 6** (1 et 4) — **goulot 1 re-bloqué le
+  2026-05-14, plus que 1 sur 6 débloqué**.
 - **3 chantiers techniques** désormais autorisés à l'implémentation :
   M2-sec-policy, T99CP cumul public, M1-RGPD.
 - **Site live** publiquement (placeholder + pages migrées) accessible
-  via Netlify CDN mondial.
+  via Netlify CDN mondial — **statut incertain depuis 2026-05-14**
+  selon épuisement des crédits payants.
 - Les sessions 30-31 peuvent enfin exécuter l'audit Lighthouse réel
-  (priorité 1 du prompt étape 30).
+  (priorité 1 du prompt étape 30) — **à nouveau bloqué depuis
+  2026-05-14**.
 - Les étapes « +1 E2E mock » ne sont plus l'unique livrable possible
   par défaut — on peut désormais attaquer du chantier dette.
+
+### Mise à jour 2026-05-14 — crédits Netlify épuisés
+
+- Signalé par Ben pendant la session étape 39.
+- **Checks Netlify** (`netlify/maintenant-le-mouvement/deploy-preview`,
+  `Pages changed`, `Header rules`, `Redirect rules`) **vont rester
+  pending ou en erreur** sur toutes les PR à venir.
+- **Règle de merge** (mise à jour) : les 4 checks locaux verts
+  (typecheck + lint + vitest + build) + le job GitHub Actions
+  `Typecheck + Lint + Vitest + Build` sont la **seule source de
+  vérité** pour valider une livraison. Les checks Netlify
+  **doivent être ignorés** par Claude pour le merge auto tant que
+  les crédits ne sont pas restaurés.
+- Le `netlify.toml` n'est **pas modifié** côté code — la config reste
+  valable si l'équipe revient sur Netlify (free tier 100 GB/mois
+  suffisant en pré-launch ?).
+- **Audit Lighthouse réel** (étape 41) : redéploie l'arrêt en
+  attendant remise en place hébergement HTTPS.
+- **Preview URL** par PR : indisponible — review visuelle locale
+  uniquement (`npm run dev`).
+- Détail complet dans la section « Goulot 1 — Hébergement HTTPS
+  public ⛔ RE-BLOQUÉ (2026-05-14) » ci-dessus.
 
 ---
 
