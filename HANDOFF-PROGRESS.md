@@ -10965,6 +10965,16 @@ stricte de la doctrine « primum non nocere ».
   confirmé, 0 nouvelle dépendance npm confirmée, `prefers-reduced
   motion` annule bien `transform` ET `box-shadow` ET `transition`
   (3 propriétés). Cohérence handoff vs code parfaite.
+- **JAN35-F3 / medium / régression low** — Flakiness CI :
+  `ArticleDetailPage.test.tsx:135` a timeout 5000 ms en CI (run
+  GitHub Actions 25870835973) alors qu'il passe en local. CI runner
+  GitHub Actions Ubuntu plus lent que le devcontainer local sur
+  certains tests asynchrones. Hors périmètre étape 35 (test
+  inchangé), mais à fixer dans une étape test-hygiene dédiée :
+  augmenter `testTimeout` global vitest de 5000 ms → 8000 ms
+  (cf. `vite.config.ts`) ou identifier le `findByText` qui
+  bloque et y ajouter un timeout explicite. Retrigger CI suffi
+  comme work-around immédiat.
 
 **Compteur de tests final post-janitor étape 35** : 901 vitest
 verts (inchangé — aucun fix appliqué) + 41 E2E Playwright verts
