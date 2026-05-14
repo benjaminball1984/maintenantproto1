@@ -72,6 +72,7 @@ const TOOL_LINKS: { to: string; label: string }[] = [
   { to: '/services', label: 'Services entraide' },
   { to: '/media', label: 'Média' },
   { to: '/communes', label: 'Communes libres' },
+  { to: '/roadmap', label: 'Roadmap' },
 ];
 
 const LEGAL_LINKS: { to: string; label: string }[] = [
@@ -80,6 +81,7 @@ const LEGAL_LINKS: { to: string; label: string }[] = [
   { to: '/legal/cookies', label: 'Cookies' },
   { to: '/legal/contact', label: 'Contact' },
   { to: '/transparence', label: 'Transparence' },
+  { to: '/faq', label: 'FAQ' },
 ];
 
 export default function Footer() {
@@ -103,6 +105,11 @@ export default function Footer() {
             <div style={{ marginTop: '0.5rem' }}>
               <NavLink to="/decouvrir" style={linkStyle}>
                 Découvrir
+              </NavLink>
+            </div>
+            <div style={{ marginTop: '0.5rem' }}>
+              <NavLink to="/about" style={linkStyle}>
+                À propos
               </NavLink>
             </div>
           </section>
