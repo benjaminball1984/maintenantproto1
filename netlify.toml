@@ -3,6 +3,13 @@
 
 [build]
   base = "web"
+  # PAUSE DEPLOYS — 2026-05-15 (décision utilisateur).
+  # `ignore = "exit 0"` court-circuite Netlify : tout build est skip
+  # tant que cette ligne est là. Retirer cette ligne pour reprendre
+  # les deploys (preview + prod) quand l'utilisateur donne le « go ».
+  # Cf. HANDOFF-PROGRESS « Goulot 1 » : crédits Netlify épuisés +
+  # bascule audit beta-testeur en local.
+  ignore = "exit 0"
   # `--legacy-peer-deps` aligne Netlify sur la CI GitHub Actions
   # (cf. .github/workflows/ci.yml). Nécessaire tant que
   # eslint-plugin-jsx-a11y@6.10.2 ne déclare pas ESLint 10 comme peer
