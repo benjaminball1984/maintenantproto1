@@ -1,12 +1,11 @@
 # Inventaire — Engagement militant & Services solidaires
 
-> Produit par sub-agent Explore Phase 0. Ne pas modifier — référence brute.
+> Produit par sub-agents Explore Phase 0 (2 passes). Ne pas modifier — référence brute.
 >
-> ⚠️ NOTE : Plusieurs pages services en bas du fichier (Carpooling Detail/Create,
-> Lending Detail/Create, Garden Detail/Create, Sel Detail/Create, Crowdfunding
-> Detail/Create/Contribute, Housing Detail/Create, Article Create) ont été
-> partiellement **inférées** par l'agent à partir des patterns plutôt que lues.
-> Un complément ciblé sera ajouté.
+> Note : 3 pages listing services (Carpooling, Lending, Garden, Sel, Crowdfunding listing)
+> sont décrites à partir des patterns observés sur les autres listings — les fichiers
+> existent dans `web/src/pages/services/` et seront proposés à la revue tels quels.
+> Toutes les pages Detail / Create / Contribute / Request sont issues de lecture directe.
 
 ## CATÉGORIE 1: ENGAGEMENT MILITANT
 
@@ -444,21 +443,24 @@
 ### ArticleCreatePage (`/media/new`)
 **Fichier** : web/src/pages/ArticleCreatePage.tsx
 
-> ⚠️ Inventaire partiellement inféré — à compléter par lecture directe.
-
 #### Identité
-- `article-create.h1` — H1 « Proposer un article » (ligne ~226)
-- `article-create.lead` — « Écrivez un article, proposez une vidéo, un podcast, une photo ou une enquête. Modération collective. » (ligne ~227-228)
+- `article-create.back-link` — Link vers `/media`, label « Retour aux articles » avec IconArrowLeft (ligne 195-196)
+- `article-create.h1` — H1 « Proposer un article » (ligne 198)
+- `article-create.lead` — texte explicatif (ligne 199-201)
 
-#### Champs (inférés)
-- `article-create.form.title.label` — « Titre » | min 30 / max 200
-- `article-create.form.format.label` — « Format » | select : Article, Vidéo, Podcast, Photo, Enquête
-- `article-create.form.summary.label` — « Résumé / chapô » | min 50 / max 300
-- `article-create.form.body.label` — « Contenu » | min 200 / max 10000
-- `article-create.form.cover.label` — « Image de couverture (optionnel) » | type="url"
+#### Formulaire
+- `article-create.form` — form aria-label="Création d'article", noValidate (ligne 204)
+- `article-create.error-global` — div role="alert" (ligne 205-208)
+
+#### Champs
+- `article-create.form.title.label` — « Titre » | type=text required, helper « Entre {ARTICLE_TITLE_MIN} et {ARTICLE_TITLE_MAX} caractères. » (ligne 212-228)
+- `article-create.form.format.label` — « Format » | select options : `article`, `video`, `podcast`, `photo`, `enquete` (ligne 231-248)
+- `article-create.form.summary.label` — « Résumé » | textarea required, helper « Entre {ARTICLE_SUMMARY_MIN} et {ARTICLE_SUMMARY_MAX} caractères. », minHeight 100 (ligne 251-267)
+- `article-create.form.body.label` — « Contenu » | textarea required, helper « Entre {ARTICLE_BODY_MIN} et {ARTICLE_BODY_MAX} caractères. » (ligne 270-286)
+- `article-create.form.cover.label` — « URL d'illustration (facultatif) » | type=url, placeholder « https://… » (ligne 289-302)
 
 #### Submit
-- `article-create.form.submit` — « Publier l'article »
+- `article-create.form.submit` — Button « Publier l'article » ou « Publication… » (ligne 304-312)
 
 ---
 
@@ -540,45 +542,54 @@
 ---
 
 ### HousingDetailPage (`/services/housing/:id`)
+**Fichier** : web/src/pages/services/HousingDetailPage.tsx
 
-> ⚠️ Inventaire partiellement inféré — à compléter par lecture directe.
-
-#### Navigation
-- `housing-detail.back-link` — Link vers `/services/housing`, « Retour aux hébergements » avec IconArrowLeft
+#### Identité & Navigation
+- `housing-detail.back-link` — Link vers `/services/housing`, label « Tous les hébergements » + IconArrowLeft (ligne 230-231)
+- `housing-detail.h1` — H1 `{housing.title}` (ligne 238)
 
 #### Hero
-- `housing-detail.hero.tag` — « Hébergement solidaire » badge
-- `housing-detail.hero.title` — H1 `{housing.title}`
-- `housing-detail.hero.city` — avec IconPin
-- `housing-detail.hero.capacity` — avec IconUsers
-- `housing-detail.hero.availability` — « Du {startDate} au {endDate} »
+- `housing-detail.hero.tag` — Tag « Hébergement solidaire » avec IconHome (ligne 234-236)
+- `housing-detail.hero.meta.city` — IconPin + `{housing.city}` (ligne 240-242)
+- `housing-detail.hero.meta.capacity` — IconUsers + « {housing.capacity} place{s} » (ligne 244-246)
+- `housing-detail.hero.meta.dates` — IconCalendar + « Du {fromLabel} au {toLabel} » ou variantes (ligne 248-252)
+- `housing-detail.hero.description` — Paragraphe `{housing.description}` whiteSpace pre-wrap (ligne 255)
 
 #### Actions
-- `housing-detail.actions.request-button` — « Faire une demande » ou « Vous êtes l'hôte »
-- `housing-detail.actions.share-button` — IconShare
+- `housing-detail.cta.request` — Link vers `/services/housing/{id}/request`, label « Faire une demande » + IconCalendar (visible si NOT isHost) (ligne 266-268)
+- `housing-detail.cta.owner-badge` — Span « Vous êtes l'hôte » + IconHome (visible si isHost), aria-label « Vous êtes l'hôte de cette annonce » (ligne 258-263)
+- `housing-detail.cta.share` — Button « Partager » + IconShare (ligne 270-272)
+- `housing-detail.cta.share-confirm` — Span role="status" « Lien copié. » (ligne 273-276)
 
-#### Body
-- `housing-detail.section.description` — Description text
+#### États
+- `housing-detail.state.loading` — role="status" aria-live="polite" « Chargement de l'hébergement… » (ligne 172-174)
+- `housing-detail.state.error` — role="alert" message Postgrest ou « Hébergement introuvable. » (ligne 182-184)
+- `housing-detail.state.notfound` — Navigate vers `/services/housing` (ligne 166)
 
 ---
 
 ### HousingCreatePage (`/services/housing/new`)
+**Fichier** : web/src/pages/services/HousingCreatePage.tsx
 
-> ⚠️ Inventaire partiellement inféré — à compléter par lecture directe.
+#### Identité & Navigation
+- `housing-create.back-link` — Link vers `/services/housing`, « Retour aux hébergements » + IconArrowLeft (ligne 203-204)
+- `housing-create.h1` — H1 « Proposer un hébergement » (ligne 206)
+- `housing-create.lead` — Texte explicatif (ligne 207-209)
 
-#### Identité
-- `housing-create.h1` — H1 « Proposer un hébergement »
+#### Formulaire
+- `housing-create.form` — aria-label="Création d'un hébergement", noValidate (ligne 212)
+- `housing-create.error-global` — role="alert" (ligne 213-217)
 
-#### Champs (inférés)
-- `housing-create.form.title.label` — « Titre » | 20-100 chars
-- `housing-create.form.description.label` — « Description » | 50-500 chars
-- `housing-create.form.city.label` — « Ville » | 1-50 chars
-- `housing-create.form.capacity.label` — « Capacité (places) » | type="number" min=1 max=30
-- `housing-create.form.from.label` — « Disponible à partir du (optionnel) » | type="date"
-- `housing-create.form.to.label` — « Disponible jusqu'au (optionnel) » | type="date"
+#### Champs
+- `housing-create.form.title.label` — « Titre de l'annonce » | type=text required, helper « Entre {HOUSING_TITLE_MIN} et {HOUSING_TITLE_MAX} caractères. » (ligne 220-238)
+- `housing-create.form.description.label` — « Description » | textarea, helper « Entre {HOUSING_DESCRIPTION_MIN} et {HOUSING_DESCRIPTION_MAX} caractères. Chambre, salon, équipements, accès, conditions… » (ligne 240-257)
+- `housing-create.form.city.label` — « Ville » | required, helper « Entre {HOUSING_CITY_MIN} et {HOUSING_CITY_MAX} caractères. » (ligne 261-277)
+- `housing-create.form.capacity.label` — « Capacité (places) » | type=number required min HOUSING_CAPACITY_MIN max HOUSING_CAPACITY_MAX, helper « Entre {min} et {max} personnes. » (ligne 279-297)
+- `housing-create.form.from.label` — « Disponible à partir du (facultatif) » | type=date (ligne 302-314)
+- `housing-create.form.to.label` — « Jusqu'au (facultatif) » | type=date (ligne 316-328)
 
 #### Submit
-- `housing-create.form.submit` — « Publier l'hébergement »
+- `housing-create.submit` — Button « Publier l'annonce » ou « Publication… » (ligne 331-339)
 
 ---
 
@@ -667,107 +678,190 @@
 ---
 
 ### MarketplaceCreatePage (`/services/marketplace/new`)
+**Fichier** : web/src/pages/services/MarketplaceCreatePage.tsx
 
-> ⚠️ Inventaire partiellement inféré — à compléter par lecture directe.
+#### Identité & Navigation
+- `marketplace-create.back-link` — Link vers `/services/marketplace`, « Retour aux annonces » + IconArrowLeft (ligne 205-206)
+- `marketplace-create.h1` — H1 « Publier une annonce » (ligne 208)
+- `marketplace-create.lead` — Texte explicatif (ligne 209-211)
 
-#### Identité
-- `marketplace-create.h1` — H1 « Publier une annonce »
+#### Formulaire
+- `marketplace-create.form` — aria-label="Création d'une annonce marketplace", noValidate (ligne 214-218)
+- `marketplace-create.error-global` — role="alert" (ligne 220-223)
 
-#### Champs (inférés)
-- `marketplace-create.form.category.label` — « Catégorie » | select (optionnel)
-- `marketplace-create.form.title.label` — « Titre »
-- `marketplace-create.form.description.label` — « Description »
-- `marketplace-create.form.city.label` — « Ville »
-- `marketplace-create.form.price-eur.label` — « Prix en € » | type="number" step="0.01" min=0
-- `marketplace-create.form.price-t99cp.label` — « Prix en T99CP » | type="number" min=0
-- `marketplace-create.form.cover.label` — « Photo (optionnel) » | type="url"
+#### Champs
+- `marketplace-create.form.title.label` — « Titre » | type=text required, helper « Entre {MARKETPLACE_TITLE_MIN} et {MARKETPLACE_TITLE_MAX} caractères. » (ligne 226-243)
+- `marketplace-create.form.category.label` — « Catégorie » | type=text required, helper « Entre {MARKETPLACE_CATEGORY_MIN} et {MARKETPLACE_CATEGORY_MAX} caractères. » (ligne 246-263)
+- `marketplace-create.form.city.label` — « Ville » | required, helper « Entre {MARKETPLACE_CITY_MIN} et {MARKETPLACE_CITY_MAX} caractères. » (ligne 265-282)
+- `marketplace-create.form.price.label` — « Prix en euros (facultatif) » | type=number min=0 max=MARKETPLACE_PRICE_MAX step=0.5, helper « Renseignez au moins un prix en euros OU T99CP. » (ligne 286-302)
+- `marketplace-create.form.t99cp.label` — « Coût en T99CP (facultatif) » | type=number min=0 max=MARKETPLACE_T99CP_MAX step=1, helper « Échange en T99CP plutôt qu'en euros. » (ligne 304-320)
+- `marketplace-create.form.description.label` — « Description (facultatif) » | textarea, helper « Jusqu'à {MARKETPLACE_DESCRIPTION_MAX} caractères. » (ligne 323-339)
 
 #### Submit
-- `marketplace-create.form.submit` — « Publier l'annonce »
+- `marketplace-create.submit` — Button « Publier l'annonce » ou « Publication… » (ligne 341-349)
 
 ---
 
 ### CarpoolingPage (`/services/carpooling`)
+**Fichier** : web/src/pages/services/CarpoolingPage.tsx
 
-> ⚠️ Inventaire partiellement inféré — à compléter par lecture directe.
+> Inventaire partiellement inféré par Agent B (page non lue directement) — structure attendue cohérente avec les autres pages de listing.
 
 #### Identité
 - `carpooling.h1` — H1 « Covoiturage citoyen »
 
-#### Hero
-- `carpooling.hero.lead` — Lead sur partage de trajets militants
-
-#### Toolbar
+#### Toolbar (inféré)
 - `carpooling.toolbar.origin.input` — placeholder « Ville de départ »
 - `carpooling.toolbar.destination.input` — placeholder « Destination »
-- `carpooling.toolbar.date.input` — type="date"
-- `carpooling.toolbar.search.input` — type="search"
+- `carpooling.toolbar.date.input` — type=date
+- `carpooling.toolbar.search.input` — type=search
 - `carpooling.toolbar.cta.button` — Link vers `/services/carpooling/new`, « Proposer un trajet »
 
-#### Grille
-- `carpooling.grid.item.route` — « {origin} → {destination} » title
-- `carpooling.grid.item.date` — Date tag formatDeparture
+#### Grille (inféré)
+- `carpooling.grid.item.route` — « {origin} → {destination} »
+- `carpooling.grid.item.date` — formatDeparture
 - `carpooling.grid.item.seats` — « {count} place{s} » avec IconUsers
-- `carpooling.grid.item.price` — « Gratuit » si price <= 0, sinon « {price} € »
+- `carpooling.grid.item.price` — « Gratuit » si <= 0, sinon « {price} € »
 
 ---
 
-### CarpoolingDetailPage / CarpoolingCreatePage
+### CarpoolingDetailPage (`/services/carpooling/:id`)
+**Fichier** : web/src/pages/services/CarpoolingDetailPage.tsx
 
-> ⚠️ Pages partiellement inférées — à compléter par lecture directe.
+#### Identité & Navigation
+- `carpooling-detail.back-link` — Link vers `/services/carpooling`, label « Tous les covoiturages » + IconArrowLeft (ligne 216-217)
+- `carpooling-detail.h1` — H1 « {origin_city} → {destination_city} » (ligne 224-225)
 
-CarpoolingDetailPage : back-link, hero tag « Covoiturage citoyen », H1 route, meta date/seats/price, body notes, ContactAuthorButton si non-driver, share-button.
+#### Hero
+- `carpooling-detail.hero.tag` — Tag « Covoiturage citoyen » + IconCar (ligne 220-222)
+- `carpooling-detail.hero.meta.departure` — IconCalendar + formatDeparture (ligne 228-230)
+- `carpooling-detail.hero.meta.seats` — IconUsers + « {seats} place{s} » (ligne 232-234)
+- `carpooling-detail.hero.meta.price` — IconPin + formatPrice → « Gratuit » ou « {price} € » (ligne 236-238)
+- `carpooling-detail.hero.notes` — Paragraphe optionnel `{carpooling.notes}` (ligne 241)
 
-CarpoolingCreatePage : H1 « Proposer un trajet », champs origin/destination (1-50), date (type=date required), time (default 08:00), seats (1-5), price (0-999.99 €), notes (textarea optionnel).
+#### Actions
+- `carpooling-detail.cta.contact` — ContactAuthorButton si user?.id !== driver_id (ligne 244-245)
+- `carpooling-detail.cta.share` — Button « Partager » + IconShare (ligne 247-249)
+- `carpooling-detail.cta.share-confirm` — Span role="status" « Lien copié. » (ligne 250-253)
+
+#### États
+- `carpooling-detail.state.loading` — role="status" « Chargement du covoiturage… » (ligne 167-169)
+- `carpooling-detail.state.error` — role="alert" message ou « Covoiturage introuvable. » (ligne 177-179)
+- `carpooling-detail.state.notfound` — Navigate vers `/services/carpooling` (ligne 161)
+
+---
+
+### CarpoolingCreatePage (`/services/carpooling/new`)
+**Fichier** : web/src/pages/services/CarpoolingCreatePage.tsx
+
+#### Identité & Navigation
+- `carpooling-create.back-link` — Link vers `/services/carpooling`, « Retour aux covoiturages » + IconArrowLeft (ligne 212-213)
+- `carpooling-create.h1` — H1 « Proposer un trajet » (ligne 215)
+- `carpooling-create.lead` — Texte explicatif (ligne 216-218)
+
+#### Formulaire
+- `carpooling-create.form` — aria-label="Création d'un covoiturage", noValidate (ligne 221)
+- `carpooling-create.error-global` — role="alert" (ligne 222-225)
+
+#### Champs
+- `carpooling-create.form.origin.label` — « Ville de départ » | type=text required, helper « Entre {CARPOOLING_CITY_MIN} et {CARPOOLING_CITY_MAX} caractères. » (ligne 230-246)
+- `carpooling-create.form.destination.label` — « Ville d'arrivée » | required, helper « Entre {CARPOOLING_CITY_MIN} et {CARPOOLING_CITY_MAX} caractères. » (ligne 248-266)
+- `carpooling-create.form.date.label` — « Date de départ » | type=date required (ligne 271-283)
+- `carpooling-create.form.time.label` — « Heure de départ » | type=time, default « 08:00 » (ligne 286-296)
+- `carpooling-create.form.seats.label` — « Places disponibles » | type=number required min CARPOOLING_SEATS_MIN max CARPOOLING_SEATS_MAX, helper « Entre {min} et {max} places. », default « 3 » (ligne 301-318)
+- `carpooling-create.form.price.label` — « Tarif (€ par passager) » | type=number min=0 max=CARPOOLING_PRICE_MAX step=0.5, helper « 0 € si gratuit, sinon contribution carburant. », default « 0 » (ligne 321-337)
+- `carpooling-create.form.notes.label` — « Notes (facultatif) » | textarea, helper « Détails utiles : point de rendez-vous, événement ciblé, contraintes… » (ligne 341-357)
+
+#### Submit
+- `carpooling-create.submit` — Button « Publier le trajet » ou « Publication… » (ligne 359-367)
 
 ---
 
 ### LendingPage (`/services/lending`)
+**Fichier** : web/src/pages/services/LendingPage.tsx
 
-> ⚠️ Inventaire partiellement inféré — à compléter par lecture directe.
+> Inventaire partiellement inféré par Agent B (page non lue directement) — structure attendue cohérente avec les autres pages de listing.
 
 #### Identité
 - `lending.h1` — H1 « Prêt d'objets entre voisins »
 
-#### Hero
-- Lead sur emprunt d'outils/objets
-
-#### Toolbar
+#### Toolbar (inféré)
 - `lending.toolbar.city.input` — « Ville »
 - `lending.toolbar.category.input` — « Catégorie »
-- `lending.toolbar.search.input` — type="search"
+- `lending.toolbar.search.input` — type=search
 - `lending.toolbar.cta.button` — Link vers `/services/lending/new`, « Proposer un prêt »
 
-#### Grille
+#### Grille (inféré)
 - `lending.grid.item.title` — Titre item
 - `lending.grid.item.city` — avec IconPin
 - `lending.grid.item.cost` — « Gratuit » si <= 0, sinon « {cost} T99CP »
 
+---
+
+### LendingDetailPage (`/services/lending/:id`)
+**Fichier** : web/src/pages/services/LendingDetailPage.tsx
+
+#### Identité & Navigation
+- `lending-detail.back-link` — Link vers `/services/lending`, label « Toutes les annonces » + IconArrowLeft (ligne 201-202)
+- `lending-detail.h1` — H1 `{lending.title}` (ligne 209)
+
+#### Hero
+- `lending-detail.hero.tag` — Tag `{lending.category}` + IconList (ligne 205-207)
+- `lending-detail.hero.meta.city` — IconPin + `{lending.city}` (ligne 211-213)
+- `lending-detail.hero.meta.cost` — IconBadge + formatCost → « Gratuit » ou « {cost} T99CP » (ligne 215-217)
+- `lending-detail.hero.description` — Paragraphe optionnel `{lending.description}` (ligne 220)
+
+#### Actions
+- `lending-detail.cta.contact` — ContactAuthorButton ou « Vous êtes le propriétaire », selon isOwner = user?.id === owner_id (ligne 223-228)
+- `lending-detail.cta.share` — Button « Partager » + IconShare (ligne 230-232)
+- `lending-detail.cta.share-confirm` — Span role="status" « Lien copié. » (ligne 233-236)
+
 #### États
-- EmptyState avec cta « Proposer un prêt »
+- `lending-detail.state.loading` — role="status" « Chargement de l'annonce… » (ligne 153-155)
+- `lending-detail.state.error` — role="alert" message ou « Annonce introuvable. » (ligne 163-165)
+- `lending-detail.state.notfound` — Navigate vers `/services/lending` (ligne 147)
 
 ---
 
-### LendingDetailPage / LendingCreatePage
+### LendingCreatePage (`/services/lending/new`)
+**Fichier** : web/src/pages/services/LendingCreatePage.tsx
 
-> ⚠️ Pages non lues — à compléter.
+#### Identité & Navigation
+- `lending-create.back-link` — Link vers `/services/lending`, « Retour aux annonces » + IconArrowLeft (ligne 200-201)
+- `lending-create.h1` — H1 « Proposer un prêt » (ligne 203)
+- `lending-create.lead` — Texte explicatif (ligne 204-206)
+
+#### Formulaire
+- `lending-create.form` — aria-label="Création d'un prêt", noValidate (ligne 208-212)
+- `lending-create.error-global` — role="alert" (ligne 214-217)
+
+#### Champs
+- `lending-create.form.title.label` — « Titre » | type=text required, helper « Entre {LENDING_TITLE_MIN} et {LENDING_TITLE_MAX} caractères. » (ligne 221-237)
+- `lending-create.form.category.label` — « Catégorie » | required, helper « Entre {LENDING_CATEGORY_MIN} et {LENDING_CATEGORY_MAX} caractères. » (ligne 241-257)
+- `lending-create.form.city.label` — « Ville » | required, helper « Entre {LENDING_CITY_MIN} et {LENDING_CITY_MAX} caractères. » (ligne 259-275)
+- `lending-create.form.cost.label` — « Coût en T99CP » | type=number min=0 max=LENDING_T99CP_MAX step=1, helper « 0 si gratuit, sinon coût symbolique en T99CP. », default « 0 » (ligne 279-295)
+- `lending-create.form.description.label` — « Description (facultatif) » | textarea, helper « Jusqu'à {LENDING_DESCRIPTION_MAX} caractères. » (ligne 298-313)
+
+#### Submit
+- `lending-create.submit` — Button « Publier l'annonce » ou « Publication… » (ligne 315-323)
 
 ---
 
 ### GardenPage (`/services/garden`)
+**Fichier** : web/src/pages/services/GardenPage.tsx
 
-> ⚠️ Inventaire partiellement inféré — à compléter par lecture directe.
+> Inventaire partiellement inféré par Agent B (page non lue directement) — structure attendue cohérente avec les autres pages de listing.
 
 #### Identité
 - `garden.h1` — H1 « Jardins partagés »
 
-#### Toolbar
+#### Toolbar (inféré)
 - `garden.toolbar.city.input` — « Ville »
-- `garden.toolbar.search.input` — type="search"
+- `garden.toolbar.search.input` — type=search
 - `garden.toolbar.available.checkbox` — « Parcelles libres »
 - `garden.toolbar.cta.button` — Link vers `/services/garden/new`, « Référencer un jardin »
 
-#### Grille
+#### Grille (inféré)
 - `garden.grid.item.name` — Garden name
 - `garden.grid.item.city` — avec IconPin
 - `garden.grid.item.size` — « {size}m² » optionnel
@@ -775,41 +869,132 @@ CarpoolingCreatePage : H1 « Proposer un trajet », champs origin/destination (1
 
 ---
 
-### GardenDetailPage / GardenCreatePage
+### GardenDetailPage (`/services/garden/:id`)
+**Fichier** : web/src/pages/services/GardenDetailPage.tsx
 
-> ⚠️ Pages non lues — à compléter.
+#### Identité & Navigation
+- `garden-detail.back-link` — Link vers `/services/garden`, « Tous les jardins » + IconArrowLeft (ligne 196-197)
+- `garden-detail.h1` — H1 `{garden.name}` (ligne 204)
+
+#### Hero
+- `garden-detail.hero.tag` — Tag « Jardin partagé » + IconHome (ligne 200-202)
+- `garden-detail.hero.meta.city` — IconPin + `{garden.city}` (ligne 206-208)
+- `garden-detail.hero.meta.size` — IconHome + « {size_sqm} m² » si non null (ligne 210-214)
+- `garden-detail.hero.meta.spots` — IconUsers + « {available_spots} parcelle{s} libre{s} » (ligne 216-220)
+- `garden-detail.hero.description` — Paragraphe optionnel `{garden.description}` (ligne 222)
+
+#### Actions
+- `garden-detail.cta.manager-badge` — Span « Vous êtes le responsable » + IconHome si isManager, aria-label « Vous êtes le responsable de ce jardin » (ligne 225-227)
+- `garden-detail.cta.contact` — ContactAuthorButton si !isManager (ligne 230)
+- `garden-detail.cta.share` — Button « Partager » + IconShare (ligne 232-234)
+- `garden-detail.cta.share-confirm` — Span role="status" « Lien copié. » (ligne 235-238)
+
+#### États
+- `garden-detail.state.loading` — role="status" « Chargement du jardin… » (ligne 148-150)
+- `garden-detail.state.error` — role="alert" message ou « Jardin introuvable. » (ligne 158-160)
+- `garden-detail.state.notfound` — Navigate vers `/services/garden` (ligne 142)
+
+---
+
+### GardenCreatePage (`/services/garden/new`)
+**Fichier** : web/src/pages/services/GardenCreatePage.tsx
+
+#### Identité & Navigation
+- `garden-create.back-link` — Link vers `/services/garden`, « Retour aux jardins » + IconArrowLeft (ligne 201-202)
+- `garden-create.h1` — H1 « Référencer un jardin partagé » (ligne 204)
+- `garden-create.lead` — Texte explicatif (ligne 205-207)
+
+#### Formulaire
+- `garden-create.form` — aria-label="Création d'un jardin", noValidate (ligne 210-214)
+- `garden-create.error-global` — role="alert" (ligne 216-219)
+
+#### Champs
+- `garden-create.form.name.label` — « Nom du jardin » | type=text required, helper « Entre {GARDEN_NAME_MIN} et {GARDEN_NAME_MAX} caractères. » (ligne 223-239)
+- `garden-create.form.city.label` — « Ville » | required, helper « Entre {GARDEN_CITY_MIN} et {GARDEN_CITY_MAX} caractères. » (ligne 242-258)
+- `garden-create.form.size.label` — « Surface (m², facultatif) » | type=number min=1 max=GARDEN_SIZE_MAX step=1 (ligne 262-277)
+- `garden-create.form.spots.label` — « Parcelles libres » | type=number required min=0 max=GARDEN_SPOTS_MAX step=1, default « 0 » (ligne 279-295)
+- `garden-create.form.description.label` — « Description (facultatif) » | textarea, helper « Jusqu'à {GARDEN_DESCRIPTION_MAX} caractères. » (ligne 299-314)
+
+#### Submit
+- `garden-create.submit` — Button « Référencer le jardin » ou « Publication… » (ligne 316-324)
 
 ---
 
 ### SelPage (`/services/sel`)
+**Fichier** : web/src/pages/services/SelPage.tsx
 
-> ⚠️ Inventaire partiellement inféré — à compléter par lecture directe.
+> Inventaire partiellement inféré par Agent B (page non lue directement) — structure attendue cohérente avec les autres pages de listing.
 
 #### Identité
 - `sel.h1` — H1 « SEL — Système d'Échange Local »
 
-#### Toolbar
+#### Toolbar (inféré)
 - `sel.toolbar.city.input` — « Ville »
 - `sel.toolbar.category.input` — « Catégorie »
-- `sel.toolbar.search.input` — type="search"
+- `sel.toolbar.search.input` — type=search
 - `sel.toolbar.cta.button` — Link vers `/services/sel/new`, « Proposer une offre »
 
-#### Grille
+#### Grille (inféré)
 - `sel.grid.item.title` — Offer title
 - `sel.grid.item.city` — avec IconPin
 - `sel.grid.item.rate` — « {rate} T99CP/h » ou « {rate} T99CP par unité »
 
 ---
 
-### SelDetailPage / SelCreatePage
+### SelDetailPage (`/services/sel/:id`)
+**Fichier** : web/src/pages/services/SelDetailPage.tsx
 
-> ⚠️ Pages non lues — à compléter.
+#### Identité & Navigation
+- `sel-detail.back-link` — Link vers `/services/sel`, « Toutes les offres SEL » + IconArrowLeft (ligne 197-198)
+- `sel-detail.h1` — H1 `{offer.title}` (ligne 205)
+
+#### Hero
+- `sel-detail.hero.tag` — Tag `{offer.category}` + IconList (ligne 201-203)
+- `sel-detail.hero.meta.city` — IconPin + `{offer.city}` (ligne 207-209)
+- `sel-detail.hero.meta.rate` — IconBadge + « {offer.t99cp_rate} T99CP / unité » (ligne 211-214)
+- `sel-detail.hero.description` — Paragraphe optionnel `{offer.description}` (ligne 216)
+
+#### Actions
+- `sel-detail.cta.author-badge` — Span « Vous êtes l'auteur » + IconSpark si isOwner, aria-label « Vous êtes l'auteur de cette offre » (ligne 219-222)
+- `sel-detail.cta.contact` — ContactAuthorButton si !isOwner (ligne 224)
+- `sel-detail.cta.share` — Button « Partager » + IconShare (ligne 226-228)
+- `sel-detail.cta.share-confirm` — Span role="status" « Lien copié. » (ligne 229-232)
+
+#### États
+- `sel-detail.state.loading` — role="status" « Chargement de l'offre… » (ligne 149-151)
+- `sel-detail.state.error` — role="alert" message ou « Offre introuvable. » (ligne 159-161)
+- `sel-detail.state.notfound` — Navigate vers `/services/sel` (ligne 143)
+
+---
+
+### SelCreatePage (`/services/sel/new`)
+**Fichier** : web/src/pages/services/SelCreatePage.tsx
+
+#### Identité & Navigation
+- `sel-create.back-link` — Link vers `/services/sel`, « Retour aux offres SEL » + IconArrowLeft (ligne 200-201)
+- `sel-create.h1` — H1 « Proposer une offre SEL » (ligne 203)
+- `sel-create.lead` — Texte explicatif (ligne 204-206)
+
+#### Formulaire
+- `sel-create.form` — aria-label="Création d'une offre SEL", noValidate (ligne 209-213)
+- `sel-create.error-global` — role="alert" (ligne 215-218)
+
+#### Champs
+- `sel-create.form.title.label` — « Titre » | type=text required, helper « Entre {SEL_TITLE_MIN} et {SEL_TITLE_MAX} caractères. » (ligne 222-238)
+- `sel-create.form.category.label` — « Catégorie » | required, helper « Entre {SEL_CATEGORY_MIN} et {SEL_CATEGORY_MAX} caractères. » (ligne 242-258)
+- `sel-create.form.city.label` — « Ville » | required, helper « Entre {SEL_CITY_MIN} et {SEL_CITY_MAX} caractères. » (ligne 260-276)
+- `sel-create.form.rate.label` — « Tarif en T99CP par unité » | type=number required min=0 max=SEL_RATE_MAX step=1, helper « Par heure, par séance, par prestation… à vous de définir l'unité. », default « 1 » (ligne 280-299)
+- `sel-create.form.description.label` — « Description (facultatif) » | textarea, helper « Jusqu'à {SEL_DESCRIPTION_MAX} caractères. » (ligne 302-317)
+
+#### Submit
+- `sel-create.submit` — Button « Publier l'offre » ou « Publication… » (ligne 319-327)
 
 ---
 
 ### CrowdfundingPage (`/services/crowdfunding`)
+**Fichier** : web/src/pages/services/CrowdfundingPage.tsx
 
-> ⚠️ Inventaire partiellement inféré — à compléter par lecture directe.
+> Inventaire partiellement inféré par Agent B (page non lue directement) — structure attendue cohérente avec les autres pages de listing.
 
 #### Identité
 - `crowdfunding.h1` — H1 « Cagnottes solidaires »
@@ -827,9 +1012,84 @@ CarpoolingCreatePage : H1 « Proposer un trajet », champs origin/destination (1
 
 ---
 
-### CrowdfundingDetailPage / CrowdfundingCreatePage / CrowdfundingContributePage
+### CrowdfundingDetailPage (`/services/crowdfunding/:id`)
+**Fichier** : web/src/pages/services/CrowdfundingDetailPage.tsx
 
-> ⚠️ Pages non lues — à compléter.
+#### Identité & Navigation
+- `crowdfunding-detail.back-link` — Link vers `/services/crowdfunding`, « Toutes les cagnottes » + IconArrowLeft (ligne 256-257)
+- `crowdfunding-detail.h1` — H1 `{campaign.title}` (ligne 264)
+
+#### Hero
+- `crowdfunding-detail.hero.tag` — Tag « Cagnotte solidaire » + IconFlame (ligne 260-262)
+- `crowdfunding-detail.hero.summary` — Paragraphe `{campaign.summary}` (ligne 265)
+- `crowdfunding-detail.hero.raised` — Span « {formatEur(raised_eur)} € collectés » (ligne 268)
+- `crowdfunding-detail.hero.goal` — Span « {percent}% sur {formatEur(goal_eur)} € » (ligne 269-271)
+- `crowdfunding-detail.hero.progress-bar` — div role="presentation" (ligne 273-275)
+- `crowdfunding-detail.hero.deadline` — Paragraphe optionnel + IconCheckCircle « Échéance : {deadline} » (ligne 276-279)
+- `crowdfunding-detail.hero.body` — Paragraphe optionnel `{campaign.body}` (ligne 282)
+
+#### Actions
+- `crowdfunding-detail.cta.organizer-badge` — Span « Vous êtes l'organisateur » + IconFlame si isOrganizer, aria-label « Vous êtes l'organisateur de cette cagnotte » (ligne 285-287)
+- `crowdfunding-detail.cta.contribute` — Link vers `/services/crowdfunding/{id}/contribute`, label « Contribuer » + IconCart si !isOrganizer (ligne 290-292)
+- `crowdfunding-detail.cta.share` — Button « Partager » + IconShare (ligne 294-296)
+- `crowdfunding-detail.cta.share-confirm` — Span role="status" « Lien copié. » (ligne 297-301)
+
+#### États
+- `crowdfunding-detail.state.loading` — role="status" « Chargement de la cagnotte… » (ligne 205-207)
+- `crowdfunding-detail.state.error` — role="alert" message ou « Cagnotte introuvable. » (ligne 215-217)
+- `crowdfunding-detail.state.notfound` — Navigate vers `/services/crowdfunding` (ligne 199)
+
+---
+
+### CrowdfundingCreatePage (`/services/crowdfunding/new`)
+**Fichier** : web/src/pages/services/CrowdfundingCreatePage.tsx
+
+#### Identité & Navigation
+- `crowdfunding-create.back-link` — Link vers `/services/crowdfunding`, « Retour aux cagnottes » + IconArrowLeft (ligne 201-202)
+- `crowdfunding-create.h1` — H1 « Lancer une cagnotte » (ligne 204)
+- `crowdfunding-create.lead` — Texte explicatif (ligne 205-209)
+
+#### Formulaire
+- `crowdfunding-create.form` — aria-label="Création d'une cagnotte", noValidate (ligne 211-215)
+- `crowdfunding-create.error-global` — role="alert" (ligne 217-220)
+
+#### Champs
+- `crowdfunding-create.form.title.label` — « Titre » | type=text required, helper « Entre {CROWDFUNDING_TITLE_MIN} et {CROWDFUNDING_TITLE_MAX} caractères. » (ligne 224-240)
+- `crowdfunding-create.form.summary.label` — « Résumé » | textarea required, helper « Entre {CROWDFUNDING_SUMMARY_MIN} et {CROWDFUNDING_SUMMARY_MAX} caractères. » minHeight 80 (ligne 243-259)
+- `crowdfunding-create.form.goal.label` — « Objectif (€) » | type=number required min CROWDFUNDING_GOAL_MIN max CROWDFUNDING_GOAL_MAX step=50, default « 1000 » (ligne 263-279)
+- `crowdfunding-create.form.ends.label` — « Date de fin (facultatif) » | type=date (ligne 281-293)
+- `crowdfunding-create.form.body.label` — « Contenu détaillé (facultatif) » | textarea, helper « Jusqu'à {CROWDFUNDING_BODY_MAX} caractères. » (ligne 297-312)
+
+#### Submit
+- `crowdfunding-create.submit` — Button « Lancer la cagnotte » ou « Publication… » (ligne 314-322)
+
+---
+
+### CrowdfundingContributePage (`/services/crowdfunding/:id/contribute`)
+**Fichier** : web/src/pages/services/CrowdfundingContributePage.tsx
+
+#### Identité & Navigation
+- `crowdfunding-contribute.back-link` — Link vers `/services/crowdfunding/{id}`, « Retour à la cagnotte » + IconArrowLeft (ligne 221-222)
+- `crowdfunding-contribute.h1` — H1 « Contribuer » (ligne 224)
+- `crowdfunding-contribute.subtitle` — Paragraphe `{campaign.title}` (ligne 225)
+
+#### Formulaire
+- `crowdfunding-contribute.form` — aria-label="Formulaire de contribution", noValidate (ligne 227-231)
+- `crowdfunding-contribute.error-global` — role="alert" (ligne 233-236)
+- `crowdfunding-contribute.success` — role="status" « Merci pour votre contribution ! » + IconCheckCircle (ligne 238-242)
+
+#### Champs
+- `crowdfunding-contribute.form.amount.label` — « Montant (€) » | type=number required min CONTRIBUTION_AMOUNT_MIN max CONTRIBUTION_AMOUNT_MAX step=0.5, helper « Entre {min} et {max} €. », default « 10 » (ligne 245-264)
+- `crowdfunding-contribute.form.anonymous.checkbox` — Checkbox « Contribuer de manière anonyme » (ligne 266-273)
+
+#### Submit
+- `crowdfunding-contribute.submit` — Button « Confirmer la contribution » ou « Enregistrement… » ou « Merci ! » (ligne 275-283)
+
+#### États
+- `crowdfunding-contribute.state.loading` — role="status" « Chargement de la cagnotte… » (ligne 162-164)
+- `crowdfunding-contribute.state.error` — role="alert" message ou « Cagnotte introuvable. » (ligne 172-174)
+- `crowdfunding-contribute.state.notfound` — Navigate vers `/services/crowdfunding` (ligne 156)
+- `crowdfunding-contribute.state.success-redirect` — Redirige vers `/services/crowdfunding/{id}` après 1500ms (ligne 214-216)
 
 ---
 
