@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
+import { ToastProvider } from '@/components/Toast';
 import type * as SelModule from '@/lib/sel';
 
 const selMocks = vi.hoisted(() => ({
@@ -45,10 +46,12 @@ const sample: SelOfferRow = {
 function renderDetail() {
   return render(
     <MemoryRouter initialEntries={['/services/sel/s1']}>
-      <Routes>
-        <Route path="/services/sel/:id" element={<SelDetailPage />} />
-        <Route path="/services/sel" element={<div data-testid="listing">Listing</div>} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route path="/services/sel/:id" element={<SelDetailPage />} />
+          <Route path="/services/sel" element={<div data-testid="listing">Listing</div>} />
+        </Routes>
+      </ToastProvider>
     </MemoryRouter>,
   );
 }

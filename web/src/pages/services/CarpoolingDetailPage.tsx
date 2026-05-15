@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 
+import ContactAuthorButton from '@/components/ContactAuthorButton';
 import {
   IconArrowLeft,
   IconCalendar,
@@ -9,6 +10,7 @@ import {
   IconShare,
   IconUsers,
 } from '@/components/icons';
+import { useAuth } from '@/lib/auth';
 import { postgrestErrorMessage } from '@/lib/postgrestError';
 import { useCarpoolingItem } from '@/hooks/useCarpoolingItem';
 
@@ -152,6 +154,7 @@ export default function CarpoolingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const { carpooling, status, error } = useCarpoolingItem(id);
+  const { user } = useAuth();
   const [shared, setShared] = useState<boolean>(false);
 
   if (status === 'notfound') {
@@ -238,6 +241,9 @@ export default function CarpoolingDetailPage() {
         {carpooling.notes && <p style={notesStyle}>{carpooling.notes}</p>}
 
         <div style={ctaRowStyle}>
+          {user?.id !== carpooling.driver_id && (
+            <ContactAuthorButton authorUserId={carpooling.driver_id} />
+          )}
           <button type="button" onClick={handleShare} style={ctaSecondaryStyle}>
             <IconShare /> Partager
           </button>

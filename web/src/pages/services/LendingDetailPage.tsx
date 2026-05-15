@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 
+import ContactAuthorButton from '@/components/ContactAuthorButton';
 import {
   IconArrowLeft,
   IconBadge,
@@ -223,7 +224,9 @@ export default function LendingDetailPage() {
             <span style={ctaSecondaryStyle} aria-label="Vous êtes le propriétaire de cette annonce">
               <IconList /> Vous êtes le propriétaire
             </span>
-          ) : null}
+          ) : (
+            <ContactAuthorButton authorUserId={lending.owner_id} />
+          )}
           <button type="button" onClick={handleShare} style={ctaSecondaryStyle}>
             <IconShare /> Partager
           </button>

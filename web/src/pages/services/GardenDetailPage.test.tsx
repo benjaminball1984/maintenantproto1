@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
+import { ToastProvider } from '@/components/Toast';
 import type * as GardenModule from '@/lib/garden';
 
 const gardenMocks = vi.hoisted(() => ({
@@ -44,10 +45,12 @@ const sample: GardenPlotRow = {
 function renderDetail() {
   return render(
     <MemoryRouter initialEntries={['/services/garden/g1']}>
-      <Routes>
-        <Route path="/services/garden/:id" element={<GardenDetailPage />} />
-        <Route path="/services/garden" element={<div data-testid="listing">Listing</div>} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route path="/services/garden/:id" element={<GardenDetailPage />} />
+          <Route path="/services/garden" element={<div data-testid="listing">Listing</div>} />
+        </Routes>
+      </ToastProvider>
     </MemoryRouter>,
   );
 }

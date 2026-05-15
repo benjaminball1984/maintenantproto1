@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
+import { ToastProvider } from '@/components/Toast';
 import type * as MarketplaceModule from '@/lib/marketplace';
 
 const marketMocks = vi.hoisted(() => ({
@@ -46,10 +47,12 @@ const sample: MarketplaceItemRow = {
 function renderDetail() {
   return render(
     <MemoryRouter initialEntries={['/services/marketplace/m1']}>
-      <Routes>
-        <Route path="/services/marketplace/:id" element={<MarketplaceDetailPage />} />
-        <Route path="/services/marketplace" element={<div data-testid="listing">Listing</div>} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route path="/services/marketplace/:id" element={<MarketplaceDetailPage />} />
+          <Route path="/services/marketplace" element={<div data-testid="listing">Listing</div>} />
+        </Routes>
+      </ToastProvider>
     </MemoryRouter>,
   );
 }

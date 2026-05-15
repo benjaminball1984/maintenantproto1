@@ -17114,3 +17114,192 @@ Pas d'audit janitor pour cette session (c'est déjà un audit).
 >    du proto actuel à un site lançable publiquement avec fierté.
 > 3. Lire et trancher les 4 à 8 arbitrages produit en fin de doc.
 
+---
+
+### Étape 44 — Vague 1.B : hub services + CTA contact 5 services
+
+Branche : `claude/services-hub-contact-cta-UToNn`.
+
+**Périmètre livré** (3 fixes consolidés du PLAN-FINALISATION.md
+référencés F3, F8 et F13) :
+
+- **F3 — hub services** : remplacement du `Placeholder` de
+  `/services` par une vraie page : hero avec gradient brand, grille
+  responsive de 7 cards (housing / carpooling / marketplace /
+  lending / garden / sel / crowdfunding), icône + titre + pitch +
+  CTA « Accéder », section confiance/RGPD en pied. Hover via
+  `.mn-listing-card` (étape 35) — `prefers-reduced-motion`
+  respecté. `grid-template-columns: repeat(auto-fit, minmax(280px,
+  1fr))` : 1 col mobile / 2-3 col tablet / 3-4 col desktop.
+- **F8 + F13 — bouton Contacter** : ajout de
+  `getOrCreateConversationWith(targetUserId)` dans
+  `web/src/lib/messaging.ts` (wrapper de `findOrCreateConversation`
+  qui résout l'utilisateur courant via `supabase.auth.getUser()`).
+  Nouveau composant `web/src/components/ContactAuthorButton.tsx`
+  avec 3 variantes : loading / anonymous (redirige vers
+  `?auth=login`) / authentifié·e (CTA gradient). Auto-hide si
+  `auth.uid() === authorUserId`. Toast d'erreur via le
+  `ToastProvider` global (étape 40).
+- **Intégration 5 pages détail** : `CarpoolingDetailPage`,
+  `MarketplaceDetailPage`, `LendingDetailPage`, `GardenDetailPage`,
+  `SelDetailPage`. `HousingDetailPage` non touché (déjà un flow
+  « Faire une demande » fonctionnel — choix documenté ici).
+  `MarketplaceDetailPage` cache aussi le bouton si `is_sold=true`
+  (cohérence UX — annonce clôturée).
+
+**Icônes** : 5 nouvelles icônes SVG ajoutées à `icons.tsx`
+(`IconStore`, `IconTool`, `IconLeaf`, `IconClock`, `IconCoin`) pour
+le hub services — toutes en `currentColor`, pas d'emoji.
+
+**Tests ajoutés** (+17 → 998 total, base 981) :
+
+- `ServicesHubPage.test.tsx` (5 tests) : hero, 7 cards listées, 7
+  liens corrects par slug, section RGPD, classe `mn-listing-card`
+  pour hover.
+- `ContactAuthorButton.test.tsx` (5 tests) : variante anonyme
+  redirige vers `?auth=login`, auto-hide si auteur·ice = viewer,
+  clic auth → redirige `/messaging/:convId`, toast d'erreur sur
+  échec RLS, aria-busy pendant le chargement.
+- `messaging.test.ts` (+5 tests pour `getOrCreateConversationWith`)
+  : AUTH_REQUIRED si pas de session, réutilise conv existante,
+  crée si introuvable, propage erreur PostgREST, refuse
+  l'auto-contact.
+- `CarpoolingDetailPage.test.tsx` (+2 tests d'intégration) :
+  bouton Contacter visible pour viewer ≠ chauffeur, caché si
+  viewer = chauffeur.
+
+**Checks locaux** (4/4 verts AVANT push) : typecheck ✅, lint ✅,
+vitest 998 ✅, build ✅.
+
+**Aucune migration DB** (table `conversations` déjà présente avec
+`user_a`/`user_b` + index unique `(least, greatest)` + RLS
+`conv_select_party` / `conv_insert_party` cf. `db/schema.sql §15`).
+Aucun token `T.*` modifié. Aucun `--no-verify` / `--force`.
+
+**Compteur d'étapes onboarding** : inchangé.
+
+**Décisions documentées** :
+
+- `HousingDetailPage` conserve son flow `/services/housing/:id/request`
+  (réservation calendrier + capacité — plus riche qu'un simple
+  Contact). Ajouter un bouton Contacter en plus serait redondant.
+- `CrowdfundingDetailPage` non touché (porteur d'une cagnotte
+  reçoit déjà ses notifications via le flow `/contribute` — à
+  rearbitrer en Vague 1.C ou plus tard).
+- `MarketplaceDetailPage` masque le bouton Contacter si
+  `is_sold=true` — UX cohérente avec le badge « Annonce clôturée ».
+- Mock Supabase étendu dans `messaging.test.ts` pour exposer
+  `supabase.auth.getUser()` (auparavant non utilisé par le
+  module).
+- Les 4 tests détail services modifiés (`Carpooling`,
+  `Marketplace`, `Lending`, `Garden`, `Sel`) wrappent désormais
+  leur `MemoryRouter` dans un `<ToastProvider>` puisque
+  `ContactAuthorButton` appelle `useToast()`.
+
+---
+
+## Prompt pour la session N+38 (étape 45 — Vague 1.C : ouverture communes + signalement réseau)
+
+À reprendre à la prochaine session. Inclut la consigne récursive
+de recopie pour N+2 et la consigne d'audit janitor de fin d'étape
+(cf. `CLAUDE.md § Recopie systématique du prompt` et
+`CLAUDE.md § Audit récurrent vibe janitor`).
+
+> ## Contexte
+>
+> Repo : `/home/user/maintenantproto1`. Branche imposée par
+> l'harness. Lis `HANDOFF.md`, `HANDOFF-PROGRESS.md` (en particulier
+> `### Étape 44`), `CLAUDE.md`, et — s'ils existent —
+> `docs/PLAN-FINALISATION.md` (section Vague 1.C) et
+> `docs/AUDIT-BETA-TESTEUR-2026-05-15.md` au démarrage. Si ces deux
+> documents manquent, déduis les findings 1.C par l'analyse du
+> code (`CommunesPage`, `CommuneDetailPage`, `CommuneCreatePage`,
+> `ReseauPage`, RLS commune `db/schema.sql`, modération).
+>
+> ## Objectif
+>
+> Livrer la **Vague 1.C** du plan de finalisation : ouvrir
+> davantage le module « communes libres » à la lecture publique et
+> ajouter un mécanisme de signalement réseau (Persona 2 — militant
+> local) :
+>
+> - **Communes** : page `/communes` doit lister publiquement les
+>   communes existantes (sans auth requise), mettre en avant la
+>   carte + nombre d'adhérents, et exposer un CTA `Créer ma
+>   commune` qui mène vers `/communes/new` (auth obligatoire via
+>   `RequireAuth`+`RequireAdmin`, déjà câblé). Vérifier que les
+>   pages détail commune (`/communes/:slug`) sont également
+>   lisibles sans auth (RLS `communes` doit déjà l'autoriser —
+>   audit `db/schema.sql §communes`).
+> - **Signalement réseau** : ajouter un bouton « Signaler »
+>   discret sur `ReseauPage` (cards utilisateur·rices) et sur les
+>   commentaires/posts publics. Câbler avec une RPC `report_content`
+>   (à créer en migration **uniquement si elle n'existe pas
+>   déjà** ; sinon utiliser l'existante) qui crée une row
+>   `reports(reporter_id, target_type, target_id, reason)`. Modale
+>   simple avec 3-4 raisons préchargées (spam / harcèlement /
+>   contenu illégal / autre).
+>
+> Si la RPC `report_content` ou la table `reports` n'existent pas
+> en DB : **bloquer** la partie signalement et demander
+> confirmation explicite avant migration (cf. `CLAUDE.md §
+> Politique de PR`). Le reste de l'étape (communes ouvertes) doit
+> rester livrable.
+>
+> ## Critères d'acceptation
+>
+> - 4 checks locaux verts AVANT push : typecheck, lint, vitest,
+>   build.
+> - Aucun test cassé (compteur 998 maintenu ou augmenté).
+> - Aucune migration DB sans confirmation explicite.
+> - Aucun token `T.*` modifié.
+> - Aucun `--no-verify` / `--force`.
+> - Tests ajoutés : `CommunesPage.test.tsx` doit valider la lecture
+>   publique (status='anonymous' rend la liste). `ReseauPage` doit
+>   valider l'apparition du bouton « Signaler ». Test unit de la
+>   RPC `report_content` côté `lib/social.ts` ou équivalent.
+>
+> ## Process
+>
+> - Branche imposée par l'harness.
+> - Commits Conventional Commits : `feat(communes): lecture
+>   publique des communes libres (Vague 1.C)`, `feat(reseau):
+>   bouton Signaler + modale 4 raisons (Vague 1.C)`.
+> - PR principale vers `main` titre `feat: étape 45 — Vague 1.C
+>   (communes ouvertes + signalement réseau)`. Body : Summary +
+>   Décisions + Test plan.
+> - Auto-merge dès que les 4 checks locaux + GitHub Actions sont
+>   verts (Netlify reste en pending / neutral — interpréter « CI »
+>   = GitHub Actions).
+> - Audit janitor obligatoire après merge PR principale : 2 à 3
+>   sub-agents `general-purpose` en parallèle (architecture /
+>   robustesse / sécurité), fixes safe-first uniquement, PR
+>   séparée `chore(janitor): post-step 45 — …` avec auto-merge si
+>   verte. Cf. `CLAUDE.md § Audit récurrent vibe janitor`.
+> - **À la clôture de cette étape, après le merge de la PR
+>   principale, recopier le prompt pour la session N+39 (étape 46
+>   — Vague 1.D ou consolidation finale Vague 1) à la fois dans
+>   `HANDOFF-PROGRESS.md` ET dans la réponse de chat finale.
+>   Inclure dans ce prompt N+1 cette même instruction de recopie
+>   pour N+2** (cf. `CLAUDE.md § Recopie systématique du prompt`)
+>   **et inclure aussi l'instruction d'audit janitor de fin
+>   d'étape pour N+1** (cf. `CLAUDE.md § Audit récurrent vibe
+>   janitor`).
+>
+> ## Notes & arbitrages
+>
+> - Si la table `reports` ou la RPC `report_content` n'existe pas :
+>   bloquer F-signalement et demander confirmation explicite avant
+>   migration. Le pan « communes ouvertes » reste livrable seul.
+> - Si la modale signalement nécessite des composants UI au-delà
+>   de ce qui existe : créer dans `web/src/components/` en
+>   réutilisant le pattern AuthModal / OnboardingModal.
+> - Conserver les 4 checks locaux verts AVANT push — seule source
+>   de vérité depuis le re-blocage Netlify (2026-05-14).
+> - TS strict + no `any`. Pas d'emojis dans le code TS ni dans les
+>   commits.
+> - PR #63 (audit beta-testeur) toujours draft tant que
+>   l'utilisateur n'a pas arbitré les Q1-Q8 du
+>   `PLAN-FINALISATION.md`. La Vague 1 continue malgré tout — les
+>   fixes XS sont indépendants des arbitrages produit.
+

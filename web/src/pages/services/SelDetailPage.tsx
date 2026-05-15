@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 
+import ContactAuthorButton from '@/components/ContactAuthorButton';
 import {
   IconArrowLeft,
   IconBadge,
@@ -219,7 +220,9 @@ export default function SelDetailPage() {
             <span style={ctaSecondaryStyle} aria-label="Vous êtes l’auteur de cette offre">
               <IconSpark /> Vous êtes l’auteur
             </span>
-          ) : null}
+          ) : (
+            <ContactAuthorButton authorUserId={offer.user_id} />
+          )}
           <button type="button" onClick={handleShare} style={ctaSecondaryStyle}>
             <IconShare /> Partager
           </button>

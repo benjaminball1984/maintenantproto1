@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
+import { ToastProvider } from '@/components/Toast';
 import type * as LendingModule from '@/lib/lending';
 
 const lendingMocks = vi.hoisted(() => ({
@@ -45,10 +46,12 @@ const sample: LendingRow = {
 function renderDetail() {
   return render(
     <MemoryRouter initialEntries={['/services/lending/l1']}>
-      <Routes>
-        <Route path="/services/lending/:id" element={<LendingDetailPage />} />
-        <Route path="/services/lending" element={<div data-testid="listing">Listing</div>} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route path="/services/lending/:id" element={<LendingDetailPage />} />
+          <Route path="/services/lending" element={<div data-testid="listing">Listing</div>} />
+        </Routes>
+      </ToastProvider>
     </MemoryRouter>,
   );
 }

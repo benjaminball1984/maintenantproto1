@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 
+import ContactAuthorButton from '@/components/ContactAuthorButton';
 import {
   IconArrowLeft,
   IconHome,
@@ -225,7 +226,9 @@ export default function GardenDetailPage() {
             <span style={ctaSecondaryStyle} aria-label="Vous êtes le responsable de ce jardin">
               <IconHome /> Vous êtes le responsable
             </span>
-          ) : null}
+          ) : (
+            <ContactAuthorButton authorUserId={garden.manager_id} />
+          )}
           <button type="button" onClick={handleShare} style={ctaSecondaryStyle}>
             <IconShare /> Partager
           </button>
