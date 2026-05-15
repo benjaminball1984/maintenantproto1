@@ -49,6 +49,7 @@
 | 38. Plan visible-first §Étape 38 — Communauté + Navigation polish : `<FollowButton>` réutilisable câblé sur `followUser` / `unfollowUser` (lib `social.ts`) + UI optimiste avec rollback sur erreur, intégration dans cards posts ReseauPage (visible uniquement pour viewer authentifié ≠ auteur), header sticky `position: sticky; top: 0; z-index: 10` + recherche globale placeholder (navigate `/recherche?q=…`), composant `<Breadcrumbs>` réutilisable avec `aria-current="page"` appliqué à 5 detail pages (petitions / mobilisations / sondages / campagnes / communes), 11e itération du pattern E2E mock stateful POST/DELETE via nouveau helper `installStatefulToggleRoute` (clôt la dette `L9-arch-stateful-mock` au sens « helper extrait + 1 nouveau call-site qui l'utilise »). RLS `follows_*` vérifiée (insert/delete self, select public). |   ✅   |
 | 39. Plan visible-first §Étape 39 — Pages éditoriales : `/faq` (5 catégories Compte / RGPD / T99CP / Stripe / Modération, 17 entrées Q/R via `<details>` natif, accordion replié par défaut, CTA `/legal/contact`), `/about` (3 sections Équipe / Valeurs / Historique, 3 placeholders membres marqués `Bio démo`, 5 valeurs, 5 jalons historiques, CTA `/decouvrir`), `/roadmap` (timeline 6 jalons 2025→2028 avec 3 états done / in-progress / planned, double CTA Rejoindre / Découvrir). Liens Footer : `/about` colonne Mission, `/roadmap` colonne Outils, `/faq` colonne Légal. 3 routes ajoutées à `PUBLIC_ROUTES` E2E (smoke + axe-core). 958 vitest verts (943 + 15). Bundle : Faq 8.7 kB / About 8.5 kB / Roadmap 5.8 kB lazy. Risque 0 (pages statiques, pas de fetch, pas de DB). PR janitor sautée par décision utilisateur explicite (encart « Étapes 39-42 sans audit janitor » 2026-05-14). |   ✅   |
 | 40. Plan visible-first §Étape 40 — Animations & onboarding première visite : composant `<Skeleton>` + `<SkeletonCardList>` réutilisable (pulse 1.4 s via `.mn-skeleton` keyframe, désactivé si `prefers-reduced-motion`) appliqué à 5 pages listings (Pétitions / Mobilisations / Sondages / Campagnes / Communes) en remplacement de `<p>Chargement…</p>`. `<ToastProvider>` global dans RootLayout + hook `useToast` (lib/toast.ts) — variantes `success` / `info` / `error` (role `status`/`alert`, aria-live `polite`/`assertive`), auto-dismiss 4 s par défaut, `durationMs=0` = persistant, bouton Fermer. `<OnboardingModal>` 4 étapes (Bienvenue / Pétitions / Entraide / Adhésion T99CP) auto-affichée à la première visite (flag `mn-onboarding-seen` en localStorage, lib/onboarding.ts), CTA final « S’inscrire » → `/join`, fermable par Escape / clic dehors / Passer. Animations entrée toast 180 ms + skeleton pulse 1.4 s, toutes désactivées si `prefers-reduced-motion`. 981 vitest verts (958 + 23). Bundle : index 58.7 kB (+7.5 kB vs étape 39 — toast + onboarding embarqués dans le shell pour éviter un nouveau chunk lazy au mount). Risque 0 (pas de DB, flag localStorage purement technique non RGPD). PR janitor sautée par décision utilisateur explicite. |   ✅   |
+| 42bis. Audit beta-testeur lien-par-lien (3 personas × 46 routes) — 60 findings (5 🔴 BLOCKERS, 13 🟠 MAJORS, 22 🟡 MINORS, 20 🟢 NITPICKS), 2 docs livrés (`docs/AUDIT-BETA-TESTEUR-2026-05-15.md` + `docs/PLAN-FINALISATION.md`), plan en 3 vagues (V1 ≈ 5 sessions Must-fix, V2 ≈ 6-8 sessions post-launch immédiat, V3 ≥ 15 sessions backlog), 8 arbitrages produit Q1-Q8 prêts à poser via `AskUserQuestion`. Aucun code modifié, 981 vitest inchangés. PR draft, **non mergée** (décision utilisateur d'enchaîner V1.A en étape 43). |   ✅   |
 
 ---
 
@@ -17114,3 +17115,236 @@ Pas d'audit janitor pour cette session (c'est déjà un audit).
 >    du proto actuel à un site lançable publiquement avec fierté.
 > 3. Lire et trancher les 4 à 8 arbitrages produit en fin de doc.
 
+
+
+---
+
+## Étape 42bis — Audit beta-testeur lien-par-lien ✅
+
+### Contexte d'ouverture
+
+- Décision utilisateur 2026-05-15 : skip étapes 41 (CSP / Sentry /
+  maintenance) et 42 (variantes initialement prévues). Bascule directe
+  sur une session **audit beta-testeur** avant lancement public, qui
+  produira un plan de finalisation.
+- Étape 40 mergée (`a08c164`, squash) : 981 vitest verts + E2E
+  Playwright + axe verts. Pattern visible-first complété.
+- But de la session : audit lien-par-lien du site sur trois personas
+  (visiteur / militant·e / services solidaires), production de 2 docs
+  (audit + plan de finalisation), aucun fichier de code modifié.
+- Pas d'audit janitor (la session est elle-même un audit).
+
+### Méthode
+
+- 3 sub-agents `Explore` lancés en parallèle, un par persona, chacun a
+  lu l'ensemble des pages `.tsx` de son périmètre (~60 fichiers
+  cumulés).
+- Vérification HTTP : `curl -sSL` sur les 46 routes du périmètre
+  (toutes 200, SPA fallback Vite normal).
+- Vérifications ciblées par lecture directe sur :
+  `LegalNoticePage.tsx`, `index.html`, `ServicesHubPage.tsx`,
+  `RootLayout.tsx`, `index.css` (pour confirmer l'absence de menu
+  burger / @media queries mobile / favicon / OG meta).
+- Scoring /10 par dimension × persona, moyenne pondérée (40 % P1 +
+  35 % P2 + 25 % P3) = **6.6 / 10**.
+
+### Livré
+
+- **`docs/AUDIT-BETA-TESTEUR-2026-05-15.md`** (~720 lignes) :
+  - Résumé exécutif (verdict : **🟠 NO-GO en l'état, CONDITIONAL-GO
+    si Vague 1 livrée**).
+  - Scoring par dimension × persona avec moyenne pondérée.
+  - Findings exhaustifs route-par-route (46 routes auditées,
+    grille standardisée : premier ressenti / liens testés / liens
+    cassés / findings catégorisés par sévérité × dimension).
+  - Synthèse par sévérité : compteurs + listes consolidées.
+  - Méthodologie + limites (pas de Playwright captures car Chromium
+    pas installé, pas d'utilisateur réel Supabase).
+- **`docs/PLAN-FINALISATION.md`** (~580 lignes) :
+  - Pour chaque finding 🔴 / 🟠 (5 + 13 = 18) : 2 à 3 options de
+    fix avec effort (XS/S/M/L), impact attendu, risque de
+    régression, tradeoff, recommandation par défaut.
+  - Plan en 3 vagues : V1 Must-fix (5 sessions, 14 fixes), V2
+    post-launch (6-8 sessions, 10 fixes), V3 backlog (≥ 15 sessions).
+  - Section Arbitrages produit Q1-Q8 prêts à poser via
+    `AskUserQuestion` (communes, siège social, bios équipe, CTA
+    home, images, recherche, témoignages, nav).
+
+### Findings consolidés
+
+| Sévérité | Compte | Exemples |
+| --- | :---: | --- |
+| 🔴 BLOCKER | **5** | F1 Mentions légales incomplètes, F2 Pas de OG meta/favicon, F3 ServicesHubPage Placeholder, F4 Communes RequireAdmin, F5 Recherche header → 404 |
+| 🟠 MAJOR | **13** | F6 Header non-responsive, F7 Partage absent pétitions, F8 Pas de CTA contact 5 services, F9 Pas d'images annonces, F10 Bios équipe placeholders, F11 Témoignages placeholders, F12 Pas de gestion centralisée annonces profil, F13 Messaging non-intégré services, F14 Communes vides, F15 Pas de signalement réseau, F16 Email contact à confirmer, F17/F18 Empilement cookie + onboarding |
+| 🟡 MINOR | **22** | brouillons /new manquants, latence post-action, ID truncated messaging, validation croisée dates, etc. |
+| 🟢 NITPICK | **20** | drag-reorder campagnes, OAuth providers, ribbon recommandé, etc. |
+| **Total** | **60** | |
+
+### Décisions étape 42bis
+
+- **2 docs uniquement, aucun code modifié** : la session est pure
+  audit. 981 vitest restent verts.
+- **PR ouverte en draft, NON mergée** : décision utilisateur
+  d'enchaîner directement la Vague 1.A (étape 43) en validant les
+  options recommandées (ou en arbitrant Q1-Q8).
+- **Pas d'audit janitor** : déjà couvert par la session.
+- **Plan séquencé** : 5 sessions V1 (étapes 43 → 47), 6-8 sessions
+  V2 (étapes 48 → 55), backlog V3 ≥ 15 sessions.
+
+### Prochaines étapes (étape 43 — Vague 1.A : conformité légale + SEO + UX)
+
+L'étape 43 traite les 4 fixes XS de la Vague 1.A (effort total ≈ 1
+session) :
+1. **F1** — Mentions légales : compléter `LegalNoticePage.tsx` avec
+   raison sociale, siège social, SIRET, directeur de publication,
+   contact (Option A recommandée — données fournies par l'équipe).
+2. **F2** — Meta SEO/OG (Option C recommandée, statique en V1) :
+   ajouter dans `index.html` `<meta name="description">`,
+   `og:title`, `og:description`, `og:image` (+ asset à designer),
+   `og:type`, `twitter:card`, `<link rel="icon">`, `theme-color`.
+3. **F5** — Recherche header → 404 (Option A recommandée) : retirer
+   le `<form role="search">` du `RootLayout.tsx` jusqu'à ce que
+   `/recherche` soit câblé en V3.
+4. **F17/F18** — Empilement cookie + onboarding (Option A
+   recommandée) : conditionner l'affichage de `OnboardingModal` à
+   `localStorage[mn:cookie-consent] !== null` (cookie d'abord, puis
+   onboarding).
+
+Risque global étape 43 : **faible** (4 fixes additifs ou strings,
+aucune migration DB, aucun changement DB schema, aucun T.* touché).
+Audit janitor obligatoire après merge PR principale.
+
+---
+
+## Prompt pour la session N+36 (étape 43 — Vague 1.A : conformité légale + SEO + UX)
+
+Étape 42bis ✅ mergée (PR draft d'audit, **non mergée par décision
+utilisateur**) : 2 docs livrés (`docs/AUDIT-BETA-TESTEUR-2026-05-15.md`
++ `docs/PLAN-FINALISATION.md`), 60 findings (5 🔴 BLOCKERS, 13 🟠
+MAJORS, 22 🟡 MINORS, 20 🟢 NITPICKS), 981 vitest verts inchangés.
+Plan en 3 vagues : V1 ≈ 5 sessions Must-fix, V2 ≈ 6-8 sessions
+post-launch, V3 ≥ 15 sessions backlog. Q1-Q8 arbitrages produit
+posés en fin de `PLAN-FINALISATION.md`.
+
+> # Étape 43 — Vague 1.A du plan de finalisation (audit beta-testeur)
+>
+> ## Contexte
+>
+> Repo : `/home/user/maintenantproto1`. Branche imposée par l'harness
+> (typiquement `claude/<auto>`). Lis `HANDOFF.md`,
+> `HANDOFF-PROGRESS.md` (en particulier `### Étape 42bis`),
+> `CLAUDE.md`, `docs/AUDIT-BETA-TESTEUR-2026-05-15.md`,
+> `docs/PLAN-FINALISATION.md` au démarrage.
+>
+> ## Objectif
+>
+> Livrer la **Vague 1.A** (4 fixes XS, ≈ 1 session) du plan de
+> finalisation, qui regroupe les fixes additifs sans migration DB et
+> sans risque sur les tokens `T.*`. Référence : `PLAN-FINALISATION.md`
+> Section C — Vague 1, ligne « étape 43 — Vague 1.A : conformité légale ».
+>
+> ## Périmètre
+>
+> 1. **F1 — Mentions légales** : compléter `web/src/pages/LegalNoticePage.tsx`
+>    aux lignes 50-65. Demander à l'équipe (via `AskUserQuestion` si
+>    pas dans le contexte) les 4 valeurs : raison sociale (déjà
+>    « Association Maintenant ! » mais à confirmer), siège social,
+>    SIRET, directeur de la publication, contact officiel
+>    (`contact@maintenant.org` ou autre). Si l'équipe ne dispose pas
+>    encore des données légales, basculer Option B (domiciliation
+>    associative) ou Option C (mention « En cours d'enregistrement »)
+>    cf. `PLAN-FINALISATION.md` F1.
+> 2. **F2 — Meta SEO/OG (Option C, statique d'abord)** : éditer
+>    `web/index.html`. Ajouter dans `<head>` :
+>    - `<meta name="description" content="...">` (mission en 150-160
+>      chars).
+>    - `<meta property="og:title" content="Maintenant ! Le pouvoir
+>      citoyen, à portée de clic">`
+>    - `<meta property="og:description" content="...">`
+>    - `<meta property="og:image" content="https://maintenant-le-mouvement.netlify.app/og-image.png">`
+>    - `<meta property="og:type" content="website">`
+>    - `<meta property="og:url" content="https://maintenant-le-mouvement.netlify.app/">`
+>    - `<meta name="twitter:card" content="summary_large_image">`
+>    - `<link rel="icon" type="image/svg+xml" href="/favicon.svg">`
+>    - `<meta name="theme-color" content="#e11d74">`
+>    
+>    Pour `og-image.png` et `favicon.svg`, soit créer des placeholders
+>    minimaux (SVG inline avec gradient + texte « M ! »), soit lister
+>    en dette `L11-design-og-image` et `L11-design-favicon` si pas de
+>    capacité graphique dans la session.
+> 3. **F5 — Cacher la barre de recherche header (Option A)** : éditer
+>    `web/src/layouts/RootLayout.tsx` lignes 239-265. Retirer le
+>    `<form role="search">` et son state associé (`searchQuery`,
+>    `handleSearchSubmit`). Conserver `useNavigate` (utilisé par le
+>    user menu). Documenter en commentaire la dette
+>    `L11-recherche-fulltext` (déjà ouverte étape 38) et la
+>    réintroduction prévue en V3.
+> 4. **F17/F18 — Séquencer cookie banner + onboarding (Option A)** :
+>    éditer `web/src/components/OnboardingModal.tsx` pour ne s'auto-
+>    afficher que si `localStorage.getItem('mn:cookie-consent') !==
+>    null` (lire la clé via le helper `lib/consent.ts` si présent —
+>    sinon implémenter la condition directement). Vérifier qu'aucun
+>    test E2E ne casse à cause du nouveau délai d'affichage.
+>
+> ## Critères d'acceptation
+>
+> - 4 checks locaux verts AVANT push : typecheck, lint, vitest, build.
+> - Aucun test vitest cassé (compteur 981 maintenu ou augmenté).
+> - Aucune migration DB.
+> - Aucun token `T.*` modifié.
+> - Aucun `--no-verify` / `--force`.
+> - Tests ajoutés :
+>   - `LegalNoticePage.test.tsx` : assert que les 4 strings « À
+>     compléter » ne sont plus présents.
+>   - `App.test.tsx` ou nouveau test d'index : assert que
+>     `<meta name="description">` est présent dans `index.html` (via
+>     vitest + jsdom ou via test runtime).
+>   - `RootLayout.test.tsx` : assert que la barre de recherche n'est
+>     plus rendue (suppression des assertions précédentes ajoutées
+>     étape 38).
+>   - `OnboardingModal.test.tsx` : assert que le modal ne s'affiche
+>     pas si `mn:cookie-consent` est null (nouveau test).
+>
+> ## Process
+>
+> 1. Branche imposée par l'harness.
+> 2. Commits Conventional Commits :
+>    - `fix(legal): compléter mentions légales (F1 audit beta)`
+>    - `feat(seo): meta description + OG + favicon (F2 audit beta)`
+>    - `chore(layout): cacher barre recherche header (F5 audit beta)`
+>    - `fix(onboarding): séquencer cookie banner avant modal (F17/F18 audit beta)`
+> 3. PR principale vers `main` titre `feat: étape 43 — Vague 1.A
+>    (légal + SEO + UX)`. Body : Summary + Décisions + Test plan +
+>    référence aux findings F1/F2/F5/F17/F18 du
+>    `PLAN-FINALISATION.md`.
+> 4. Auto-merge dès que les 4 checks locaux + GitHub Actions sont
+>    verts (cf. `CLAUDE.md § Politique de PR`). Netlify checks restent
+>    en pending — interpréter « CI » = GitHub Actions (cf. Goulot 1
+>    re-bloqué 2026-05-14).
+> 5. **Audit janitor obligatoire après merge PR principale** : 2 à 3
+>    sub-agents `general-purpose` en parallèle (architecture /
+>    robustesse / sécurité), application des fixes safe-first
+>    uniquement, PR séparée `chore(janitor): post-step 43 — …` avec
+>    auto-merge si verte. Cf. `CLAUDE.md § Audit récurrent vibe
+>    janitor`.
+> 6. À la clôture de cette étape, **après le merge de la PR
+>    principale**, recopier le prompt pour la session N+37 (étape 44
+>    — Vague 1.B : hub services + CTA contact 5 services) à la fois
+>    dans `HANDOFF-PROGRESS.md` ET dans la réponse de chat finale.
+>    Inclure dans ce prompt N+1 cette même instruction de recopie pour
+>    N+2 (cf. `CLAUDE.md § Recopie systématique du prompt`). Inclure
+>    aussi l'instruction d'audit janitor de fin d'étape pour N+1
+>    (cf. `CLAUDE.md § Audit récurrent vibe janitor`).
+>
+> ## Notes & arbitrages
+>
+> - Si l'équipe n'a pas tranché Q2 du `PLAN-FINALISATION.md` (siège
+>   social), bloquer F1 et le reporter à étape 43bis ou étape 44 (mais
+>   le launch sera bloqué sans cette information).
+> - Si pas de capacité graphique pour l'OG image / favicon, livrer
+>   des placeholders SVG minimaux et tracer en dette.
+> - Conserver les 4 checks locaux verts AVANT push (typecheck + lint
+>   + vitest + build) — c'est la seule source de vérité depuis le
+>   re-blocage Netlify (2026-05-14).
+> - TS strict + no `any`. Pas d'emojis dans le code TS ni dans les
+>   commits.
