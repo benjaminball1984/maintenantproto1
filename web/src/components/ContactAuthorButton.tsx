@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { IconMail } from '@/components/icons';
@@ -16,15 +16,23 @@ import { useToast } from '@/lib/toast';
  * `conv_insert_party` (auth.uid() obligatoire = user_a ou user_b).
  *
  * Variantes d'affichage :
+ * - Loading auth : `<button disabled aria-busy>` pour préserver la
+ *   sémantique (cf. audit janitor #44, R-8 / S-11).
  * - Anonyme : redirige vers `?auth=login` (pattern RootLayout).
  * - Auteur·ice du contenu : non rendu (cas géré par le parent via
  *   isOwner — ce composant ne le sait pas).
  * - Authentifié·e : bouton primaire « Contacter ».
+ *
+ * Un `mountedRef` gate les `setState` / `toast.show` post-await pour
+ * éviter les warnings React si l'utilisateur·rice navigue ailleurs
+ * pendant la résolution (cf. audit janitor #44, R-1).
  */
 export interface ContactAuthorButtonProps {
   authorUserId: string;
   authorDisplayName?: string;
 }
+
+const ICON_SIZE = 16;
 
 const baseStyle: CSSProperties = {
   height: 48,
@@ -73,13 +81,21 @@ export default function ContactAuthorButton({
   const navigate = useNavigate();
   const toast = useToast();
   const [loading, setLoading] = useState<boolean>(false);
+  const mountedRef = useRef<boolean>(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   if (status === 'loading') {
     return (
-      <span style={disabledStyle} aria-disabled="true">
-        <IconMail width={16} height={16} />
+      <button type="button" style={disabledStyle} disabled aria-busy="true">
+        <IconMail width={ICON_SIZE} height={ICON_SIZE} />
         Contacter
-      </span>
+      </button>
     );
   }
 
@@ -95,7 +111,7 @@ export default function ContactAuthorButton({
             : 'Se connecter pour contacter cette personne'
         }
       >
-        <IconMail width={16} height={16} />
+        <IconMail width={ICON_SIZE} height={ICON_SIZE} />
         Se connecter pour contacter
       </button>
     );
@@ -109,6 +125,7 @@ export default function ContactAuthorButton({
     if (loading) return;
     setLoading(true);
     const { data, error } = await getOrCreateConversationWith(authorUserId);
+    if (!mountedRef.current) return;
     if (error || !data) {
       setLoading(false);
       toast.show({
@@ -132,7 +149,7 @@ export default function ContactAuthorButton({
         authorDisplayName ? `Contacter ${authorDisplayName}` : 'Contacter l’auteur·ice'
       }
     >
-      <IconMail width={16} height={16} />
+      <IconMail width={ICON_SIZE} height={ICON_SIZE} />
       {loading ? 'Ouverture…' : 'Contacter'}
     </button>
   );
