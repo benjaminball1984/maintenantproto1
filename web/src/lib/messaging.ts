@@ -141,6 +141,52 @@ export async function findOrCreateConversation(
   return { data, error };
 }
 
+export interface GetOrCreateConversationResult {
+  data: { id: string } | null;
+  error: PostgrestError | null;
+}
+
+/**
+ * Wrapper « bouton Contacter » : résout l'utilisateur authentifié via
+ * `supabase.auth.getUser()` puis délègue à `findOrCreateConversation`.
+ * Renvoie un objet `{ id }` minimaliste pour faciliter la navigation
+ * vers `/messaging/:id`. Si l'utilisateur n'est pas authentifié·e, un
+ * code d'erreur `AUTH_REQUIRED` est retourné (la RLS aurait de toute
+ * façon rejeté l'INSERT côté DB).
+ */
+export async function getOrCreateConversationWith(
+  targetUserId: string,
+): Promise<GetOrCreateConversationResult> {
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+  if (authError || !userData.user) {
+    return {
+      data: null,
+      error: new PostgrestError({
+        message: 'Vous devez être connecté·e pour contacter cette personne.',
+        details: '',
+        hint: '',
+        code: 'AUTH_REQUIRED',
+      }),
+    };
+  }
+  const { data, error } = await findOrCreateConversation(userData.user.id, targetUserId);
+  if (error) {
+    return { data: null, error };
+  }
+  if (!data) {
+    return {
+      data: null,
+      error: new PostgrestError({
+        message: 'Conversation introuvable.',
+        details: '',
+        hint: '',
+        code: 'CONVERSATION_NOT_FOUND',
+      }),
+    };
+  }
+  return { data: { id: data.id }, error: null };
+}
+
 /**
  * Liste les messages d'une conversation. Tri ASC pour affichage chronologique.
  * RLS filtre : seules les deux parties accèdent aux messages. Si l'utilisateur

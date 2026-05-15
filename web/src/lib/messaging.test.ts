@@ -25,7 +25,10 @@ const mocks = vi.hoisted(() => {
     eq: vi.fn(),
     then: vi.fn(),
   };
-  return { selectChain, insertChain, updateChain };
+  const authMock = {
+    getUser: vi.fn(),
+  };
+  return { selectChain, insertChain, updateChain, authMock };
 });
 
 function resolveChain<T>(chain: { then: ReturnType<typeof vi.fn> }, result: QueryResult<T>): void {
@@ -60,6 +63,7 @@ vi.mock('@/lib/supabase', () => ({
         return mocks.updateChain;
       },
     })),
+    auth: mocks.authMock,
   },
 }));
 
@@ -67,6 +71,7 @@ import {
   MESSAGE_BODY_MAX,
   findOrCreateConversation,
   getConversation,
+  getOrCreateConversationWith,
   listConversations,
   listMessages,
   otherParty,
@@ -260,5 +265,68 @@ describe('listMessages (edge cases)', () => {
     resolveChain(mocks.selectChain, { data: [], error: null });
     await listMessages('c1');
     expect(mocks.selectChain.limit).toHaveBeenCalledWith(200);
+  });
+});
+
+describe('getOrCreateConversationWith', () => {
+  it('renvoie AUTH_REQUIRED si pas d’utilisateur·rice authentifié·e', async () => {
+    mocks.authMock.getUser.mockResolvedValueOnce({
+      data: { user: null },
+      error: null,
+    });
+    const { data, error } = await getOrCreateConversationWith('u2');
+    expect(data).toBeNull();
+    expect(error?.code).toBe('AUTH_REQUIRED');
+    expect(mocks.insertChain.insert).not.toHaveBeenCalled();
+  });
+
+  it('réutilise la conversation existante et retourne { id }', async () => {
+    mocks.authMock.getUser.mockResolvedValueOnce({
+      data: { user: { id: 'u1' } },
+      error: null,
+    });
+    mocks.selectChain.maybeSingle.mockResolvedValueOnce({ data: sampleConv, error: null });
+    const { data, error } = await getOrCreateConversationWith('u2');
+    expect(error).toBeNull();
+    expect(data).toEqual({ id: 'c1' });
+    expect(mocks.insertChain.insert).not.toHaveBeenCalled();
+  });
+
+  it('crée la conversation si introuvable et retourne { id }', async () => {
+    mocks.authMock.getUser.mockResolvedValueOnce({
+      data: { user: { id: 'u1' } },
+      error: null,
+    });
+    mocks.selectChain.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+    mocks.insertChain.maybeSingle.mockResolvedValueOnce({ data: sampleConv, error: null });
+    const { data, error } = await getOrCreateConversationWith('u2');
+    expect(error).toBeNull();
+    expect(data).toEqual({ id: 'c1' });
+    expect(mocks.insertChain.insert).toHaveBeenCalledWith({ user_a: 'u1', user_b: 'u2' });
+  });
+
+  it('propage l’erreur PostgREST si findOrCreate échoue', async () => {
+    mocks.authMock.getUser.mockResolvedValueOnce({
+      data: { user: { id: 'u1' } },
+      error: null,
+    });
+    mocks.selectChain.maybeSingle.mockResolvedValueOnce({
+      data: null,
+      error: { code: '42501', message: 'denied' },
+    });
+    const { data, error } = await getOrCreateConversationWith('u2');
+    expect(data).toBeNull();
+    expect(error?.code).toBe('42501');
+  });
+
+  it('refuse l’auto-contact (target = current user)', async () => {
+    mocks.authMock.getUser.mockResolvedValueOnce({
+      data: { user: { id: 'u1' } },
+      error: null,
+    });
+    const { data, error } = await getOrCreateConversationWith('u1');
+    expect(data).toBeNull();
+    expect(error?.code).toBe('CONVERSATION_SELF');
+    expect(mocks.insertChain.insert).not.toHaveBeenCalled();
   });
 });
