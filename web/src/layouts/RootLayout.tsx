@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState, type CSSProperties, type FormEvent } from 'react';
+import { Suspense, useEffect, useState, type CSSProperties } from 'react';
 import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom';
 
 import AuthModal from '@/components/AuthModal';
@@ -7,7 +7,7 @@ import Footer from '@/components/Footer';
 import OnboardingModal from '@/components/OnboardingModal';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import { ToastProvider } from '@/components/Toast';
-import { IconLogout, IconSearch, IconUser } from '@/components/icons';
+import { IconLogout, IconUser } from '@/components/icons';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useAuth } from '@/lib/auth';
 
@@ -56,44 +56,10 @@ const headerStyle: CSSProperties = {
   zIndex: 10,
 };
 
-// Étape 38 — recherche globale (placeholder UI : navigation vers
-// `/recherche?q=…`). La page `/recherche` reste à câbler (étape future) ;
-// pour l'instant on tombe sur le `NotFoundPage` standard si l'utilisateur
-// soumet. C'est volontaire — le placeholder cadre l'attente fonctionnelle
-// sans déployer un index full-text incomplet.
-const searchFormStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 6,
-  background: 'var(--mn-surface-2)',
-  border: '1px solid var(--mn-border)',
-  borderRadius: 999,
-  padding: '4px 4px 4px 12px',
-  height: 36,
-};
-
-const searchInputStyle: CSSProperties = {
-  border: 'none',
-  outline: 'none',
-  background: 'transparent',
-  fontSize: 13,
-  fontFamily: 'inherit',
-  color: 'var(--mn-text-1)',
-  width: 160,
-};
-
-const searchSubmitStyle: CSSProperties = {
-  height: 28,
-  width: 28,
-  border: 'none',
-  borderRadius: 999,
-  background: 'var(--mn-brand)',
-  color: '#ffffff',
-  cursor: 'pointer',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-};
+// Étape 43 — recherche globale du header retirée (audit beta-testeur
+// finding F5, option A). La barre soumettait vers `/recherche?q=…` qui
+// tombait sur le 404. Dette `L11-recherche-fulltext` : ré-introduire
+// quand la recherche full-text Postgres sera implémentée (Vague 3).
 
 const navListStyle: CSSProperties = {
   listStyle: 'none',
@@ -195,14 +161,6 @@ export default function RootLayout() {
     await signOut();
   };
 
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const handleSearchSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const q = searchQuery.trim();
-    if (!q) return;
-    navigate(`/recherche?q=${encodeURIComponent(q)}`);
-  };
-
   const navItems =
     status === 'authenticated'
       ? [
@@ -235,34 +193,6 @@ export default function RootLayout() {
             ))}
           </ul>
         </nav>
-
-        <form
-          role="search"
-          aria-label="Recherche globale"
-          onSubmit={handleSearchSubmit}
-          style={searchFormStyle}
-        >
-          <label htmlFor="global-search" style={{ position: 'absolute', left: -9999 }}>
-            Rechercher
-          </label>
-          <input
-            id="global-search"
-            type="search"
-            placeholder="Rechercher…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={searchInputStyle}
-            autoComplete="off"
-          />
-          <button
-            type="submit"
-            style={searchSubmitStyle}
-            aria-label="Lancer la recherche"
-            disabled={searchQuery.trim().length === 0}
-          >
-            <IconSearch width={14} height={14} />
-          </button>
-        </form>
 
         {status === 'authenticated' && user ? (
           <div style={userMenuStyle}>

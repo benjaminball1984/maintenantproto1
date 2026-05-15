@@ -13,6 +13,8 @@
 
 export const CONSENT_STORAGE_KEY = 'mn:cookie-consent';
 export const CONSENT_VERSION = 1;
+/** Event browser-natif émis après chaque `writeConsent`/`clearConsent` (étape 43). */
+export const CONSENT_CHANGED_EVENT = 'mn:consent-changed';
 
 export type ConsentChoice = 'all' | 'essential' | 'custom';
 
@@ -67,6 +69,16 @@ export function readConsent(storage: Storage = window.localStorage): ConsentReco
   }
 }
 
+function dispatchConsentChanged() {
+  try {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new Event(CONSENT_CHANGED_EVENT));
+    }
+  } catch {
+    /* environnements sans `Event` (SSR, anciens jsdom) — silencieux. */
+  }
+}
+
 export function writeConsent(
   choice: ConsentChoice,
   categories: ConsentCategories,
@@ -83,6 +95,7 @@ export function writeConsent(
   } catch {
     /* localStorage indisponible (mode privé Safari) — silencieux côté UI. */
   }
+  dispatchConsentChanged();
   return record;
 }
 
@@ -92,4 +105,5 @@ export function clearConsent(storage: Storage = window.localStorage): void {
   } catch {
     /* idem */
   }
+  dispatchConsentChanged();
 }

@@ -8,6 +8,7 @@ import {
   IconSpark,
   IconUsers,
 } from '@/components/icons';
+import { CONSENT_CHANGED_EVENT, readConsent } from '@/lib/consent';
 import { hasSeenOnboarding, markOnboardingSeen } from '@/lib/onboarding';
 
 const overlayStyle: CSSProperties = {
@@ -191,17 +192,26 @@ export interface OnboardingModalProps {
   onClose?: () => void;
 }
 
+/** Lit défensivement si un consentement cookies a été enregistré. */
+function hasCookieConsent(): boolean {
+  return readConsent() !== null;
+}
+
 /**
  * Modale d'onboarding première visite. Affichée si le flag
  * `mn-onboarding-seen` n'est pas en localStorage. Au close (skip ou
  * step final), pose le flag pour ne plus s'afficher.
  *
- * Pas de RGPD : flag purement technique, pas de donnée personnelle.
+ * Étape 43 (audit beta-testeur F17/F18) : ne s'affiche pas tant que la
+ * bannière cookies n'a pas reçu de choix (séquençage UX : un seul overlay
+ * à la fois). Réveil automatique via un event `storage` + un event
+ * custom `mn:consent-changed` quand l'utilisateur valide les cookies.
  */
 export default function OnboardingModal({ open, onClose }: OnboardingModalProps) {
+  const [, setConsentReady] = useState<boolean>(() => hasCookieConsent());
   const [isOpen, setIsOpen] = useState<boolean>(() => {
     if (typeof open === 'boolean') return open;
-    return !hasSeenOnboarding();
+    return hasCookieConsent() && !hasSeenOnboarding();
   });
   const [stepIndex, setStepIndex] = useState(0);
   const titleId = useId();
@@ -217,6 +227,24 @@ export default function OnboardingModal({ open, onClose }: OnboardingModalProps)
       setIsOpen(open);
     }
   }
+
+  // Étape 43 — F17/F18 : écouter le choix cookies pour déclencher
+  // l'auto-ouverture une fois la bannière refermée. Pas d'effet si
+  // `open` est piloté en prop ou si l'utilisateur a déjà vu l'onboarding.
+  useEffect(() => {
+    if (typeof open === 'boolean') return;
+    const onConsent = () => {
+      if (!hasCookieConsent()) return;
+      setConsentReady(true);
+      if (!hasSeenOnboarding()) {
+        setIsOpen(true);
+      }
+    };
+    window.addEventListener(CONSENT_CHANGED_EVENT, onConsent);
+    return () => {
+      window.removeEventListener(CONSENT_CHANGED_EVENT, onConsent);
+    };
+  }, [open]);
 
   // Focus le dialog quand il s'ouvre (a11y clavier).
   useEffect(() => {

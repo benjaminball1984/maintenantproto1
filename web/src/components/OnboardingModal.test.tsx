@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import OnboardingModal from './OnboardingModal';
 import { hasSeenOnboarding, markOnboardingSeen } from '@/lib/onboarding';
+import { writeConsent } from '@/lib/consent';
 
 function renderModal(props: Parameters<typeof OnboardingModal>[0] = {}) {
   return render(
@@ -34,26 +35,47 @@ describe('OnboardingModal — rendu', () => {
     window.localStorage.clear();
   });
 
-  it('s’affiche par défaut si flag absent', () => {
+  it('s’affiche par défaut si flag absent ET consentement cookies déjà choisi', () => {
+    // Pré-seed du consentement cookies pour simuler une visite suivante.
+    writeConsent('essential', { analytics: false });
     renderModal();
     expect(screen.getByTestId('onboarding-dialog')).toBeInTheDocument();
     expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true');
   });
 
   it('ne s’affiche pas si le flag est déjà posé', () => {
+    writeConsent('essential', { analytics: false });
     markOnboardingSeen();
     renderModal();
     expect(screen.queryByTestId('onboarding-dialog')).not.toBeInTheDocument();
   });
 
-  it('respecte la prop `open` (override)', () => {
+  it('respecte la prop `open` (override) même sans consentement cookies', () => {
     markOnboardingSeen();
     renderModal({ open: true });
     expect(screen.getByTestId('onboarding-dialog')).toBeInTheDocument();
   });
 
-  it('navigue entre les 4 étapes via Suivant / Revenir', () => {
+  // Étape 43 — F17/F18 : auto-affichage gated par le consentement cookies.
+  it('NE s’affiche PAS si aucun consentement cookies n’a été choisi (F17/F18)', () => {
+    // localStorage vide → readConsent() === null → onboarding différé.
     renderModal();
+    expect(screen.queryByTestId('onboarding-dialog')).not.toBeInTheDocument();
+  });
+
+  it('s’ouvre dès que le choix cookies est posé (event `mn:consent-changed`)', () => {
+    // Pas de consentement initial → modale absente.
+    renderModal();
+    expect(screen.queryByTestId('onboarding-dialog')).not.toBeInTheDocument();
+    // L'utilisateur clique sur « Tout refuser » → writeConsent émet l'event.
+    act(() => {
+      writeConsent('essential', { analytics: false });
+    });
+    expect(screen.getByTestId('onboarding-dialog')).toBeInTheDocument();
+  });
+
+  it('navigue entre les 4 étapes via Suivant / Revenir', () => {
+    renderModal({ open: true });
     // étape 1
     expect(screen.getByRole('heading', { name: /Bienvenue sur Maintenant/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Suivant/i }));
@@ -68,7 +90,7 @@ describe('OnboardingModal — rendu', () => {
   });
 
   it('le dernier step remplace Suivant par un CTA Inscription vers /join', () => {
-    renderModal();
+    renderModal({ open: true });
     fireEvent.click(screen.getByRole('button', { name: /Suivant/i }));
     fireEvent.click(screen.getByRole('button', { name: /Suivant/i }));
     fireEvent.click(screen.getByRole('button', { name: /Suivant/i }));
@@ -80,20 +102,20 @@ describe('OnboardingModal — rendu', () => {
   });
 
   it('Passer ferme la modale et pose le flag', () => {
-    renderModal();
+    renderModal({ open: true });
     fireEvent.click(screen.getByRole('button', { name: /Passer l.onboarding/i }));
     expect(screen.queryByTestId('onboarding-dialog')).not.toBeInTheDocument();
     expect(hasSeenOnboarding()).toBe(true);
   });
 
   it('Echap ferme la modale', () => {
-    renderModal();
+    renderModal({ open: true });
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByTestId('onboarding-dialog')).not.toBeInTheDocument();
   });
 
   it('clic en dehors du dialog ferme la modale', () => {
-    renderModal();
+    renderModal({ open: true });
     fireEvent.click(screen.getByTestId('onboarding-overlay'));
     expect(screen.queryByTestId('onboarding-dialog')).not.toBeInTheDocument();
   });

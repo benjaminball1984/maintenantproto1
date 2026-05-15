@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="Maintenant ! Le pouvoir citoyen, à portée de clic">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e11d74" />
+      <stop offset="60%" stop-color="#c026d3" />
+      <stop offset="100%" stop-color="#7c3aed" />
+    </linearGradient>
+    <linearGradient id="badge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.08" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <g transform="translate(80,80)">
+    <rect width="220" height="60" rx="30" fill="url(#badge)" stroke="rgba(255,255,255,0.35)" stroke-width="1.5" />
+    <text x="110" y="40" text-anchor="middle"
+          font-family="'Sora', 'Helvetica Neue', Arial, sans-serif"
+          font-size="22" font-weight="600" fill="#ffffff" letter-spacing="0.5">Plateforme citoyenne</text>
+  </g>
+  <text x="80" y="320"
+        font-family="'Sora', 'Helvetica Neue', Arial, sans-serif"
+        font-size="96" font-weight="800" fill="#ffffff" letter-spacing="-3">Maintenant !</text>
+  <text x="80" y="410"
+        font-family="'Sora', 'Helvetica Neue', Arial, sans-serif"
+        font-size="44" font-weight="500" fill="#ffffff" opacity="0.95">Le pouvoir citoyen,</text>
+  <text x="80" y="465"
+        font-family="'Sora', 'Helvetica Neue', Arial, sans-serif"
+        font-size="44" font-weight="500" fill="#ffffff" opacity="0.95">à portée de clic.</text>
+  <g transform="translate(80,540)" fill="#ffffff" opacity="0.85">
+    <circle cx="8" cy="10" r="6" />
+    <text x="28" y="16"
+          font-family="'Sora', 'Helvetica Neue', Arial, sans-serif"
+          font-size="22" font-weight="500">Pétitions</text>
+    <circle cx="168" cy="10" r="6" />
+    <text x="188" y="16"
+          font-family="'Sora', 'Helvetica Neue', Arial, sans-serif"
+          font-size="22" font-weight="500">Mobilisations</text>
+    <circle cx="368" cy="10" r="6" />
+    <text x="388" y="16"
+          font-family="'Sora', 'Helvetica Neue', Arial, sans-serif"
+          font-size="22" font-weight="500">Entraide</text>
+    <circle cx="528" cy="10" r="6" />
+    <text x="548" y="16"
+          font-family="'Sora', 'Helvetica Neue', Arial, sans-serif"
+          font-size="22" font-weight="500">Communes libres</text>
+  </g>
+</svg>
