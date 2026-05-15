@@ -4,7 +4,9 @@ import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
 import AuthModal from '@/components/AuthModal';
 import CookieBanner from '@/components/CookieBanner';
 import Footer from '@/components/Footer';
+import OnboardingModal from '@/components/OnboardingModal';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
+import { ToastProvider } from '@/components/Toast';
 import { IconLogout, IconSearch, IconUser } from '@/components/icons';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useAuth } from '@/lib/auth';
@@ -211,8 +213,9 @@ export default function RootLayout() {
       : baseNavItems;
 
   return (
-    <div>
-      <header style={headerStyle}>
+    <ToastProvider>
+      <div>
+        <header style={headerStyle}>
         <nav aria-label="Navigation principale" style={{ flex: 1, minWidth: 0 }}>
           <ul style={navListStyle}>
             {navItems.map(({ to, label }) => (
@@ -302,8 +305,10 @@ export default function RootLayout() {
 
       <Footer />
 
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
-      <CookieBanner />
-    </div>
+        <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+        <CookieBanner />
+        <OnboardingModal />
+      </div>
+    </ToastProvider>
   );
 }

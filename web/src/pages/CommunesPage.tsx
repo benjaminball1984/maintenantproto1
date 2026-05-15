@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
 import EmptyState from '@/components/EmptyState';
+import { SkeletonCardList } from '@/components/Skeleton';
 import { IconPen, IconPin, IconSearch, IconUsers } from '@/components/icons';
 import { useCommunes } from '@/hooks/useCommunes';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
@@ -230,9 +231,7 @@ export default function CommunesPage() {
       )}
 
       {status === 'loading' && (
-        <p style={{ color: 'var(--mn-text-3)' }} role="status" aria-live="polite">
-          Chargement des communes…
-        </p>
+        <SkeletonCardList label="Chargement des communes…" testId="communes-loading" />
       )}
 
       {status === 'ready' && communes.length === 0 && (
