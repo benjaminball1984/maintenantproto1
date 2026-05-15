@@ -49,6 +49,8 @@
 | 38. Plan visible-first §Étape 38 — Communauté + Navigation polish : `<FollowButton>` réutilisable câblé sur `followUser` / `unfollowUser` (lib `social.ts`) + UI optimiste avec rollback sur erreur, intégration dans cards posts ReseauPage (visible uniquement pour viewer authentifié ≠ auteur), header sticky `position: sticky; top: 0; z-index: 10` + recherche globale placeholder (navigate `/recherche?q=…`), composant `<Breadcrumbs>` réutilisable avec `aria-current="page"` appliqué à 5 detail pages (petitions / mobilisations / sondages / campagnes / communes), 11e itération du pattern E2E mock stateful POST/DELETE via nouveau helper `installStatefulToggleRoute` (clôt la dette `L9-arch-stateful-mock` au sens « helper extrait + 1 nouveau call-site qui l'utilise »). RLS `follows_*` vérifiée (insert/delete self, select public). |   ✅   |
 | 39. Plan visible-first §Étape 39 — Pages éditoriales : `/faq` (5 catégories Compte / RGPD / T99CP / Stripe / Modération, 17 entrées Q/R via `<details>` natif, accordion replié par défaut, CTA `/legal/contact`), `/about` (3 sections Équipe / Valeurs / Historique, 3 placeholders membres marqués `Bio démo`, 5 valeurs, 5 jalons historiques, CTA `/decouvrir`), `/roadmap` (timeline 6 jalons 2025→2028 avec 3 états done / in-progress / planned, double CTA Rejoindre / Découvrir). Liens Footer : `/about` colonne Mission, `/roadmap` colonne Outils, `/faq` colonne Légal. 3 routes ajoutées à `PUBLIC_ROUTES` E2E (smoke + axe-core). 958 vitest verts (943 + 15). Bundle : Faq 8.7 kB / About 8.5 kB / Roadmap 5.8 kB lazy. Risque 0 (pages statiques, pas de fetch, pas de DB). PR janitor sautée par décision utilisateur explicite (encart « Étapes 39-42 sans audit janitor » 2026-05-14). |   ✅   |
 | 40. Plan visible-first §Étape 40 — Animations & onboarding première visite : composant `<Skeleton>` + `<SkeletonCardList>` réutilisable (pulse 1.4 s via `.mn-skeleton` keyframe, désactivé si `prefers-reduced-motion`) appliqué à 5 pages listings (Pétitions / Mobilisations / Sondages / Campagnes / Communes) en remplacement de `<p>Chargement…</p>`. `<ToastProvider>` global dans RootLayout + hook `useToast` (lib/toast.ts) — variantes `success` / `info` / `error` (role `status`/`alert`, aria-live `polite`/`assertive`), auto-dismiss 4 s par défaut, `durationMs=0` = persistant, bouton Fermer. `<OnboardingModal>` 4 étapes (Bienvenue / Pétitions / Entraide / Adhésion T99CP) auto-affichée à la première visite (flag `mn-onboarding-seen` en localStorage, lib/onboarding.ts), CTA final « S’inscrire » → `/join`, fermable par Escape / clic dehors / Passer. Animations entrée toast 180 ms + skeleton pulse 1.4 s, toutes désactivées si `prefers-reduced-motion`. 981 vitest verts (958 + 23). Bundle : index 58.7 kB (+7.5 kB vs étape 39 — toast + onboarding embarqués dans le shell pour éviter un nouveau chunk lazy au mount). Risque 0 (pas de DB, flag localStorage purement technique non RGPD). PR janitor sautée par décision utilisateur explicite. |   ✅   |
+| 42bis. Audit beta-testeur (PR #63 draft, NE PAS MERGER tant que Q1-Q8 non tranchés) — 60 findings sur 46 routes / 3 personas (5 🔴 BLOCKERS + 13 🟠 MAJORS + 22 🟡 MINORS + 20 🟢 NITPICKS), scoring moyen pondéré 6.6/10, verdict CONDITIONAL-GO si Vague 1 livrée. Livrables : `docs/AUDIT-BETA-TESTEUR-2026-05-15.md` (~720 lignes) + `docs/PLAN-FINALISATION.md` (~580 lignes, 2-3 options par finding 🔴/🟠 + plan 3 vagues + 8 arbitrages Q1-Q8). Aucun code modifié, 981 vitest inchangés. |   ✅   |
+| 43. Vague 1.A du plan de finalisation (audit beta-testeur — 4 fixes XS) : F1 mentions légales complétées (siège 27 rue de Paradis 95100 Argenteuil, contact@maintenant.org + tel 0649985753, statut « en cours d'enregistrement préfecture Val d'Oise », hébergeur front rectifié Vercel → Netlify), F2 SEO/OG statiques dans `web/index.html` (meta description 200 chars, og:title/description/image/url/type/locale, twitter:card summary_large_image, theme-color #e11d74, link rel="canonical") + 2 placeholders SVG (`web/public/favicon.svg` 64×64 gradient brand + lettre M!, `web/public/og-image.svg` 1200×630 gradient brand + tagline + 4 services), F5 barre recherche header retirée de `RootLayout.tsx` (suppression form/state, dette `L11-recherche-fulltext` documentée), F17/F18 séquençage onboarding ↔ cookies (`OnboardingModal` ne s'auto-affiche que si `readConsent() !== null`, réveil via event `mn:consent-changed` émis depuis `writeConsent`/`clearConsent`). 988 vitest verts (981 + 7 = +9 nouveaux F1/F2/F5/F17/18 − 2 anciens search ; 140 fichiers). Bundle index 58.0 kB (-0.7 kB vs étape 40 — retrait du form recherche). Aucune migration DB, aucun token T.* touché. Risque 0 (changements UI additifs + suppression search non utilisée + event additif sur lib consent). |   ✅   |
 
 ---
 
@@ -17113,4 +17115,337 @@ Pas d'audit janitor pour cette session (c'est déjà un audit).
 > 2. Connaître la séquence exacte des prochaines étapes pour passer
 >    du proto actuel à un site lançable publiquement avec fierté.
 > 3. Lire et trancher les 4 à 8 arbitrages produit en fin de doc.
+
+---
+
+## Étape 43 — Vague 1.A : conformité légale + SEO + UX ✅
+
+Première vague du plan de finalisation (audit beta-testeur étape 42bis).
+4 fixes XS dans une seule session, additifs, sans migration DB, sans
+toucher au design system `T.*`.
+
+### F1 — Mentions légales complétées (`web/src/pages/LegalNoticePage.tsx`)
+
+Décision utilisateur (2026-05-15) : hybride Option A/C du
+`PLAN-FINALISATION.md`. Données injectées :
+
+- **Raison sociale** : Association Maintenant !
+- **Forme juridique** : Association loi 1901 en cours
+  d'enregistrement à la préfecture du Val d'Oise (mai 2026).
+- **Siège social** : 27 rue de Paradis, 95100 Argenteuil, France.
+- **SIRET** : « En cours d'attribution (déclaration en préfecture du
+  Val d'Oise, mai 2026). Publié dès réception du récépissé officiel. »
+- **Directeur de la publication** : « Le bureau de l'association (à
+  publier nominativement à la finalisation de l'enregistrement
+  préfectoral). »
+- **Contact** : `<a mailto>contact@maintenant.org</a>` +
+  `<a tel>06 49 98 57 53</a>`.
+
+Effet de bord rectifié : la section Hébergement listait encore
+« Vercel Inc. — région UE » alors que l'hébergeur est passé sur
+Netlify étape 39. Texte mis à jour en « Netlify, Inc. — réseau CDN
+mondial (UE incluse) ».
+
+### F2 — Meta SEO/OG statiques + placeholders SVG
+
+`web/index.html` enrichi du bloc head minimal viable pour le partage
+social (option C du `PLAN-FINALISATION.md`, statique d'abord) :
+
+- `<title>` : « Maintenant ! Le pouvoir citoyen, à portée de clic »
+- `<meta name="description">` 200 caractères (mission en 1 phrase).
+- `<meta name="theme-color" content="#e11d74">` (PWA install + browser
+  chrome tinting).
+- `<link rel="icon" type="image/svg+xml" href="/favicon.svg">`.
+- `<link rel="canonical">` sur l'URL Netlify.
+- Bloc Open Graph : `og:type=website`, `og:site_name`, `og:title`,
+  `og:description`, `og:url`, `og:image` (1200×630), `og:image:width`,
+  `og:image:height`, `og:locale=fr_FR`.
+- Bloc Twitter : `twitter:card=summary_large_image` + title/description/image.
+
+Deux placeholders SVG ajoutés (`web/public/`) — déployés tels quels
+par Vite/Netlify :
+
+- `favicon.svg` : 64×64, gradient brand `#e11d74 → #f97316`, lettre
+  M! centrée font-family Sora (cohérent avec le reste du design).
+- `og-image.svg` : 1200×630, gradient brand → violet, badge
+  « Plateforme citoyenne », tagline « Le pouvoir citoyen, à portée de
+  clic », 4 services en footer (Pétitions / Mobilisations / Entraide
+  / Communes libres).
+
+Décision utilisateur (2026-05-15) : « Placeholders SVG inline minimaux »
+— pas de PNG. Note : certains réseaux sociaux (Facebook, LinkedIn) ne
+supportent pas le SVG dans `og:image`. À ré-encoder en PNG/JPG dans une
+étape design dédiée si nécessaire — dette `L11-design-og-png`.
+
+### F5 — Barre de recherche header retirée
+
+`web/src/layouts/RootLayout.tsx` :
+
+- Suppression du `<form role="search">` (lignes 239-265 avant).
+- Suppression du state `searchQuery` + handler `handleSearchSubmit`.
+- Suppression de l'import `IconSearch` (toujours utilisé dans 14
+  autres pages, juste plus dans RootLayout).
+- Suppression du type import `FormEvent`.
+- Conservation de `useNavigate` (utilisé par le menu utilisateur
+  « Ouvrir mon profil »).
+- Commentaire de dette `L11-recherche-fulltext` ajouté en remplacement
+  du commentaire étape 38 sur le placeholder.
+
+### F17/F18 — Séquençage cookie banner ↔ onboarding
+
+`web/src/components/OnboardingModal.tsx` + `web/src/lib/consent.ts` :
+
+- L'onboarding ne s'auto-affiche que si `readConsent() !== null`
+  (donc choix cookies déjà fait). État initial calculé via un helper
+  `hasCookieConsent()`.
+- Listener `window.addEventListener('mn:consent-changed', …)` ajouté.
+  À chaque event reçu : si choix cookies posé ET onboarding pas
+  encore vu, réveille la modale. Cleanup via `removeEventListener`.
+- `lib/consent.ts` : nouvelle constante exportée
+  `CONSENT_CHANGED_EVENT = 'mn:consent-changed'`. Nouveau helper
+  privé `dispatchConsentChanged()` qui émet l'event après chaque
+  `writeConsent` ET `clearConsent`. Defensive try/catch (env SSR /
+  vieux jsdom sans `Event`).
+- Override `open` prop : si une prop `open: boolean` est fournie
+  explicitement (par exemple depuis le profil), le gating cookies
+  est court-circuité — l'effet `useEffect` est skip.
+
+### Tests
+
+| Catégorie | Compteur début | Compteur fin | Δ |
+| --- | :---: | :---: | :---: |
+| Total vitest | 981 | 988 | +7 |
+| Fichiers | 139 | 140 | +1 |
+
+Détail des modifications :
+
+- `src/App.test.tsx` : 2 tests retirés (form recherche + submit
+  navigation `/recherche?q=…` qui n'existe plus), 1 nouveau test
+  d'absence (`ne rend plus de form role="search"`).
+- `src/pages/LegalNoticePage.test.tsx` : 2 nouveaux tests (assertion
+  d'absence des 4 « À compléter », assertion de présence siège +
+  contact + SIRET « en cours »), 1 test existant ajusté pour Netlify
+  au lieu de Vercel.
+- `src/index.html.test.ts` (nouveau fichier) : 5 tests sur la
+  présence des meta description / OG / Twitter / favicon /
+  theme-color / title descriptif. Lit le HTML source via `readFile`
+  (pattern identique à `stripeWebhookDeploy.test.ts`).
+- `src/components/OnboardingModal.test.tsx` : 2 nouveaux tests
+  (absence par défaut tant que pas de consentement, ouverture
+  automatique au `writeConsent` via event `mn:consent-changed`).
+  Les 5 tests existants (4 étapes nav, CTA inscription, Passer,
+  Echap, clic overlay) ont été ré-aiguillés via `open: true` pour
+  contourner le gating cookies (testent uniquement le comportement
+  intra-modal).
+
+Soldes : +9 tests ajoutés (F1×2 + F2×5 + F17/18×2), -2 tests retirés
+(F5 search submit qui n'a plus de cible).
+
+### Bundle
+
+| Chunk | Étape 40 | Étape 43 | Δ |
+| --- | :---: | :---: | :---: |
+| `index` (shell) | 58.7 kB / gzip 16.27 kB | 58.0 kB / gzip 16.11 kB | -0.7 kB |
+| Reste | inchangé | inchangé | — |
+
+Léger gain (-0.7 kB) sur le shell suite au retrait du form de
+recherche (state + handler + 3 styles + IconSearch import).
+
+### Risques & garde-fous
+
+- ✅ Aucune migration DB.
+- ✅ Aucun token `T.*` modifié.
+- ✅ Pas de `--force` / `--no-verify`.
+- ✅ Tous les fixes additifs ou suppression sans impact UX.
+- ⚠️ Le `og:image` en SVG ne sera pas affiché par tous les réseaux
+  sociaux. Mastodon/Bluesky/X gèrent SVG. Facebook/LinkedIn préfèrent
+  PNG/JPG. Dette `L11-design-og-png` à traiter dans une étape design
+  dédiée (Vague 2 ou 3).
+- ⚠️ Mentions légales encore en mode « en cours d'enregistrement » :
+  non-conformité LCEN partielle persiste tant que SIRET + directeur
+  publication nominatif ne sont pas publiés. À ré-éditer dès
+  réception du récépissé préfectoral.
+
+### Dette ajoutée
+
+- `L11-recherche-fulltext` : ré-introduire la barre de recherche
+  header une fois `/recherche` câblée (Vague 3 du plan).
+- `L11-design-og-png` : convertir `og-image.svg` en PNG 1200×630 pour
+  compat Facebook/LinkedIn (Vague 2-3, étape design dédiée).
+- `L11-legal-finalisation` : ré-éditer `LegalNoticePage.tsx` dès
+  réception du récépissé préfectoral pour publier SIRET officiel +
+  directeur de publication nominatif (juin-juillet 2026 estimé).
+
+---
+
+## Prompt pour la session N+37 (étape 44 — Vague 1.B : hub services + CTA contact 5 services)
+
+Étape 43 ✅ mergée : Vague 1.A du plan de finalisation livrée (F1
+mentions légales, F2 SEO/OG statiques + 2 SVG placeholders, F5 barre
+recherche header retirée, F17/F18 séquençage cookies ↔ onboarding). 988
+vitest verts (981 + 7). Pas de changement DB, pas de token `T.*`
+touché.
+
+> **Contexte**
+>
+> Repo : `/home/user/maintenantproto1`. Branche imposée par
+> l'harness. Lis `HANDOFF.md`, `HANDOFF-PROGRESS.md` (en particulier
+> `### Étape 43`), `CLAUDE.md`, `docs/PLAN-FINALISATION.md` (section
+> Vague 1.B), `docs/AUDIT-BETA-TESTEUR-2026-05-15.md` au démarrage.
+>
+> **Objectif**
+>
+> Livrer la **Vague 1.B** (2 fixes consolidés, ≈ 1 session) du plan
+> de finalisation, qui débloque le parcours services solidaires
+> (persona 3) :
+>
+> - **F3** — `ServicesHubPage` est un Placeholder. Option A
+>   recommandée : hub minimaliste 7 cards. Effort S.
+> - **F8 + F13** — Le bouton « Contacter » est absent sur
+>   `carpooling`, `marketplace`, `lending`, `garden`, `sel`. Option A
+>   recommandée : bouton « Contacter » qui crée (ou retrouve) une
+>   conversation `/messaging` avec l'auteur. Couvre F8 et F13
+>   ensemble. Effort M.
+>
+> **Périmètre F3 — Hub services minimaliste**
+>
+> Éditer `web/src/pages/services/ServicesHubPage.tsx` (remplacer le
+> Placeholder par une vraie page). Structure :
+>
+> - Hero court (h1 + lead 2 lignes : « Services solidaires :
+>   hébergement, covoiturage, marketplace, prêt, jardins, SEL,
+>   crowdfunding. Sans commission, sans pub. »).
+> - Grille de 7 cards (housing, carpooling, marketplace, lending,
+>   garden, sel, crowdfunding) avec :
+>   - Icône `ICONS.*` (utiliser `icons.tsx` existants : IconHome,
+>     IconCar, IconStore, IconTool, IconLeaf, IconClock, IconCoin —
+>     vérifier la liste, créer un nouveau composant SVG si absent).
+>   - Titre du service.
+>   - Pitch 1 ligne (15-25 mots).
+>   - CTA « Accéder » → `/services/{nom}`.
+> - Section RGPD/confiance (1 paragraphe) : « Tous les échanges sont
+>   privés. T99CP utilisable comme monnaie locale (pas obligatoire).
+>   Aucune commission, aucune publicité. »
+> - Hover state sur les cards (réutiliser `.mn-listing-card` étape 35
+>   + `prefers-reduced-motion`).
+> - Layout responsive : 1 col mobile / 2 col tablet / 3 col desktop
+>   via `display: grid` + `gridTemplateColumns: repeat(auto-fit,
+>   minmax(280px, 1fr))`.
+>
+> **Périmètre F8 + F13 — Bouton Contacter**
+>
+> 1. Module `web/src/lib/messaging.ts` (ou équivalent existant — à
+>    vérifier en début de session) : ajouter une fonction
+>    `getOrCreateConversationWith(targetUserId: string): Promise<{ id:
+>    string }>`. Pattern : vérifier si une conversation existe déjà
+>    entre `auth.uid()` et `targetUserId` (filtre `participants`
+>    table). Si oui, retourne son ID. Sinon, INSERT nouvelle
+>    conversation + 2 participants, retourne l'ID. RLS doit déjà
+>    autoriser ce flow.
+> 2. Nouveau composant réutilisable
+>    `web/src/components/ContactAuthorButton.tsx` :
+>    - Props : `authorUserId: string`, `authorDisplayName?: string`.
+>    - State : `loading` (boolean), `error` (string | null).
+>    - Comportement : au clic, appelle
+>      `getOrCreateConversationWith(authorUserId)`, redirige vers
+>      `/messaging/:convId` via `useNavigate`.
+>    - Visible uniquement si `useAuth().status === 'authenticated'`
+>      ET `auth.uid() !== authorUserId` (pas de bouton sur ses
+>      propres annonces).
+>    - Si non authentifié·e : afficher une variante « Se connecter
+>      pour contacter » qui ouvre `?auth=login` (pattern existant
+>      RootLayout).
+>    - Optimistic UI + toast (utiliser `useToast` étape 40 pour
+>      l'erreur).
+> 3. Intégration dans 5 pages détail :
+>    - `web/src/pages/services/CarpoolingDetailPage.tsx`
+>    - `web/src/pages/services/MarketplaceDetailPage.tsx`
+>    - `web/src/pages/services/LendingDetailPage.tsx`
+>    - `web/src/pages/services/GardenDetailPage.tsx`
+>    - `web/src/pages/services/SelDetailPage.tsx`
+>    - Vérifier que `HousingDetailPage` (qui a déjà son flow
+>      `request`) reste cohérent — ne pas dupliquer son bouton, mais
+>      possiblement ajouter aussi un Contacter générique en parallèle
+>      (à arbitrer en début de session via `AskUserQuestion` si la
+>      duplication est UX-positive ou non).
+>    - `CrowdfundingDetailPage` — à arbitrer en début de session :
+>      logique de don/contribution déjà séparée, le Contacter
+>      est-il pertinent ? Option A : oui (pour question sur le
+>      projet). Option B : non (parasite la conversion don).
+>
+> **Critères d'acceptation**
+>
+> - 4 checks locaux verts AVANT push : typecheck, lint, vitest,
+>   build.
+> - Aucun test cassé (compteur 988 maintenu ou augmenté).
+> - Aucune migration DB (la table `conversations` + `participants`
+>   doit déjà exister depuis l'étape 16 ; sinon basculer F8 sur
+>   demande utilisateur explicite et reporter à étape 44bis).
+> - Aucun token `T.*` modifié.
+> - Aucun `--no-verify` / `--force`.
+> - Tests ajoutés :
+>   - `ServicesHubPage.test.tsx` : 7 cards visibles, 7 liens vers
+>     `/services/{nom}` corrects, plus de Placeholder.
+>   - `ContactAuthorButton.test.tsx` : rendu conditionnel sur
+>     `authenticated` + différent de l'auteur, clic appelle
+>     `getOrCreateConversationWith` et navigate, état de loading
+>     visible, erreur affichée via toast.
+>   - `lib/messaging.ts` (ou équivalent) : test unit de
+>     `getOrCreateConversationWith` (case 1 : conv existe → retourne
+>     ID ; case 2 : conv n'existe pas → crée + retourne ID).
+>   - Tests d'intégration sur 1 des 5 pages détail : bouton présent
+>     + clic déclenche navigate (mock messaging).
+>
+> **Process**
+>
+> 1. Branche imposée par l'harness.
+> 2. Commits Conventional Commits :
+>    - `feat(services): hub services minimaliste 7 cards (F3 audit beta)`
+>    - `feat(messaging): getOrCreateConversationWith + ContactAuthorButton (F8/F13 audit beta)`
+>    - `feat(services): bouton Contacter sur 5 pages détail services (F8/F13 audit beta)`
+> 3. PR principale vers `main` titre `feat: étape 44 — Vague 1.B
+>    (hub services + CTA contact 5 services)`. Body : Summary +
+>    Décisions + Test plan + référence aux findings F3/F8/F13 du
+>    `PLAN-FINALISATION.md`.
+> 4. Auto-merge dès que les 4 checks locaux + GitHub Actions sont
+>    verts (cf. `CLAUDE.md § Politique de PR`). Netlify checks
+>    restent en pending — interpréter « CI » = GitHub Actions (cf.
+>    Goulot 1 re-bloqué 2026-05-14).
+> 5. **Audit janitor obligatoire après merge PR principale** : 2 à 3
+>    sub-agents `general-purpose` en parallèle (architecture /
+>    robustesse / sécurité), application des fixes safe-first
+>    uniquement, PR séparée `chore(janitor): post-step 44 — …` avec
+>    auto-merge si verte. Cf. `CLAUDE.md § Audit récurrent vibe
+>    janitor`.
+> 6. **À la clôture de cette étape, après le merge de la PR
+>    principale**, recopier le prompt pour la session N+38 (étape
+>    45 — Vague 1.C : ouverture communes + signalement réseau) à la
+>    fois dans `HANDOFF-PROGRESS.md` ET dans la réponse de chat
+>    finale. Inclure dans ce prompt N+1 cette même instruction de
+>    recopie pour N+2 (cf. `CLAUDE.md § Recopie systématique du
+>    prompt`). Inclure aussi l'instruction d'audit janitor de fin
+>    d'étape pour N+1 (cf. `CLAUDE.md § Audit récurrent vibe
+>    janitor`).
+>
+> **Notes & arbitrages**
+>
+> - Si la table `conversations` ou `participants` n'existe pas
+>   encore : **bloquer F8/F13** et demander confirmation explicite
+>   à l'utilisateur. Ne pas créer une migration silencieuse — c'est
+>   un changement DB qui sort du périmètre janitor-friendly.
+> - Si `HousingDetailPage` n'a pas besoin du bouton Contacter en
+>   plus de son flow `request` existant : laisser inchangé,
+>   documenter la décision dans le commit message.
+> - Si `CrowdfundingDetailPage` est arbitré « pas de bouton
+>   Contacter » : ne pas l'ajouter, documenter dans `PLAN-FINALISATION.md`
+>   ou un commentaire en tête de fichier.
+> - Conserver les 4 checks locaux verts AVANT push (typecheck +
+>   lint + vitest + build) — c'est la seule source de vérité depuis
+>   le re-blocage Netlify (2026-05-14).
+> - TS strict + no `any`. Pas d'emojis dans le code TS ni dans les
+>   commits.
+> - **PR #63 toujours draft, NE PAS MERGER** tant que l'utilisateur
+>   n'a pas arbitré les Q1-Q8 du `PLAN-FINALISATION.md`. La Vague 1
+>   continue malgré tout — les fixes XS sont indépendants des
+>   arbitrages produit.
 
