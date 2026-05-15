@@ -16863,3 +16863,254 @@ ci-dessous).
 > - Réutiliser `slugify()` si on décide d'ajouter `housing.slug` (préférer
 >   alors une migration séparée — modifier `db/schema.sql` + régénérer
 >   `web/src/types/database.ts`).
+
+---
+
+## Prompt pour la session N+35 (étape 42bis — audit beta-testeur)
+
+Étape 40 ✅ mergée (`a08c164`, squash) : loading skeletons + toast +
+onboarding modal, 981 vitest verts + E2E Playwright + axe verts (1 fix
+post-CI : `fix(e2e,a11y)` pré-remplit `localStorage.mn-onboarding-seen=1`
+en E2E, ajoute `role="region"` au toast-stack et `role="group"` au
+compteur d'étapes onboarding).
+
+**Décision utilisateur 2026-05-15** : skip des étapes 41 (CSP / Sentry /
+maintenance) et 42 (variantes initialement prévues). Bascule directe sur
+une session **audit beta-testeur** avant lancement public, qui produira
+le plan de finalisation. Les fixes seront appliqués dans les sessions
+suivantes par options validées.
+
+Pas d'audit janitor pour cette session (c'est déjà un audit).
+
+> # Session beta-testeur — audit lien-par-lien du site Maintenant !
+>
+> ## Rôle
+>
+> Tu es un **beta-testeur exigeant et candide** mandaté pour auditer
+> https://maintenant-le-mouvement.netlify.app **avant le lancement
+> public officiel**. Tu n'as **pas vu le code**, tu cliques comme un
+> visiteur réel, tu notes tout ce qui frotte. Pas de complaisance : si
+> une page est moche, dis-le ; si un lien ne mène nulle part,
+> signale-le ; si un parcours t'embrouille, explique pourquoi.
+>
+> ## Règle d'or
+>
+> **AUCUNE MODIFICATION DE CODE dans cette session.** Pure phase
+> d'audit + recommandations. Les fixes seront appliqués dans les
+> sessions suivantes, par options validées par l'utilisateur.
+>
+> Lis quand même `HANDOFF.md`, `HANDOFF-PROGRESS.md`, `CLAUDE.md`, et
+> `web/src/router.tsx` au démarrage pour cadrer le périmètre. Mais ne
+> touche à rien d'autre que les deux fichiers de docs livrables (cf.
+> plus bas).
+>
+> ## 3 personas obligatoires
+>
+> Joue successivement (et étiquette chaque finding avec le persona qui
+> l'a repéré) :
+>
+> 1. **Visiteur grand public curieux** : « j'ai vu Maintenant ! dans
+>    un toot Mastodon ou via un·e ami·e, je veux comprendre en 30 s ce
+>    que c'est, si c'est sérieux, et si ça vaut le coup d'y rester. »
+>    Focus : home, `/decouvrir`, `/about`, `/transparence`,
+>    `/roadmap`, CTA d'adhésion, bannière cookies, mentions légales.
+>
+> 2. **Militant·e local·e prêt·e à agir** : « je veux créer la
+>    commune libre de ma ville, lancer une pétition contre un projet
+>    local, et mobiliser autour. » Focus : `/communes/new`,
+>    `/petitions/new`, `/mobilizations/new`, `/campaigns/new`,
+>    `/polls/new`, `/media/new`, `/admin` (vue commune), navigation
+>    entre objets liés, partage social.
+>
+> 3. **Utilisateur·rice des services solidaires** : « je cherche un
+>    covoiturage pour la manif, un hébergement militant, un objet à
+>    emprunter, ou j'ai des heures de SEL à proposer. » Focus :
+>    `/services` (hub) + chacun des 8 services (`housing`,
+>    `carpooling`, `marketplace`, `lending`, `garden`, `sel`,
+>    `crowdfunding`), flow request/contribute, messagerie
+>    `/messaging` qui en découle, `/profile` pour gérer ses
+>    annonces, `/notifications`.
+>
+> Pour chaque persona, complète le parcours typique de bout en bout :
+> arrivée → exploration → première action → seconde action → sortie.
+>
+> ## Périmètre exhaustif des routes
+>
+> Public : `/`, `/decouvrir`, `/about`, `/roadmap`, `/faq`,
+> `/transparence`, `/join`, `/reseau`.
+>
+> Engagement : `/petitions` (+ détail + `/new`), `/mobilizations`
+> (+ détail + `/new`), `/campaigns` (+ détail + `/new`), `/polls`
+> (+ détail + `/new`), `/communes` (+ détail + `/new`), `/media`
+> (+ article + `/new`).
+>
+> Services (priorité **persona 3**) : `/services` hub + pour chacun
+> de `housing` / `carpooling` / `marketplace` / `lending` / `garden`
+> / `sel` / `crowdfunding` : liste + 1 détail + form `/new` + flow
+> `request` ou `contribute` si applicable.
+>
+> Compte : `/profile`, `/notifications`, `/messaging` (+ 1
+> conversation), `/auth/callback`, `/auth/reset-password`.
+>
+> Admin & légal : `/admin`, `/legal/privacy`, `/legal/notice`,
+> `/legal/cookies`, `/legal/contact`.
+>
+> Edge cases : 404, route protégée en déconnecté,
+> lien-vers-objet-supprimé, form soumis vide, form soumis avec
+> données invalides.
+>
+> ## Viewports
+>
+> - **Mobile** : 360×800
+> - **Tablette** : 768×1024 (bascule `767`)
+> - **Desktop** : 1280×800 et 1920×1080 (bascule `1023`)
+>
+> ## Méthode systématique
+>
+> Pour **chaque route**, remplis :
+>
+> ```
+> ## Route : /xxx
+> - Persona : [1/2/3]
+> - Viewport : [mobile/tablet/desktop]
+> - Premier ressenti (5 s) : « ... »
+> - Liens testés : liste exhaustive (CTA, nav, footer, cards, breadcrumbs)
+> - Lien(s) cassé(s) / dead-end : ...
+> - Findings :
+>   - [severity] design/cohérence : ...
+>   - [severity] UX/parcours : ...
+>   - [severity] responsivité : ...
+>   - [severity] engagement (CTA flou ? friction ? abandon probable ?) : ...
+>   - [severity] accessibilité quick-win : ...
+>   - [severity] contenu/ton/typo : ...
+> ```
+>
+> **Échelle de sévérité** :
+> - 🔴 BLOCKER : bloque le lancement public
+> - 🟠 MAJOR : nuit fortement à la conversion ou à la confiance
+> - 🟡 MINOR : friction réelle mais survivable
+> - 🟢 NITPICK : préférence
+>
+> ## 7 dimensions à couvrir
+>
+> 1. **Liens & dead-ends** : chaque clic mène-t-il à du contenu
+>    cohérent ?
+> 2. **Cohérence graphique** : respect des tokens `T.*` (couleurs,
+>    espacements, typo, radius, ombres), uniformité boutons / cards /
+>    forms entre pages.
+> 3. **UX & parcours d'engagement** : funnel découverte →
+>    compréhension → 1ʳᵉ action → engagement durable. Note les
+>    moments de doute.
+> 4. **Responsivité** : casse, débordements, tap-targets < 44 px,
+>    menu burger, images, modals.
+> 5. **Micro-interactions & feedback** : hover / focus / active /
+>    disabled, loaders, toasts, empty states, confirmations.
+> 6. **Contenu & ton** : placeholders oubliés, lorem, typos, tu/vous,
+>    jargon, proof-points (chiffres, témoignages).
+> 7. **Confiance & RGPD** : bannière cookies, mentions légales,
+>    politique de confidentialité, dark patterns.
+>
+> ## Livrables (les SEULS fichiers à créer/modifier)
+>
+> ### A. `docs/AUDIT-BETA-TESTEUR-2026-05-15.md`
+>
+> 1. **Résumé exécutif** (10 lignes) : verdict, 3 forces, 3
+>    faiblesses, go/no-go pour lancement public.
+> 2. **Scoring par dimension** (note /10) : design, UX, responsivité,
+>    engagement, accessibilité, contenu, confiance — un score par
+>    persona + moyenne pondérée.
+> 3. **Findings exhaustifs** par route (grille ci-dessus).
+> 4. **Synthèse par sévérité** : compteurs 🔴 / 🟠 / 🟡 / 🟢.
+>
+> ### B. `docs/PLAN-FINALISATION.md`
+>
+> Pour **chaque finding 🔴 et 🟠**, fournis **2 à 3 options de fix** :
+>
+> ```
+> ### Finding #N — [titre court]
+> Sévérité : 🔴/🟠
+> Persona : 1/2/3
+> Route(s) : ...
+> Diagnostic : impact utilisateur concret (1-3 lignes)
+>
+> Option A — [nom]
+> - Description précise du fix
+> - Effort : XS / S / M / L  (≈ 1h / 1/2 j / 1 j / 2+ j)
+> - Impact attendu : faible / moyen / fort
+> - Risque de régression : faible / moyen / fort
+> - Tradeoff : ...
+>
+> Option B — [nom]
+> - (idem)
+>
+> Option C (si pertinent) — [nom]
+> - (idem)
+>
+> 👉 Recommandation par défaut : Option X parce que ...
+> ```
+>
+> Puis le plan en **3 vagues** :
+>
+> - **Vague 1 — Must-fix avant lancement public** : tous les 🔴 + 🟠
+>   du parcours d'adhésion (persona 1) + 🟠 du parcours
+>   commune-création (persona 2). Estimation effort total. Ordonnée
+>   par dépendances. Pour chaque item : référence finding + option
+>   recommandée + n° d'étape de session proposée (« étape 43 — Vague
+>   1.A : home + CTA adhésion »).
+>
+> - **Vague 2 — Post-lancement immédiat (2 semaines)** : reste des
+>   🟠 + 🟡 critiques sur les services (persona 3).
+>
+> - **Vague 3 — Backlog UX phase 2** : 🟡 confort + 🟢 utiles.
+>
+> ### Questions ouvertes pour l'utilisateur
+>
+> Ajoute en fin de `PLAN-FINALISATION.md` une section « ##
+> Arbitrages produit à valider » : 4 à 8 questions formulées comme
+> des `AskUserQuestion` prêts à poser, avec 2-4 options préchargées
+> chacune. Cible les arbitrages que Claude ne peut pas trancher
+> seul (priorité CTA home, niveau d'engagement initial, choix
+> éditoriaux).
+>
+> ## Outils
+>
+> - `curl -sSL` pour vérifier les codes HTTP de chaque route.
+> - Playwright headless si dispo (`npx playwright`) pour les
+>   captures 3 viewports sur les 10 pages les plus critiques.
+>   Joins-les avec `SendUserFile`. Sinon décris textuellement le
+>   rendu via lecture du HTML/CSS source.
+> - 2-3 sub-agents `Explore` en parallèle pour accélérer : 1 par
+>   persona, chacun parcourt son périmètre. Synthèse finale unifiée
+>   par toi.
+>
+> ## Contraintes process
+>
+> - **N'ouvre pas de PR mergée** : 2 docs ajoutés uniquement.
+>   Commit + push sur la branche imposée par l'harness, ouvre la PR
+>   en **draft**, **NE LA MERGE PAS** : l'utilisateur décide
+>   d'enchaîner les vagues 1/2/3.
+> - Pas d'audit janitor à la fin de cette session (c'est déjà un
+>   audit).
+> - Mets à jour `HANDOFF-PROGRESS.md` avec une section `### Étape
+>   42bis — audit beta-testeur` : nb findings par sévérité, liens
+>   vers les 2 nouveaux docs, résumé des 3 vagues, compteur de
+>   tests inchangé (981).
+> - À la clôture de cette étape, recopier le prompt pour la session
+>   suivante (« étape 43 — Vague 1.A du plan de finalisation ») à
+>   la fois dans `HANDOFF-PROGRESS.md` ET dans la réponse de chat
+>   finale. Inclure dans ce prompt N+1 cette même instruction de
+>   recopie pour N+2 (cf. `CLAUDE.md § Recopie systématique du
+>   prompt`). Inclure aussi l'instruction d'audit janitor de fin
+>   d'étape pour N+1 (cf. `CLAUDE.md § Audit récurrent vibe
+>   janitor`).
+>
+> ## Critère de succès
+>
+> Quand l'utilisateur ouvre `docs/PLAN-FINALISATION.md`, il doit
+> pouvoir en **5 minutes** :
+>
+> 1. Choisir les options qu'il valide pour la Vague 1.
+> 2. Connaître la séquence exacte des prochaines étapes pour passer
+>    du proto actuel à un site lançable publiquement avec fierté.
+> 3. Lire et trancher les 4 à 8 arbitrages produit en fin de doc.
+
