@@ -295,7 +295,11 @@ export default function OnboardingModal({ open, onClose }: OnboardingModalProps)
           <p id={descId} style={stepDescStyle}>
             {step.description}
           </p>
-          <div style={dotsStyle} aria-label={`Étape ${stepIndex + 1} sur ${STEPS.length}`}>
+          <div
+            style={dotsStyle}
+            role="group"
+            aria-label={`Étape ${stepIndex + 1} sur ${STEPS.length}`}
+          >
             {STEPS.map((_, i) => (
               <span key={i} style={dotStyle(i === stepIndex)} />
             ))}

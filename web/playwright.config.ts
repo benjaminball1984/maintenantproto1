@@ -17,6 +17,19 @@ export default defineConfig({
     trace: 'on-first-retry',
     actionTimeout: 10_000,
     navigationTimeout: 15_000,
+    // Pré-remplit le flag d'onboarding pour que la modale ne s'auto-ouvre
+    // pas en E2E (sinon overlay → tous les clics timeout). Les specs qui
+    // voudraient tester l'onboarding peuvent réinitialiser localStorage
+    // explicitement.
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: BASE_URL,
+          localStorage: [{ name: 'mn-onboarding-seen', value: '1' }],
+        },
+      ],
+    },
   },
   projects: [
     {

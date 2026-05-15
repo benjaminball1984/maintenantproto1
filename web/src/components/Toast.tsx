@@ -136,6 +136,7 @@ export function ToastProvider({ children }: ToastProviderProps) {
       {children}
       <div
         style={stackStyle}
+        role="region"
         aria-label="Notifications"
         data-testid="toast-stack"
       >
