@@ -26,7 +26,7 @@ const mocks = vi.hoisted(() => {
     then: vi.fn(),
   };
   const authMock = {
-    getUser: vi.fn(),
+    getSession: vi.fn(),
   };
   return { selectChain, insertChain, updateChain, authMock };
 });
@@ -269,62 +269,83 @@ describe('listMessages (edge cases)', () => {
 });
 
 describe('getOrCreateConversationWith', () => {
-  it('renvoie AUTH_REQUIRED si pas d’utilisateur·rice authentifié·e', async () => {
-    mocks.authMock.getUser.mockResolvedValueOnce({
-      data: { user: null },
+  const UID_A = '11111111-1111-4111-a111-111111111111';
+  const UID_B = '22222222-2222-4222-a222-222222222222';
+
+  it('refuse un targetUserId non-UUID (INVALID_TARGET)', async () => {
+    const { data, error } = await getOrCreateConversationWith('u2');
+    expect(data).toBeNull();
+    expect(error?.code).toBe('INVALID_TARGET');
+    expect(mocks.authMock.getSession).not.toHaveBeenCalled();
+    expect(mocks.insertChain.insert).not.toHaveBeenCalled();
+  });
+
+  it('renvoie AUTH_REQUIRED si pas de session active', async () => {
+    mocks.authMock.getSession.mockResolvedValueOnce({
+      data: { session: null },
       error: null,
     });
-    const { data, error } = await getOrCreateConversationWith('u2');
+    const { data, error } = await getOrCreateConversationWith(UID_B);
     expect(data).toBeNull();
     expect(error?.code).toBe('AUTH_REQUIRED');
     expect(mocks.insertChain.insert).not.toHaveBeenCalled();
   });
 
+  it('renvoie AUTH_REQUIRED si getSession renvoie une erreur', async () => {
+    mocks.authMock.getSession.mockResolvedValueOnce({
+      data: { session: null },
+      error: { message: 'network error', name: 'AuthError' },
+    });
+    const { data, error } = await getOrCreateConversationWith(UID_B);
+    expect(data).toBeNull();
+    expect(error?.code).toBe('AUTH_REQUIRED');
+  });
+
   it('réutilise la conversation existante et retourne { id }', async () => {
-    mocks.authMock.getUser.mockResolvedValueOnce({
-      data: { user: { id: 'u1' } },
+    mocks.authMock.getSession.mockResolvedValueOnce({
+      data: { session: { user: { id: UID_A } } },
       error: null,
     });
     mocks.selectChain.maybeSingle.mockResolvedValueOnce({ data: sampleConv, error: null });
-    const { data, error } = await getOrCreateConversationWith('u2');
+    const { data, error } = await getOrCreateConversationWith(UID_B);
     expect(error).toBeNull();
     expect(data).toEqual({ id: 'c1' });
     expect(mocks.insertChain.insert).not.toHaveBeenCalled();
   });
 
   it('crée la conversation si introuvable et retourne { id }', async () => {
-    mocks.authMock.getUser.mockResolvedValueOnce({
-      data: { user: { id: 'u1' } },
+    mocks.authMock.getSession.mockResolvedValueOnce({
+      data: { session: { user: { id: UID_A } } },
       error: null,
     });
     mocks.selectChain.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
     mocks.insertChain.maybeSingle.mockResolvedValueOnce({ data: sampleConv, error: null });
-    const { data, error } = await getOrCreateConversationWith('u2');
+    const { data, error } = await getOrCreateConversationWith(UID_B);
     expect(error).toBeNull();
     expect(data).toEqual({ id: 'c1' });
-    expect(mocks.insertChain.insert).toHaveBeenCalledWith({ user_a: 'u1', user_b: 'u2' });
+    expect(mocks.insertChain.insert).toHaveBeenCalledWith({ user_a: UID_A, user_b: UID_B });
   });
 
   it('propage l’erreur PostgREST si findOrCreate échoue', async () => {
-    mocks.authMock.getUser.mockResolvedValueOnce({
-      data: { user: { id: 'u1' } },
+    mocks.authMock.getSession.mockResolvedValueOnce({
+      data: { session: { user: { id: UID_A } } },
       error: null,
     });
     mocks.selectChain.maybeSingle.mockResolvedValueOnce({
       data: null,
       error: { code: '42501', message: 'denied' },
     });
-    const { data, error } = await getOrCreateConversationWith('u2');
+    const { data, error } = await getOrCreateConversationWith(UID_B);
     expect(data).toBeNull();
     expect(error?.code).toBe('42501');
   });
 
   it('refuse l’auto-contact (target = current user)', async () => {
-    mocks.authMock.getUser.mockResolvedValueOnce({
-      data: { user: { id: 'u1' } },
+    mocks.authMock.getSession.mockResolvedValueOnce({
+      data: { session: { user: { id: UID_A } } },
       error: null,
     });
-    const { data, error } = await getOrCreateConversationWith('u1');
+    const { data, error } = await getOrCreateConversationWith(UID_A);
     expect(data).toBeNull();
     expect(error?.code).toBe('CONVERSATION_SELF');
     expect(mocks.insertChain.insert).not.toHaveBeenCalled();

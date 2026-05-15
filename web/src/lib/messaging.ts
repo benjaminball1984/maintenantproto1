@@ -146,19 +146,35 @@ export interface GetOrCreateConversationResult {
   error: PostgrestError | null;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Wrapper « bouton Contacter » : résout l'utilisateur authentifié via
- * `supabase.auth.getUser()` puis délègue à `findOrCreateConversation`.
- * Renvoie un objet `{ id }` minimaliste pour faciliter la navigation
- * vers `/messaging/:id`. Si l'utilisateur n'est pas authentifié·e, un
- * code d'erreur `AUTH_REQUIRED` est retourné (la RLS aurait de toute
- * façon rejeté l'INSERT côté DB).
+ * `supabase.auth.getSession()` (lecture locale instantanée, cohérente
+ * avec `lib/auth.ts`) puis délègue à `findOrCreateConversation`. Court-
+ * circuit défensif : on évite un round-trip réseau si pas de session
+ * et on garantit un code d'erreur `AUTH_REQUIRED` lisible côté UI.
+ * Validation UUID en amont pour éviter une erreur PostgREST 22P02
+ * cryptique si la prop `targetUserId` est mal formée. Renvoie un objet
+ * `{ id }` minimaliste pour faciliter la navigation vers
+ * `/messaging/:id`.
  */
 export async function getOrCreateConversationWith(
   targetUserId: string,
 ): Promise<GetOrCreateConversationResult> {
-  const { data: userData, error: authError } = await supabase.auth.getUser();
-  if (authError || !userData.user) {
+  if (!UUID_RE.test(targetUserId)) {
+    return {
+      data: null,
+      error: new PostgrestError({
+        message: 'Identifiant utilisateur invalide.',
+        details: '',
+        hint: 'targetUserId',
+        code: 'INVALID_TARGET',
+      }),
+    };
+  }
+  const { data: sessionData, error: authError } = await supabase.auth.getSession();
+  if (authError || !sessionData.session?.user) {
     return {
       data: null,
       error: new PostgrestError({
@@ -169,7 +185,10 @@ export async function getOrCreateConversationWith(
       }),
     };
   }
-  const { data, error } = await findOrCreateConversation(userData.user.id, targetUserId);
+  const { data, error } = await findOrCreateConversation(
+    sessionData.session.user.id,
+    targetUserId,
+  );
   if (error) {
     return { data: null, error };
   }

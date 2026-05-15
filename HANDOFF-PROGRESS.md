@@ -17196,6 +17196,111 @@ Aucun token `T.*` modifié. Aucun `--no-verify` / `--force`.
   leur `MemoryRouter` dans un `<ToastProvider>` puisque
   `ContactAuthorButton` appelle `useToast()`.
 
+### Audit vibe janitor étape 44
+
+3 sub-agents `general-purpose` lancés en parallèle après le merge
+de la PR principale `#65` (commit `c7c9d43`) :
+
+- **A (architecture / élégance)** : 15 findings, 0 critical, 0 high,
+  6 medium, 9 low.
+- **R (robustesse / edge cases)** : 12 findings, 0 critical, 0
+  high, 4 medium, 8 low.
+- **S (sécurité / cohérence handoff)** : 11 findings, 0 critical,
+  1 high (S-1 anti-abus DM, déféré → migration DB), 1 medium, 9
+  low.
+
+**38 findings totaux** (1 high déféré, 11 medium, 26 low /
+informatifs).
+
+**Fixes safe-first appliqués** (PR `chore/janitor-post-step-44`) :
+
+- **S-2 / A-5** — `getOrCreateConversationWith` : remplace
+  `supabase.auth.getUser()` (round-trip réseau) par
+  `supabase.auth.getSession()` (lecture locale instantanée,
+  cohérent avec `lib/auth.ts`). Latence -100ms côté UX. Risque
+  régression : low.
+- **R-1** — `ContactAuthorButton` : `useRef<boolean>` + `useEffect`
+  cleanup pour gate les `setState` / `toast.show` post-await si
+  démontage. Évite les warnings React. Risque régression : low.
+- **R-5** — `getOrCreateConversationWith` : validation UUID
+  défensive en amont (regex RFC 4122), short-circuit avec code
+  `INVALID_TARGET`. Évite une erreur PostgREST 22P02 cryptique
+  si la prop `authorUserId` est malformée. Risque régression :
+  low.
+- **R-8 / S-11** — `ContactAuthorButton` variante loading auth :
+  `<button disabled aria-busy="true">` au lieu de
+  `<span aria-disabled>` (sémantique + a11y screen readers).
+  Risque régression : low.
+- **S-3** — JSDoc `getOrCreateConversationWith` reformulée
+  (« short-circuit défensif » au lieu de « la RLS aurait rejeté
+  de toute façon »). Pas de changement de code. Risque
+  régression : nul.
+- **R-10** — `ServicesHubPage` : `aria-labelledby={titleId}` sur
+  chaque `<Link>` de card, pointant vers son `<h2>`. Risque
+  régression : low.
+- **A-14** — `ContactAuthorButton` : constante `ICON_SIZE = 16`
+  au lieu de magic number répété 3×. Risque régression : nul.
+- **S-5** — Test additionnel : `getSession` qui renvoie une
+  erreur → `AUTH_REQUIRED` (couverture du chemin auth-error).
+
+**Tests** : 998 → 1000 (+2 nets : `INVALID_TARGET` + `auth-error`,
+remplacement du test `getUser` par son équivalent `getSession`).
+
+**Findings déférés** (documentés en dette technique, à traiter en
+étapes dédiées) :
+
+- **S-1 (high)** — Pas d'anti-abus DM : un user authentifié peut
+  ouvrir des conversations 1-1 avec n'importe quel autre user
+  (récolte d'UUIDs via pages détail). Pas de table `user_blocks`,
+  pas de rate-limit, pas de signalement DM. **Migration DB
+  requise** (table `user_blocks` + policy étendue) → étape
+  dédiée Vague 1.C ou ultérieure.
+- **A-1 (medium)** — `<ServiceDetailLayout>` à extraire : ~120
+  lignes de styles dupliquées entre 6 pages détail services.
+  Refonte transverse → étape dédiée.
+- **A-2 (medium)** — `useShareCurrentUrl()` à extraire : 6
+  copies du `handleShare` (navigator.share + clipboard fallback).
+  Coupler avec A-1.
+- **A-3 (medium)** — Uniformiser le pattern owner UX :
+  `CarpoolingDetailPage` filtre depuis le parent, les 4 autres
+  affichent un placeholder « Vous êtes l'auteur », `Housing`
+  utilise un flow différent (« Faire une demande »). Discussion
+  produit nécessaire.
+- **A-7 (medium)** — Inline styles partout → migrer vers CSS
+  Modules ou Tailwind (décision tech à valider en amont). 100%
+  du nouveau code étape 44 est inline.
+- **A-11 / R-2 (medium)** — `navigate('?auth=login')` perd
+  l'intent post-login. Pas de `next=` / `returnTo` pour rejouer
+  l'action après authentification. Refonte du flow auth global.
+- **R-4 (low, régression risk high)** — `MarketplaceDetailPage`
+  ne refresh pas `is_sold` en cas de vente concurrente (pas de
+  Realtime, pas de revalidate-on-focus). À reporter — touche le
+  fetch.
+- **R-6 (medium)** — Race TOCTOU dans `findOrCreateConversation` :
+  2 INSERT concurrents peuvent échouer sur la contrainte
+  unique `(least, greatest)` (code 23505). Catch + refetch
+  proposé, mais à coupler avec un audit messaging plus large.
+- **R-11 (low)** — Toast d'erreur sans bouton « Réessayer ». Pas
+  de retry automatique. À reporter (change l'API du toast).
+- **A-13 (low)** — `errorMessage` à exposer dans les hooks
+  `useXxxItem` au lieu de re-projeter `postgrestErrorMessage`
+  dans chaque page détail (6×). Coupler avec A-1.
+- **S-6 / S-10 (low)** — `#ffffff` en dur dans
+  `ContactAuthorButton` et focus indicator manquant sur la
+  variante anonyme. Touche le design system (`T.*`
+  intouchable en janitor).
+- **R-12 (low)** — `MarketplaceDetailPage` : check `!item.is_sold`
+  externe au composant — fragile mais pas un bug. À déléguer au
+  composant via prop `disabledReason`. Refonte d'API.
+
+**Checks locaux** (4/4 verts AVANT push) : typecheck ✅, lint ✅,
+vitest 1000 ✅, build ✅.
+
+**Conditions d'arrêt janitor non déclenchées** : aucun fix DB,
+aucun token `T.*` touché, aucun fix n'a cassé un test existant,
+aucun bump majeur de dépendance, pas de review humaine en
+attente.
+
 ---
 
 ## Prompt pour la session N+38 (étape 45 — Vague 1.C : ouverture communes + signalement réseau)

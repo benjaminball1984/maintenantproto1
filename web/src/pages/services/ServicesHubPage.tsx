@@ -195,23 +195,29 @@ export default function ServicesHubPage() {
       </section>
 
       <ul aria-label="Liste des services solidaires" style={gridStyle}>
-        {services.map((service) => (
-          <li key={service.slug}>
-            <Link
-              to={`/services/${service.slug}`}
-              style={cardStyle}
-              className="mn-listing-card"
-              data-testid={`service-card-${service.slug}`}
-            >
-              <span style={iconWrapStyle} aria-hidden="true">
-                {service.icon}
-              </span>
-              <h2 style={cardTitleStyle}>{service.title}</h2>
-              <p style={cardPitchStyle}>{service.pitch}</p>
-              <span style={cardCtaStyle}>Accéder →</span>
-            </Link>
-          </li>
-        ))}
+        {services.map((service) => {
+          const titleId = `service-card-title-${service.slug}`;
+          return (
+            <li key={service.slug}>
+              <Link
+                to={`/services/${service.slug}`}
+                style={cardStyle}
+                className="mn-listing-card"
+                data-testid={`service-card-${service.slug}`}
+                aria-labelledby={titleId}
+              >
+                <span style={iconWrapStyle} aria-hidden="true">
+                  {service.icon}
+                </span>
+                <h2 id={titleId} style={cardTitleStyle}>
+                  {service.title}
+                </h2>
+                <p style={cardPitchStyle}>{service.pitch}</p>
+                <span style={cardCtaStyle}>Accéder →</span>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
 
       <section style={trustSectionStyle} aria-labelledby="services-trust-title">
