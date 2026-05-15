@@ -538,3 +538,91 @@ export function IconCar({ width = 18, height = 18, ...props }: IconProps) {
     </svg>
   );
 }
+
+export function IconStore({ width = 18, height = 18, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <path d="M3 9 4.5 4h15L21 9" />
+      <path d="M4 9v11h16V9" />
+      <path d="M9 20v-6h6v6" />
+    </svg>
+  );
+}
+
+export function IconTool({ width = 18, height = 18, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <path d="M14.7 6.3a4 4 0 0 0 5 5L21 13l-8 8-4-4 8-8z" />
+      <path d="m9 13-6 6 2 2 6-6" />
+    </svg>
+  );
+}
+
+export function IconLeaf({ width = 18, height = 18, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <path d="M20 4c-9 0-15 5-15 12 0 2 1 3 3 3 7 0 12-6 12-15z" />
+      <path d="M5 19c4-4 8-7 13-11" />
+    </svg>
+  );
+}
+
+export function IconClock({ width = 18, height = 18, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12 7 12 12 15.5 14" />
+    </svg>
+  );
+}
+
+export function IconCoin({ width = 18, height = 18, ...props }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      {...baseProps}
+      {...props}
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M15 9.5C14.5 8.5 13.4 8 12 8c-1.7 0-3 .9-3 2.2 0 1.2 1 1.8 3 2.2 2 .4 3 1 3 2.2 0 1.3-1.3 2.2-3 2.2-1.4 0-2.5-.5-3-1.5" />
+      <line x1="12" y1="6" x2="12" y2="8" />
+      <line x1="12" y1="16.7" x2="12" y2="18" />
+    </svg>
+  );
+}

@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 
+import ContactAuthorButton from '@/components/ContactAuthorButton';
 import {
   IconArrowLeft,
   IconBadge,
@@ -243,7 +244,9 @@ export default function MarketplaceDetailPage() {
             <span style={ctaSecondaryStyle} aria-label="Vous êtes le vendeur de cette annonce">
               <IconCart /> Vous êtes le vendeur
             </span>
-          ) : null}
+          ) : (
+            !item.is_sold && <ContactAuthorButton authorUserId={item.seller_id} />
+          )}
           <button type="button" onClick={handleShare} style={ctaSecondaryStyle}>
             <IconShare /> Partager
           </button>
