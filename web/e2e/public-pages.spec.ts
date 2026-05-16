@@ -7,8 +7,8 @@ import { installSupabaseStubs } from './utils/mockSupabase';
 // elle est couverte par son spec dédié `transparence.spec.ts` qui ajoute
 // des assertions spécifiques (graphique, lien footer, état vide).
 const PUBLIC_ROUTES: { path: string; heading: RegExp }[] = [
+  // D-016 : `/decouvrir` supprimée intégralement (revue Phase 1).
   { path: '/', heading: /Maintenant !/i },
-  { path: '/decouvrir', heading: /Découvre le mouvement/i },
   { path: '/faq', heading: /Questions fréquentes/i },
   { path: '/about', heading: /À propos de Maintenant/i },
   { path: '/roadmap', heading: /Là où on va/i },
