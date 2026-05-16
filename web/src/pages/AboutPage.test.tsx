@@ -13,46 +13,39 @@ function renderPage() {
 }
 
 describe('AboutPage', () => {
-  it('affiche le H1 « À propos de Maintenant ! »', () => {
+  it('affiche l’eyebrow « Le projet en quelques mots » (D-017)', () => {
+    renderPage();
+    expect(screen.getByText(/Le projet en quelques mots/i)).toBeInTheDocument();
+  });
+
+  it('affiche le H1 « À propos de Maintenant ! » (D-018 conservé)', () => {
     renderPage();
     expect(
       screen.getByRole('heading', { level: 1, name: /À propos de Maintenant/i }),
     ).toBeInTheDocument();
   });
 
-  it('rend les 3 sections (Équipe / Valeurs / Historique)', () => {
+  it('ne rend plus les sections Équipe (D-020) ni Valeurs (D-021)', () => {
     renderPage();
-    expect(screen.getByRole('heading', { level: 2, name: /L.+équipe/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 2, name: /Nos valeurs/i })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 2, name: /L.+équipe/i })).toBeNull();
+    expect(screen.queryByRole('heading', { level: 2, name: /Nos valeurs/i })).toBeNull();
+  });
+
+  it('garde la section Historique', () => {
+    renderPage();
     expect(screen.getByRole('heading', { level: 2, name: /Historique/i })).toBeInTheDocument();
   });
 
-  it('marque chaque membre d’équipe avec un badge démo (RGPD / loyauté)', () => {
+  it('le CTA final pointe vers /join (D-T01 — /decouvrir supprimé)', () => {
     renderPage();
-    const badges = screen.getAllByTestId('about-team-demo-badge');
-    expect(badges.length).toBeGreaterThanOrEqual(3);
-    badges.forEach((badge) => {
-      expect(badge).toHaveTextContent(/Bio démo/i);
-    });
+    const cta = screen.getByRole('link', { name: /Rejoindre le mouvement/i });
+    expect(cta).toHaveAttribute('href', '/join');
   });
 
-  it('expose au moins 5 valeurs', () => {
+  it('mentionne l’adhésion « à prix libre à partir de 0 € » (D-023)', () => {
     renderPage();
-    const valueTitles = [
-      /Citoyen·nes d.+abord/i,
-      /Transparence radicale/i,
-      /Sobriété & éthique/i,
-      /Action concrète/i,
-      /Inclusion sans condition/i,
-    ];
-    valueTitles.forEach((re) => {
-      expect(screen.getByText(re)).toBeInTheDocument();
-    });
-  });
-
-  it('le CTA final pointe vers /decouvrir', () => {
-    renderPage();
-    const cta = screen.getByRole('link', { name: /Découvrir le mouvement/i });
-    expect(cta).toHaveAttribute('href', '/decouvrir');
+    expect(
+      screen.getByText(/à prix libre à partir de 0\s*€/i),
+    ).toBeInTheDocument();
   });
 });

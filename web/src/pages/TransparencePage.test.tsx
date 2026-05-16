@@ -325,11 +325,11 @@ describe('TransparencePage', () => {
     expect(chart.style.minHeight).toBe('360px');
   });
 
-  it('affiche un lien vers /decouvrir en bas de page (étape 37)', async () => {
+  it('affiche un lien vers /about en bas de page (D-T01 — /decouvrir supprimé)', async () => {
     fetchTransparencyCountsMock.mockResolvedValueOnce({ data: ZERO_COUNTS, error: null });
     renderPage();
-    const link = screen.getByRole('link', { name: /Découvrir Maintenant/i });
-    expect(link).toHaveAttribute('href', '/decouvrir');
+    const link = screen.getByRole('link', { name: /À propos de Maintenant/i });
+    expect(link).toHaveAttribute('href', '/about');
   });
 
   it('met en avant la carte T99CP via fond contrasté (étape 37)', async () => {

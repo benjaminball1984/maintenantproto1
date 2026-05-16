@@ -1,6 +1,22 @@
 {
-  "phase": "0-inventaire-en-cours",
-  "items": {},
-  "last_seen_id": null,
-  "started_at": "2026-05-15"
+  "phase": "1-decisions-livrees-pr1",
+  "started_at": "2026-05-15",
+  "updated_at": "2026-05-16",
+  "pr1": {
+    "branch": "claude/maintenant-site-review-ZthT9",
+    "status": "fix_now_applied",
+    "items_applied": [
+      "D-001", "D-002", "D-003", "D-005", "D-006", "D-007", "D-009",
+      "D-011", "D-012", "D-013", "D-014",
+      "D-016", "D-017", "D-019", "D-020", "D-021", "D-023",
+      "D-T01"
+    ],
+    "items_deferred": ["D-004", "D-022", "D-015"],
+    "items_ok": ["D-008", "D-010", "D-018"]
+  },
+  "notes": {
+    "D-004": "TODO_PROD — pétition à la une dans le hero (nécessite colonne petitions.is_featured + UI admin). Reporté.",
+    "D-022": "PR2 dédiée — méga-menu 4 espaces thématiques (S'informer / Mobiliser / S'entraider / Agir). Trop intrusif sur RootLayout pour être mêlé à la finalisation revue (impact tests cross-page, a11y, mobile drawer).",
+    "D-015": "Bug compteurs loading/error à diagnostiquer en Phase 2 (placeholder '…' vs skeleton, retry, a11y announce)."
+  }
 }

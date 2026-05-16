@@ -300,8 +300,9 @@ export default function RoadmapPage() {
           >
             Rejoindre
           </Link>
+          {/* D-T01 : ancien lien /decouvrir bascule vers /about (page projet). */}
           <Link
-            to="/decouvrir"
+            to="/about"
             style={{
               display: 'inline-block',
               padding: '0.75rem 1.4rem',
@@ -313,7 +314,7 @@ export default function RoadmapPage() {
               border: '1px solid var(--mn-border)',
             }}
           >
-            Découvrir
+            À propos
           </Link>
         </div>
       </section>

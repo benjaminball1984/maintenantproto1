@@ -1049,6 +1049,36 @@ export interface Database {
           },
         ];
       };
+      newsletter_subscriptions: {
+        Row: {
+          id: string;
+          email: string;
+          source: string | null;
+          confirmed_at: string | null;
+          unsubscribed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          email: string;
+          source?: string | null;
+          confirmed_at?: string | null;
+          unsubscribed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          source?: string | null;
+          confirmed_at?: string | null;
+          unsubscribed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       notifications: {
         Row: {
           id: string;
@@ -1770,6 +1800,10 @@ export interface Database {
         Returns: number;
       };
       transparency_t99cp_total: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
+      transparency_newsletter_count: {
         Args: Record<string, never>;
         Returns: number;
       };

@@ -3,17 +3,18 @@ import { Link } from 'react-router-dom';
 
 import {
   IconBarChart,
-  IconFlame,
+  IconBadge,
   IconHome,
+  IconMail,
   IconMegaphone,
   IconPen,
-  IconShare,
   IconSpark,
   IconUsers,
 } from '@/components/icons';
 import {
-  fetchT99cpTotal,
+  fetchNewsletterCount,
   fetchTransparencyCounts,
+  type NewsletterCountResult,
   type TransparencyCounts,
 } from '@/lib/transparency';
 
@@ -22,7 +23,7 @@ type CountersState =
   | { kind: 'success'; counts: TransparencyCounts }
   | { kind: 'error' };
 
-type T99cpState =
+type NewsletterState =
   | { kind: 'loading' }
   | { kind: 'success'; total: number }
   | { kind: 'error' };
@@ -33,7 +34,7 @@ function formatNumber(n: number): string {
 
 const heroSectionStyle: CSSProperties = {
   position: 'relative',
-  padding: 'clamp(3rem, 6vw, 5rem) 1.5rem 2.5rem',
+  padding: 'clamp(3rem, 6vw, 5rem) 1.5rem 1.5rem',
   background:
     'radial-gradient(ellipse at top, rgba(225, 29, 116, 0.08), transparent 60%), var(--mn-bg)',
   textAlign: 'center',
@@ -54,6 +55,9 @@ const heroEyebrowStyle: CSSProperties = {
   fontWeight: 600,
   letterSpacing: '0.02em',
   margin: '0 0 1.25rem',
+  maxWidth: 720,
+  whiteSpace: 'normal',
+  lineHeight: 1.4,
 };
 
 const heroH1Style: CSSProperties = {
@@ -96,56 +100,37 @@ const primaryCtaStyle: CSSProperties = {
   cursor: 'pointer',
 };
 
-const secondaryCtaStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 8,
-  padding: '0.85rem 1.4rem',
-  borderRadius: 12,
-  background: 'var(--mn-surface)',
-  color: 'var(--mn-text-1)',
-  fontWeight: 600,
-  fontSize: 16,
-  textDecoration: 'none',
-  border: '1px solid var(--mn-border-dark)',
-  cursor: 'pointer',
-};
-
+// Compteurs : nouvel encart compact sous le hero, fond dégradé (cf. D-007).
 const countersSectionStyle: CSSProperties = {
   padding: '0 1.5rem 3rem',
   background: 'var(--mn-bg)',
 };
 
-const countersGridStyle: CSSProperties = {
-  maxWidth: 1080,
+const countersBandStyle: CSSProperties = {
+  maxWidth: 880,
   margin: '0 auto',
+  background: 'var(--mn-gradient)',
+  borderRadius: 16,
+  padding: '1rem 1.25rem',
+};
+
+const countersGridStyle: CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-  gap: '1rem',
+  gap: '0.75rem',
+  margin: 0,
+  padding: 0,
+  listStyle: 'none',
 };
 
 const counterCardStyle: CSSProperties = {
-  background: 'var(--mn-surface)',
-  border: '1px solid var(--mn-border)',
-  borderRadius: 14,
-  padding: '1.25rem 1.25rem 1rem',
-  textAlign: 'left',
-};
-
-const counterValueStyle: CSSProperties = {
-  fontFamily: "'Sora', sans-serif",
-  fontSize: 'clamp(1.6rem, 3vw, 2rem)',
-  fontWeight: 700,
-  letterSpacing: '-0.02em',
-  margin: '0.4rem 0 0.25rem',
-  lineHeight: 1.1,
-  color: 'var(--mn-text-1)',
-};
-
-const counterLabelStyle: CSSProperties = {
-  color: 'var(--mn-text-2)',
-  fontSize: 14,
-  margin: 0,
+  background: 'rgba(255, 255, 255, 0.12)',
+  border: '1px solid rgba(255, 255, 255, 0.22)',
+  borderRadius: 12,
+  padding: '0.75rem 0.9rem',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '0.7rem',
 };
 
 const counterIconWrapStyle: CSSProperties = {
@@ -155,14 +140,38 @@ const counterIconWrapStyle: CSSProperties = {
   width: 32,
   height: 32,
   borderRadius: 8,
-  background: 'var(--mn-brand-light)',
-  color: 'var(--mn-brand-dark)',
+  background: 'rgba(255, 255, 255, 0.18)',
+  color: '#ffffff',
+  flex: 'none',
+};
+
+const counterTextWrapStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  minWidth: 0,
+};
+
+const counterValueStyle: CSSProperties = {
+  fontFamily: "'Sora', sans-serif",
+  fontSize: '1.15rem',
+  fontWeight: 700,
+  letterSpacing: '-0.01em',
+  lineHeight: 1.1,
+  color: '#ffffff',
+  margin: 0,
+};
+
+const counterLabelStyle: CSSProperties = {
+  color: 'rgba(255, 255, 255, 0.92)',
+  fontSize: 12,
+  margin: 0,
+  marginTop: 2,
 };
 
 const counterPlaceholderStyle: CSSProperties = {
   display: 'inline-block',
   minWidth: '3.5ch',
-  color: 'var(--mn-text-3)',
+  color: 'rgba(255, 255, 255, 0.65)',
 };
 
 const actionsSectionStyle: CSSProperties = {
@@ -176,23 +185,15 @@ const sectionTitleStyle: CSSProperties = {
   fontWeight: 700,
   letterSpacing: '-0.02em',
   textAlign: 'center',
-  margin: '0 0 0.5rem',
+  margin: '0 0 1.5rem',
   color: 'var(--mn-text-1)',
-};
-
-const sectionSubtitleStyle: CSSProperties = {
-  textAlign: 'center',
-  color: 'var(--mn-text-2)',
-  fontSize: 16,
-  margin: '0 auto 2rem',
-  maxWidth: 600,
 };
 
 const actionsGridStyle: CSSProperties = {
   maxWidth: 1080,
   margin: '0 auto',
   display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
   gap: '1.25rem',
 };
 
@@ -205,7 +206,7 @@ const actionCardStyle: CSSProperties = {
   color: 'inherit',
   display: 'flex',
   flexDirection: 'column',
-  gap: '0.75rem',
+  gap: '0.65rem',
 };
 
 const actionIconWrapStyle: CSSProperties = {
@@ -229,7 +230,7 @@ const actionTitleStyle: CSSProperties = {
 };
 
 const actionDescStyle: CSSProperties = {
-  fontSize: 15,
+  fontSize: 14,
   lineHeight: 1.5,
   color: 'var(--mn-text-2)',
   margin: 0,
@@ -243,31 +244,17 @@ const actionCtaStyle: CSSProperties = {
   marginTop: '0.25rem',
 };
 
-const missionSectionStyle: CSSProperties = {
-  padding: '3.5rem 1.5rem',
-  background: 'var(--mn-bg)',
-};
-
-const missionInnerStyle: CSSProperties = {
-  maxWidth: 760,
-  margin: '0 auto',
-  textAlign: 'center',
-};
-
-const missionBodyStyle: CSSProperties = {
-  fontSize: 17,
-  lineHeight: 1.7,
-  color: 'var(--mn-text-2)',
-  margin: '0 auto 1.5rem',
-};
-
 interface CounterDef {
-  key: string;
+  key: 'signatures' | 'newsletter' | 'members';
   label: string;
   testId: string;
   icon: (props: { width?: number; height?: number }) => ReactElement;
 }
 
+// D-007 : 3 compteurs (Signataires / Abonnées newsletter / Membres). Le bloc
+// T99CP émis reste sur /transparence. Les compteurs Mobilisations / Communes
+// sont retirés (D-009) — l'objectif est de mettre en avant les volumes
+// d'audience, pas la production de contenu.
 const COUNTER_DEFS: CounterDef[] = [
   {
     key: 'signatures',
@@ -276,67 +263,74 @@ const COUNTER_DEFS: CounterDef[] = [
     icon: IconPen,
   },
   {
-    key: 'mobilizations',
-    label: 'Mobilisations en cours',
-    testId: 'home-counter-mobilizations',
-    icon: IconMegaphone,
+    key: 'newsletter',
+    label: 'Abonné·es à la newsletter',
+    testId: 'home-counter-newsletter',
+    icon: IconMail,
   },
   {
-    key: 'communes',
-    label: 'Communes libres',
-    testId: 'home-counter-communes',
+    key: 'members',
+    label: 'Membres',
+    testId: 'home-counter-members',
     icon: IconUsers,
-  },
-  {
-    key: 'T99CP',
-    label: 'T99CP émis',
-    testId: 'home-counter-t99cp',
-    icon: IconBarChart,
   },
 ];
 
 interface ActionDef {
   to: string;
-  label: string;
+  testId: string;
   title: string;
   description: string;
   cta: string;
   icon: (props: { width?: number; height?: number }) => ReactElement;
 }
 
+// D-012 : refonte 3 cartes par feature → 4 cartes thématiques (S'informer /
+// Mobiliser / S'entraider / Agir). Chaque carte mène vers une route existante
+// représentative du thème, en attendant les pages d'index thématiques (cf.
+// TODO_PROD futur dans HANDOFF-PROGRESS).
 const ACTIONS: ActionDef[] = [
   {
-    to: '/petitions',
-    label: 'Pétitions',
-    title: 'Signer ou lancer une pétition',
+    to: '/media',
+    testId: 'home-action-informer',
+    title: 'S’informer',
     description:
-      'Pèse sur les décisions publiques : porte une demande citoyenne, ajoute ta signature à celles qui te parlent.',
-    cta: 'Voir les pétitions',
-    icon: IconPen,
+      'Média militant, sondages publics, réseau social interne : comprendre, débattre, partager.',
+    cta: 'Explorer S’informer',
+    icon: IconBarChart,
   },
   {
-    to: '/mobilizations',
-    label: 'Mobilisations',
-    title: 'Rejoindre une mobilisation',
+    to: '/petitions',
+    testId: 'home-action-mobiliser',
+    title: 'Mobiliser',
     description:
-      'Manifestations, AG, actions locales : trouve un événement près de chez toi ou organise-le.',
-    cta: 'Voir les mobilisations',
-    icon: IconFlame,
+      'Campagnes, pétitions, mobilisations locales : porter une demande citoyenne et agir ensemble.',
+    cta: 'Explorer Mobiliser',
+    icon: IconMegaphone,
   },
   {
     to: '/services',
-    label: 'Services',
-    title: "Échanger via les services d'entraide",
+    testId: 'home-action-entraider',
+    title: 'S’entraider',
     description:
-      'Hébergement, covoiturage, prêt, jardin partagé, SEL : des services pour s’entraider au quotidien.',
-    cta: "Découvrir l'entraide",
+      'Marketplace solidaire, prêt, SEL, jardins, hébergement, covoiturage : des services concrets entre voisin·es.',
+    cta: 'Explorer S’entraider',
     icon: IconHome,
+  },
+  {
+    to: '/join',
+    testId: 'home-action-agir',
+    title: 'Agir',
+    description:
+      'Adhérer, créer une commune libre, organiser des moments solidaires : prendre une part durable au mouvement.',
+    cta: 'Explorer Agir',
+    icon: IconBadge,
   },
 ];
 
 export default function HomePage() {
   const [countersState, setCountersState] = useState<CountersState>({ kind: 'loading' });
-  const [t99cpState, setT99cpState] = useState<T99cpState>({ kind: 'loading' });
+  const [newsletterState, setNewsletterState] = useState<NewsletterState>({ kind: 'loading' });
 
   useEffect(() => {
     let cancelled = false;
@@ -360,28 +354,28 @@ export default function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchT99cpTotal()
-      .then((result) => {
+    fetchNewsletterCount()
+      .then((result: NewsletterCountResult) => {
         if (cancelled) return;
         if (result.error || result.data === null) {
-          setT99cpState({ kind: 'error' });
+          setNewsletterState({ kind: 'error' });
         } else {
-          setT99cpState({ kind: 'success', total: result.data });
+          setNewsletterState({ kind: 'success', total: result.data });
         }
       })
       .catch(() => {
         if (cancelled) return;
-        setT99cpState({ kind: 'error' });
+        setNewsletterState({ kind: 'error' });
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const valueFor = (key: string): string | null => {
-    if (key === 'T99CP') {
-      if (t99cpState.kind === 'success') return formatNumber(t99cpState.total);
-      if (t99cpState.kind === 'error') return '—';
+  const valueFor = (key: CounterDef['key']): string | null => {
+    if (key === 'newsletter') {
+      if (newsletterState.kind === 'success') return formatNumber(newsletterState.total);
+      if (newsletterState.kind === 'error') return '—';
       return null;
     }
     if (countersState.kind !== 'success') {
@@ -389,8 +383,7 @@ export default function HomePage() {
     }
     const counts = countersState.counts;
     if (key === 'signatures') return formatNumber(counts.signatures);
-    if (key === 'mobilizations') return formatNumber(counts.publishedMobilizations);
-    if (key === 'communes') return formatNumber(counts.publishedCommunes);
+    if (key === 'members') return formatNumber(counts.members);
     return null;
   };
 
@@ -398,68 +391,71 @@ export default function HomePage() {
     <main>
       <section style={heroSectionStyle} aria-labelledby="home-hero-title">
         <div style={heroInnerStyle}>
-          <p style={heroEyebrowStyle}>La voix des 99 %</p>
+          <p style={heroEyebrowStyle}>
+            S’informer, s’outiller, s’organiser, mobiliser, agir, s’entre aider,
+            résister, ensemble.
+          </p>
           <h1 id="home-hero-title" style={heroH1Style}>
-            Maintenant ! Le pouvoir citoyen, à portée de clic.
+            Maintenant ! La voix des 99%
           </h1>
           <p style={heroSubStyle}>
-            Pétitions, mobilisations, services d&rsquo;entraide, communes libres : la
-            plateforme qui outille les citoyennes et citoyens pour peser ensemble.
+            Pour une vie digne et heureuse pour toutes et tous dans un monde
+            vivable. Face aux oppressions systémiques nos luttes doivent devenir
+            systémiques.
           </p>
           <div style={ctaRowStyle}>
             <Link to="/join" style={primaryCtaStyle} aria-label="Adhérer au mouvement Maintenant !">
               <IconSpark width={18} height={18} aria-hidden />
               Adhérer
             </Link>
-            <Link
-              to="/decouvrir"
-              style={secondaryCtaStyle}
-              aria-label="Découvrir le mouvement Maintenant !"
-            >
-              <IconShare width={18} height={18} aria-hidden />
-              Découvrir
-            </Link>
           </div>
         </div>
       </section>
 
       <section style={countersSectionStyle} aria-labelledby="home-counters-title">
-        <h2 id="home-counters-title" className="sr-only" style={{ position: 'absolute', left: -9999 }}>
-          Compteurs publics en temps réel
+        <h2
+          id="home-counters-title"
+          className="sr-only"
+          style={{ position: 'absolute', left: -9999 }}
+        >
+          Compteurs publics : signataires, abonné·es à la newsletter, membres
         </h2>
-        <ul style={countersGridStyle} aria-label="Compteurs publics en temps réel">
-          {COUNTER_DEFS.map((def) => {
-            const Icon = def.icon;
-            const value = valueFor(def.key);
-            return (
-              <li key={def.key} style={counterCardStyle} data-testid={def.testId}>
-                <span style={counterIconWrapStyle} aria-hidden>
-                  <Icon width={18} height={18} />
-                </span>
-                <p style={counterValueStyle}>
-                  {value === null ? (
-                    <span style={counterPlaceholderStyle} aria-label="Chargement…">
-                      …
-                    </span>
-                  ) : (
-                    value
-                  )}
-                </p>
-                <p style={counterLabelStyle}>{def.label}</p>
-              </li>
-            );
-          })}
-        </ul>
+        <div style={countersBandStyle}>
+          <ul
+            style={countersGridStyle}
+            aria-label="Compteurs publics en temps réel"
+          >
+            {COUNTER_DEFS.map((def) => {
+              const Icon = def.icon;
+              const value = valueFor(def.key);
+              return (
+                <li key={def.key} style={counterCardStyle} data-testid={def.testId}>
+                  <span style={counterIconWrapStyle} aria-hidden>
+                    <Icon width={16} height={16} />
+                  </span>
+                  <div style={counterTextWrapStyle}>
+                    <p style={counterValueStyle}>
+                      {value === null ? (
+                        <span style={counterPlaceholderStyle} aria-label="Chargement…">
+                          …
+                        </span>
+                      ) : (
+                        value
+                      )}
+                    </p>
+                    <p style={counterLabelStyle}>{def.label}</p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       </section>
 
       <section style={actionsSectionStyle} aria-labelledby="home-actions-title">
         <h2 id="home-actions-title" style={sectionTitleStyle}>
           Ce que tu peux faire dès maintenant
         </h2>
-        <p style={sectionSubtitleStyle}>
-          Trois manières d&rsquo;agir, ouvertes à toutes et tous, sans condition de
-          revenu ni d&rsquo;adhésion.
-        </p>
         <div style={actionsGridStyle}>
           {ACTIONS.map((action) => {
             const Icon = action.icon;
@@ -469,6 +465,7 @@ export default function HomePage() {
                 to={action.to}
                 style={actionCardStyle}
                 aria-label={action.title}
+                data-testid={action.testId}
               >
                 <span style={actionIconWrapStyle} aria-hidden>
                   <Icon width={22} height={22} />
@@ -482,25 +479,21 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section id="mission" style={missionSectionStyle} aria-labelledby="home-mission-title">
-        <div style={missionInnerStyle}>
-          <h2 id="home-mission-title" style={sectionTitleStyle}>
-            Notre mission
-          </h2>
-          <p style={missionBodyStyle}>
-            Maintenant ! est un mouvement citoyen qui rassemble les outils nécessaires
-            pour reprendre la main sur les décisions qui nous concernent. Sans
-            publicité, sans pistage, sans intermédiaire — nos compteurs sont publics
-            et la plateforme est ouverte à toutes et tous.
-          </p>
-          <p style={{ ...missionBodyStyle, marginBottom: 0 }}>
-            <Link to="/transparence" style={{ color: 'var(--mn-brand)', fontWeight: 600 }}>
-              Voir nos compteurs publics →
-            </Link>
-          </p>
-        </div>
+      {/* D-014 : bloc Mission supprimé. La transparence reste accessible via le
+          footer (lien Transparence) et la navigation principale. */}
+      <section style={{ ...actionsSectionStyle, background: 'var(--mn-bg)' }} aria-labelledby="home-trust-title">
+        <h2 id="home-trust-title" style={sectionTitleStyle}>
+          Une plateforme citoyenne, sans publicité ni pistage
+        </h2>
+        <p style={{ ...heroSubStyle, maxWidth: 720 }}>
+          Hébergement en Europe, données minimales, compteurs publics et code
+          source ouvert au fil des étapes. Le détail est sur la page{' '}
+          <Link to="/transparence" style={{ color: 'var(--mn-brand)', fontWeight: 600 }}>
+            Transparence
+          </Link>
+          .
+        </p>
       </section>
-
     </main>
   );
 }

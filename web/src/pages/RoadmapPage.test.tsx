@@ -43,9 +43,9 @@ describe('RoadmapPage', () => {
     expect(lastYear).toMatch(/2028/);
   });
 
-  it('expose un double CTA Rejoindre / Découvrir', () => {
+  it('expose un double CTA Rejoindre / À propos (D-T01 — /decouvrir supprimé)', () => {
     renderPage();
     expect(screen.getByRole('link', { name: /Rejoindre/i })).toHaveAttribute('href', '/join');
-    expect(screen.getByRole('link', { name: /Découvrir/i })).toHaveAttribute('href', '/decouvrir');
+    expect(screen.getByRole('link', { name: /À propos/i })).toHaveAttribute('href', '/about');
   });
 });

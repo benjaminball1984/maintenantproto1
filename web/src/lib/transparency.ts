@@ -263,6 +263,39 @@ export async function fetchT99cpTotal(
   return { data: value, error: null };
 }
 
+// =====================================================================================
+// Compteur newsletter — RPC publique `transparency_newsletter_count()`
+// (revue Phase 1, D-007).
+//
+// La table `newsletter_subscriptions` est verrouillée à la lecture
+// (PII = emails) : seul l'admin peut faire un select sur les rows. La RPC
+// `transparency_newsletter_count` est SECURITY DEFINER (cf. db/schema.sql
+// §24) et expose uniquement un scalaire `bigint` = nombre d'inscriptions
+// actives (`unsubscribed_at is null`).
+// =====================================================================================
+
+export interface NewsletterCountResult {
+  data: number | null;
+  error: PostgrestError | null;
+}
+
+export async function fetchNewsletterCount(
+  client: Client = supabase,
+): Promise<NewsletterCountResult> {
+  const { data, error } = await client.rpc('transparency_newsletter_count');
+  if (error) {
+    return { data: null, error };
+  }
+  if (data === null || data === undefined) {
+    return { data: 0, error: null };
+  }
+  const value = Number(data);
+  if (!Number.isFinite(value) || value < 0) {
+    return { data: 0, error: null };
+  }
+  return { data: value, error: null };
+}
+
 const MONTH_LABELS_FR = [
   'janv.',
   'févr.',

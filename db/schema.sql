@@ -969,6 +969,36 @@ create table if not exists public.stripe_events (
 );
 create index if not exists stripe_events_type_idx on public.stripe_events (type, received_at desc);
 
+-- -------------------------------------------------------------------------------------
+-- 17.c newsletter_subscriptions — opt-in newsletter publique (étape revue Phase 1)
+-- -------------------------------------------------------------------------------------
+-- Table d'inscription publique à la newsletter (anonyme : pas de FK vers users —
+-- on accepte les emails de personnes sans compte). Sert deux usages :
+--   1. compteur public « abonnées à la newsletter » sur la home et /transparence
+--      (cf. RPC `transparency_newsletter_count` §24) ;
+--   2. base d'envoi pour les campagnes email militantes (rejoint
+--      `email_campaigns` côté admin — l'audience est sélectionnée via une
+--      requête SQL paramétrée en admin, pas via une jointure produit).
+--
+-- Désinscription : pas de suppression hard (audit RGPD), on pose
+-- `unsubscribed_at` et on ignore en envoi + on exclut du count.
+-- Email unique au niveau de la table : on évite les doublons même si l'UI
+-- replonge l'utilisateur dans le flow.
+create table if not exists public.newsletter_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  source text,
+  confirmed_at timestamptz,
+  unsubscribed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists newsletter_subscriptions_active_idx
+  on public.newsletter_subscriptions (created_at desc)
+  where unsubscribed_at is null;
+create trigger newsletter_subscriptions_touch before update on public.newsletter_subscriptions
+  for each row execute function public.touch_updated_at();
+
 -- =====================================================================================
 -- RLS — activation + policies par table
 --
@@ -1017,6 +1047,7 @@ alter table public.t99cp_transactions     enable row level security;
 alter table public.admin_logs             enable row level security;
 alter table public.email_campaigns        enable row level security;
 alter table public.stripe_events          enable row level security;
+alter table public.newsletter_subscriptions enable row level security;
 
 -- -------------------------------------------------------------------------------------
 -- users : profil public ; chaque user gère sa ligne ; admins ont tous les droits.
@@ -1718,6 +1749,31 @@ drop policy if exists stripe_events_admin_read on public.stripe_events;
 create policy stripe_events_admin_read on public.stripe_events
   for select using (public.is_admin(auth.uid()));
 
+-- -------------------------------------------------------------------------------------
+-- newsletter_subscriptions (insert public anon, lecture/edit admin uniquement)
+-- -------------------------------------------------------------------------------------
+-- Insertion : anonyme autorisée (formulaire public). Pas de check on email
+-- format ici — la validation reste côté front (regex + DOMPurify). L'unicité
+-- de `email` empêche les doublons. RLS contrôle qu'on ne peut PAS écrire
+-- d'autres colonnes sensibles (created_at, updated_at sont protégés par
+-- triggers, unsubscribed_at par l'absence de policy update pour anon).
+drop policy if exists newsletter_subscriptions_insert_public on public.newsletter_subscriptions;
+create policy newsletter_subscriptions_insert_public on public.newsletter_subscriptions
+  for insert with check (true);
+
+-- Lecture : aucun anon, aucun authenticated ne lit la liste (PII = emails).
+-- Seul l'admin voit les rows ; le compteur public passe par la RPC
+-- `transparency_newsletter_count` (SECURITY DEFINER).
+drop policy if exists newsletter_subscriptions_select_admin on public.newsletter_subscriptions;
+create policy newsletter_subscriptions_select_admin on public.newsletter_subscriptions
+  for select using (public.is_admin(auth.uid()));
+
+-- Update / delete : admin uniquement (gérer désinscriptions, purge RGPD).
+drop policy if exists newsletter_subscriptions_write_admin on public.newsletter_subscriptions;
+create policy newsletter_subscriptions_write_admin on public.newsletter_subscriptions
+  for all using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
+
 -- =====================================================================================
 -- 18 · Synchronisation auth.users → public.users
 -- =====================================================================================
@@ -2135,6 +2191,31 @@ grant execute on function public.transparency_t99cp_total() to anon, authenticat
 -- projet non-hardened, débloquant si un futur outil interne appelle la
 -- RPC en service-role.
 grant execute on function public.transparency_t99cp_total() to service_role;
+
+-- =====================================================================================
+-- 24 · Transparence — RPC publique transparency_newsletter_count() (revue Phase 1)
+-- =====================================================================================
+-- Décision produit revue exhaustive Phase 1 (D-007) : afficher publiquement
+-- le compteur d'abonné·es à la newsletter sur la home (encart compact sous
+-- le hero). RLS sur `newsletter_subscriptions` interdit toute lecture anon
+-- des rows (PII = emails) ; cette RPC SECURITY DEFINER expose uniquement
+-- un scalaire `bigint` = count des subscriptions actives
+-- (`unsubscribed_at is null`) sans projection des emails ni des dates.
+create or replace function public.transparency_newsletter_count()
+  returns bigint
+  language sql
+  stable
+  security definer
+  set search_path = public
+as $$
+  select count(*)::bigint
+  from public.newsletter_subscriptions
+  where unsubscribed_at is null;
+$$;
+
+revoke all on function public.transparency_newsletter_count() from public;
+grant execute on function public.transparency_newsletter_count() to anon, authenticated;
+grant execute on function public.transparency_newsletter_count() to service_role;
 
 -- =====================================================================================
 -- FIN du schéma. Régénérer les types : `supabase gen types typescript --local`.

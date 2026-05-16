@@ -159,11 +159,11 @@ const FAQ: FaqCategory[] = [
     items: [
       {
         q: 'Qu’est-ce qu’un T99CP ?',
-        a: "Le T99CP (« Token 99 % Citoyen Participatif ») est l'unité d'adhésion symbolique du mouvement. À chaque adhésion (libre, dès 1 €), tu reçois 1 T99CP — c'est un jeton interne, sans valeur monétaire, qui matérialise ton statut d'adhérent·e. Le compteur cumulé est public sur la page Transparence.",
+        a: "Le T99CP (« Token 99 % Citoyen Participatif ») est l'unité d'adhésion symbolique du mouvement. À chaque adhésion (à prix libre, à partir de 0 €), tu reçois 1 T99CP — c'est un jeton interne, sans valeur monétaire, qui matérialise ton statut d'adhérent·e. Le compteur cumulé est public sur la page Transparence.",
       },
       {
         q: 'Comment obtenir des T99CP ?',
-        a: 'Une seule façon : l’adhésion via la page « Rejoindre ». Trois tiers libres : 1 € symbolique, 12 € standard, 60 € soutien. Tu reçois 1 T99CP par adhésion (renouvelable annuellement).',
+        a: 'Une seule façon : l’adhésion via la page « Rejoindre ». Trois tiers : « Adhésion libre » (à partir de 0 €), 5 €/mois Soutien, 15 €/mois Engagé·e. Tu reçois 1 T99CP par adhésion (renouvelable annuellement).',
       },
       {
         q: 'Les T99CP me donnent-ils des avantages ?',
@@ -171,7 +171,7 @@ const FAQ: FaqCategory[] = [
       },
       {
         q: 'Que se passe-t-il si je n’ai pas les moyens d’adhérer ?',
-        a: "L'adhésion à 1 € symbolique reste accessible. Si même cette somme est un obstacle, contacte-nous via le formulaire dédié : nous accordons des adhésions gratuites au cas par cas, sans justification demandée. La règle du mouvement : jamais d'exclusion pour des raisons financières.",
+        a: "L'adhésion à prix libre (à partir de 0 €) reste accessible. Si même cette somme est un obstacle, contacte-nous via le formulaire dédié : nous accordons des adhésions gratuites au cas par cas, sans justification demandée. La règle du mouvement : jamais d'exclusion pour des raisons financières.",
       },
     ],
   },

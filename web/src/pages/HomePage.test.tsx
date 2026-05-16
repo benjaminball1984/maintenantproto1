@@ -5,10 +5,10 @@ import { MemoryRouter } from 'react-router-dom';
 import type * as TransparencyModule from '@/lib/transparency';
 
 type TransparencyResult = TransparencyModule.TransparencyResult;
-type T99cpTotalResult = TransparencyModule.T99cpTotalResult;
+type NewsletterCountResult = TransparencyModule.NewsletterCountResult;
 
 const fetchTransparencyCountsMock = vi.fn<() => Promise<TransparencyResult>>();
-const fetchT99cpTotalMock = vi.fn<() => Promise<T99cpTotalResult>>();
+const fetchNewsletterCountMock = vi.fn<() => Promise<NewsletterCountResult>>();
 
 vi.mock('@/lib/transparency', async () => {
   const actual = await vi.importActual<typeof TransparencyModule>('@/lib/transparency');
@@ -16,7 +16,7 @@ vi.mock('@/lib/transparency', async () => {
     ...actual,
     fetchTransparencyCounts: (...args: unknown[]) =>
       fetchTransparencyCountsMock(...(args as [])),
-    fetchT99cpTotal: (...args: unknown[]) => fetchT99cpTotalMock(...(args as [])),
+    fetchNewsletterCount: (...args: unknown[]) => fetchNewsletterCountMock(...(args as [])),
   };
 });
 
@@ -41,28 +41,29 @@ function renderHome() {
 
 beforeEach(() => {
   fetchTransparencyCountsMock.mockReset();
-  fetchT99cpTotalMock.mockReset();
+  fetchNewsletterCountMock.mockReset();
   fetchTransparencyCountsMock.mockResolvedValue({ data: ZERO_COUNTS, error: null });
-  fetchT99cpTotalMock.mockResolvedValue({ data: 0, error: null });
+  fetchNewsletterCountMock.mockResolvedValue({ data: 0, error: null });
 });
 
 describe('HomePage', () => {
-  it('affiche le H1 hero contenant « Maintenant ! »', () => {
+  it('affiche le H1 « Maintenant ! La voix des 99% » (D-001)', () => {
     renderHome();
     expect(
-      screen.getByRole('heading', { level: 1, name: /Maintenant\s*!/i }),
+      screen.getByRole('heading', { level: 1, name: /La voix des 99%/i }),
     ).toBeInTheDocument();
   });
 
-  it('expose les deux CTA Adhérer (→ /join) et Découvrir (→ /decouvrir)', () => {
+  it('expose un unique CTA hero « Adhérer » (→ /join) — D-005 supprime Découvrir', () => {
     renderHome();
-    const adherer = screen.getByRole('link', { name: /Adhérer/i });
+    const adherer = screen.getByRole('link', { name: /Adhérer au mouvement/i });
     expect(adherer).toHaveAttribute('href', '/join');
-    const decouvrir = screen.getByRole('link', { name: /Découvrir le mouvement/i });
-    expect(decouvrir).toHaveAttribute('href', '/decouvrir');
+    // Plus aucun lien `/decouvrir` côté home.
+    const decouvrir = screen.queryByRole('link', { name: /Découvrir le mouvement/i });
+    expect(decouvrir).toBeNull();
   });
 
-  it('affiche les 4 compteurs live (signataires, mobilisations, communes, T99CP)', async () => {
+  it('affiche les 3 compteurs live (signataires, newsletter, membres) — D-007', async () => {
     fetchTransparencyCountsMock.mockReset();
     fetchTransparencyCountsMock.mockResolvedValueOnce({
       data: {
@@ -75,28 +76,34 @@ describe('HomePage', () => {
       },
       error: null,
     });
-    fetchT99cpTotalMock.mockReset();
-    fetchT99cpTotalMock.mockResolvedValueOnce({ data: 3600, error: null });
+    fetchNewsletterCountMock.mockReset();
+    fetchNewsletterCountMock.mockResolvedValueOnce({ data: 8420, error: null });
 
     renderHome();
 
     await waitFor(() => {
       expect(screen.getByTestId('home-counter-signatures')).toHaveTextContent(/56\s789/);
     });
-    expect(screen.getByTestId('home-counter-mobilizations')).toHaveTextContent(/^.*5/);
-    expect(screen.getByTestId('home-counter-communes')).toHaveTextContent(/^.*2/);
-    expect(screen.getByTestId('home-counter-t99cp')).toHaveTextContent(/3\s?600/);
+    expect(screen.getByTestId('home-counter-newsletter')).toHaveTextContent(/8\s420/);
+    expect(screen.getByTestId('home-counter-members')).toHaveTextContent(/1\s500/);
+  });
+
+  it('ne rend plus les compteurs Mobilisations / Communes / T99CP — D-009', () => {
+    renderHome();
+    expect(screen.queryByTestId('home-counter-mobilizations')).toBeNull();
+    expect(screen.queryByTestId('home-counter-communes')).toBeNull();
+    expect(screen.queryByTestId('home-counter-t99cp')).toBeNull();
   });
 
   it('affiche un placeholder « … » pendant le chargement des compteurs', () => {
     fetchTransparencyCountsMock.mockReset();
-    fetchT99cpTotalMock.mockReset();
+    fetchNewsletterCountMock.mockReset();
     fetchTransparencyCountsMock.mockReturnValueOnce(new Promise(() => undefined));
-    fetchT99cpTotalMock.mockReturnValueOnce(new Promise(() => undefined));
+    fetchNewsletterCountMock.mockReturnValueOnce(new Promise(() => undefined));
     renderHome();
-    // 4 cartes en état chargement → 4 placeholders avec aria-label « Chargement… ».
+    // 3 cartes en chargement → au moins 3 placeholders aria-label « Chargement… ».
     const placeholders = screen.getAllByLabelText(/Chargement/i);
-    expect(placeholders.length).toBeGreaterThanOrEqual(4);
+    expect(placeholders.length).toBeGreaterThanOrEqual(3);
   });
 
   it('affiche un tiret « — » si fetchTransparencyCounts échoue', async () => {
@@ -115,29 +122,61 @@ describe('HomePage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('home-counter-signatures')).toHaveTextContent('—');
     });
-    expect(screen.getByTestId('home-counter-mobilizations')).toHaveTextContent('—');
-    expect(screen.getByTestId('home-counter-communes')).toHaveTextContent('—');
+    expect(screen.getByTestId('home-counter-members')).toHaveTextContent('—');
   });
 
-  it('affiche les 3 cards d\'action (pétitions, mobilisations, services)', () => {
+  it('affiche un tiret « — » si fetchNewsletterCount échoue', async () => {
+    fetchNewsletterCountMock.mockReset();
+    fetchNewsletterCountMock.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message: 'rpc_failed',
+        details: '',
+        hint: '',
+        code: 'PGRST',
+        name: 'PostgrestError',
+      } as never,
+    });
     renderHome();
-    expect(screen.getByRole('link', { name: /Signer ou lancer une pétition/i })).toHaveAttribute(
-      'href',
-      '/petitions',
-    );
-    expect(screen.getByRole('link', { name: /Rejoindre une mobilisation/i })).toHaveAttribute(
-      'href',
-      '/mobilizations',
-    );
-    expect(
-      screen.getByRole('link', { name: /Échanger via les services d'entraide/i }),
-    ).toHaveAttribute('href', '/services');
+    await waitFor(() => {
+      expect(screen.getByTestId('home-counter-newsletter')).toHaveTextContent('—');
+    });
   });
 
-  it('affiche la section mission avec lien vers /transparence', () => {
+  it("affiche les 4 cartes d'action thématiques (D-012)", () => {
     renderHome();
-    expect(screen.getByRole('heading', { level: 2, name: /Notre mission/i })).toBeInTheDocument();
-    const link = screen.getByRole('link', { name: /Voir nos compteurs publics/i });
+    const informer = screen.getByTestId('home-action-informer');
+    expect(informer).toHaveAttribute('href', '/media');
+    expect(informer).toHaveTextContent(/S.{1,3}informer/i);
+
+    const mobiliser = screen.getByTestId('home-action-mobiliser');
+    expect(mobiliser).toHaveAttribute('href', '/petitions');
+    expect(mobiliser).toHaveTextContent(/Mobiliser/i);
+
+    const entraider = screen.getByTestId('home-action-entraider');
+    expect(entraider).toHaveAttribute('href', '/services');
+    expect(entraider).toHaveTextContent(/S.{1,3}entraider/i);
+
+    const agir = screen.getByTestId('home-action-agir');
+    expect(agir).toHaveAttribute('href', '/join');
+    expect(agir).toHaveTextContent(/Agir/i);
+  });
+
+  it("ne rend plus les anciennes cartes feature « Signer ou lancer une pétition » etc. (D-013)", () => {
+    renderHome();
+    expect(screen.queryByRole('link', { name: /Signer ou lancer une pétition/i })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Rejoindre une mobilisation/i })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Échanger via les services d'entraide/i })).toBeNull();
+  });
+
+  it('ne rend plus le bloc « Notre mission » (D-014)', () => {
+    renderHome();
+    expect(screen.queryByRole('heading', { level: 2, name: /Notre mission/i })).toBeNull();
+  });
+
+  it('garde un lien vers /transparence (encart « sans publicité ni pistage »)', () => {
+    renderHome();
+    const link = screen.getByRole('link', { name: /^Transparence$/i });
     expect(link).toHaveAttribute('href', '/transparence');
   });
 
@@ -155,17 +194,17 @@ describe('HomePage', () => {
     await new Promise((r) => setTimeout(r, 0));
   });
 
-  it('annule proprement le setState T99CP si démontage avant fetch', async () => {
-    fetchT99cpTotalMock.mockReset();
-    let resolveT99cp: (v: T99cpTotalResult) => void = () => undefined;
-    fetchT99cpTotalMock.mockReturnValueOnce(
+  it('annule proprement le setState newsletter si démontage avant fetch', async () => {
+    fetchNewsletterCountMock.mockReset();
+    let resolveNewsletter: (v: NewsletterCountResult) => void = () => undefined;
+    fetchNewsletterCountMock.mockReturnValueOnce(
       new Promise((res) => {
-        resolveT99cp = res;
+        resolveNewsletter = res;
       }),
     );
     const { unmount } = renderHome();
     unmount();
-    resolveT99cp({ data: 42, error: null });
+    resolveNewsletter({ data: 42, error: null });
     await new Promise((r) => setTimeout(r, 0));
   });
 });

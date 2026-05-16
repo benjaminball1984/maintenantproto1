@@ -180,7 +180,7 @@ const STEPS: OnboardingStep[] = [
     icon: <IconUsers width={24} height={24} />,
     title: 'Rejoins le mouvement',
     description:
-      "L'adhésion est libre dès 1 € symbolique. Tu reçois 1 jeton T99CP par adhésion — sans valeur monétaire, juste un marqueur d'engagement.",
+      "L'adhésion est à prix libre, à partir de 0 €. Tu reçois 1 jeton T99CP par adhésion — sans valeur monétaire, juste un marqueur d'engagement.",
   },
 ];
 

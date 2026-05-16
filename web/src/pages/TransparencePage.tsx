@@ -322,8 +322,9 @@ export default function TransparencePage() {
         <Link to="/legal/contact">Contactez-nous</Link>.
       </p>
       <p style={{ marginTop: '0.75rem', fontSize: 14 }}>
+        {/* D-T01 : ancien lien /decouvrir bascule vers /about (page projet). */}
         En savoir plus sur le mouvement →{' '}
-        <Link to="/decouvrir">Découvrir Maintenant !</Link>
+        <Link to="/about">À propos de Maintenant !</Link>
       </p>
     </main>
   );

@@ -52,6 +52,101 @@
 
 ---
 
+## Revue exhaustive — Phase 1 (PR1, branche `claude/maintenant-site-review-ZthT9`)
+
+Track parallèle à la roadmap d'étapes : revue exhaustive des ~1 452 items
+inventoriés (cf. `docs/REVUE-EXHAUSTIVE/`). Phase 0 (inventaire 4
+sections + cross-cutting) déjà livrée par commits précédents. Phase 1
+(décisions D-xxx + propagation FIX_NOW) livrée par cette PR1.
+
+### Décisions appliquées (FIX_NOW)
+
+**HomePage** (`/`)
+
+- **D-001** — H1 « Maintenant ! Le pouvoir citoyen, à portée de clic. » → « Maintenant ! La voix des 99% ».
+- **D-002** — Eyebrow → « S'informer, s'outiller, s'organiser, mobiliser, agir, s'entre aider, résister, ensemble. ».
+- **D-003** — Lead hero → « Pour une vie digne et heureuse pour toutes et tous dans un monde vivable. Face aux oppressions systémiques nos luttes doivent devenir systémiques. ».
+- **D-005** — CTA secondaire hero « Découvrir » supprimé (CTA Adhérer seul subsiste).
+- **D-006/D-007/D-009** — Refonte compteurs 4 → 3 : Signataires + Abonné·es à la newsletter + Membres ; encart compact sous le hero avec gradient `--mn-gradient`. Mobilisations / Communes / T99CP retirés de la home (T99CP reste sur `/transparence`).
+- **D-011** — Lead « Trois manières d'agir, ouvertes à toutes et tous… » supprimé.
+- **D-012/D-013** — Refonte 3 cartes feature (Pétitions / Mobilisations / Services) → 4 cartes thématiques (S'informer → `/media`, Mobiliser → `/petitions`, S'entraider → `/services`, Agir → `/join`). Routes cibles provisoires en attendant les pages d'index thématiques (cf. dette ci-dessous).
+- **D-014** — Bloc « Notre mission » (H2 + CTA `/transparence`) supprimé. Encart « sans publicité ni pistage » + lien `/transparence` conservés en pied de home.
+
+**AboutPage** (`/about`)
+
+- **D-017** — Eyebrow « Qui sommes-nous » → « Le projet en quelques mots ».
+- **D-019** — Lead hero (paragraphe loi 1901) supprimé.
+- **D-020** — Section Équipe (H2 + 3 cartes membres + badge démo) supprimée.
+- **D-021** — Section Valeurs (5 cartes) supprimée.
+- **D-018** — H1 « À propos de Maintenant ! » conservé (décision OK).
+
+**Transverse**
+
+- **D-016** — DecouvrirPage supprimée intégralement (composant + tests + route). La route `/decouvrir` retombe sur `NotFoundPage` via le catch-all `*` (hard delete, pas de redirect — choix utilisateur explicite).
+- **D-T01** — Tous les liens internes vers `/decouvrir` redirigés :
+  - `AboutPage` CTA final → `/join`
+  - `RoadmapPage` second CTA → `/about`
+  - `TransparencePage` lien bas → `/about`
+  - `Footer` colonne Mission → lien supprimé
+- **D-023** — Wording « dès 1 € » → « à prix libre, à partir de 0 € » dans `OnboardingModal` (étape 4) et `FaqPage` (3 entrées T99CP). Le tier « Gratuit » de `JoinPage` existait déjà — aucun changement Stripe nécessaire pour autoriser le 0 €.
+
+### Migration DB (confirmation utilisateur explicite)
+
+Ajout d'une **nouvelle table `newsletter_subscriptions`** (cf.
+`db/schema.sql §17.c`) + **RPC `transparency_newsletter_count`**
+(SECURITY DEFINER, anon + authenticated, cf. §24) pour alimenter le 3ᵉ
+compteur de la home sans exposer les emails (PII).
+
+Schéma : `id uuid PK`, `email text unique`, `source text?`,
+`confirmed_at`, `unsubscribed_at`, `created_at/updated_at`. RLS :
+
+- `insert public` (formulaire d'inscription public) — `with check (true)`.
+- `select admin` uniquement (lecture des emails verrouillée).
+- `update/delete admin` uniquement.
+
+La RPC compte uniquement les rows avec `unsubscribed_at is null`,
+retour `bigint`. Aucune projection PII côté front.
+
+Types `Database` mis à jour (`web/src/types/database.ts`).
+`lib/transparency.ts` expose `fetchNewsletterCount`.
+
+### Décisions reportées (TODO_PROD ou PR2)
+
+- **D-004** — TODO_PROD. Pétition à la une dans le hero, sélection admin
+  manuelle. Nécessite migration DB additive (`petitions.is_featured`) +
+  UI admin dédiée. Reporté à une étape principale dédiée (probablement
+  Vague 1.D ou ultérieur — non bloquant pour la finalisation revue).
+
+- **D-022** — **PR2 dédiée** (à venir). Méga-menu nav à 4 espaces
+  thématiques (S'informer / Mobiliser / S'entraider / Agir). Trop
+  intrusif sur `RootLayout` (impact sur ~140 tests qui rendent l'app
+  via `MemoryRouter`, a11y clavier `aria-haspopup`/`aria-expanded`,
+  mobile drawer, z-index vs AuthModal/CookieBanner sticky) pour être
+  mêlé à la finalisation revue. **À traiter en PR isolée.**
+
+- **D-015** — Phase 2 (analyse approfondie). Bug compteurs
+  loading/error à diagnostiquer : placeholder `…` vs skeleton, retry,
+  annonce a11y. Non bloquant Phase 1.
+
+### Pages d'index thématiques (TODO_PROD)
+
+Les 4 cartes home (D-012) renvoient pour l'instant vers la route la
+plus représentative de chaque thème (`/media`, `/petitions`,
+`/services`, `/join`). Création de **pages d'index thématiques**
+dédiées (`/informer`, `/mobiliser`, `/entraider`, `/agir`) à
+considérer après PR2 (méga-menu) — la décision dépendra de l'UX
+attendue (page éditoriale vs simple dropdown).
+
+### Compteur tests
+
+Avant PR1 : 1000 tests / 141 fichiers.
+Après PR1 : **999 tests / 140 fichiers** verts.
+Delta : −1 fichier (DecouvrirPage.test.tsx supprimé, +12 tests Home,
++6 tests About vs anciens). Les 4 checks locaux verts AVANT push
+(typecheck, lint, vitest, build).
+
+---
+
 ## Goulots externes — état au 2026-05-13 (post-étape 29)
 
 Session interactive avec l'équipe humaine (Ben/Lilou) le 2026-05-13.

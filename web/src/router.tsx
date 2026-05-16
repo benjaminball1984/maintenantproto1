@@ -68,7 +68,9 @@ const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 const LegalNoticePage = lazy(() => import('./pages/LegalNoticePage'));
 const CookiesPage = lazy(() => import('./pages/CookiesPage'));
 const TransparencePage = lazy(() => import('./pages/TransparencePage'));
-const DecouvrirPage = lazy(() => import('./pages/DecouvrirPage'));
+// D-016 : DecouvrirPage supprimée intégralement. La route `/decouvrir`
+// retombe sur NotFoundPage via le catch-all `*`. Les liens internes ont
+// été redirigés (D-T01) vers les espaces thématiques (/about, /join, /).
 const FaqPage = lazy(() => import('./pages/FaqPage'));
 const AboutPage = lazy(() => import('./pages/AboutPage'));
 const RoadmapPage = lazy(() => import('./pages/RoadmapPage'));
@@ -281,7 +283,6 @@ export const router = createBrowserRouter([
       { path: 'auth/reset-password', element: <ResetPasswordPage /> },
       { path: 'auth/callback', element: <AuthCallbackPage /> },
       { path: 'transparence', element: <TransparencePage /> },
-      { path: 'decouvrir', element: <DecouvrirPage /> },
       { path: 'faq', element: <FaqPage /> },
       { path: 'about', element: <AboutPage /> },
       { path: 'roadmap', element: <RoadmapPage /> },

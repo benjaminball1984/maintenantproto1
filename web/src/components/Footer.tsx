@@ -102,11 +102,7 @@ export default function Footer() {
             <NavLink to="/join" style={{ ...linkStyle, fontWeight: 600, color: 'var(--mn-brand)' }}>
               Rejoindre le mouvement →
             </NavLink>
-            <div style={{ marginTop: '0.5rem' }}>
-              <NavLink to="/decouvrir" style={linkStyle}>
-                Découvrir
-              </NavLink>
-            </div>
+            {/* D-016 : lien Découvrir supprimé du footer (page /decouvrir retirée). */}
             <div style={{ marginTop: '0.5rem' }}>
               <NavLink to="/about" style={linkStyle}>
                 À propos
