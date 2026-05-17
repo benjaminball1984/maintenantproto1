@@ -1,63 +1,42 @@
 # Maintenant ! — La voix des 99%
 
-Plateforme citoyenne francophone : mobilisation civique, services solidaires, espace communautaire, adhésion.
+> Reset complet 2026-05-17 — le repo a été remis à zéro pour repartir
+> sur de meilleures bases. Lis **[HANDOFF.md](./HANDOFF.md)** avant
+> toute action. La version pré-reset reste accessible via la branche
+> `backup-pre-reset-2026-05-17`.
 
-## Démarrage rapide (prototype actuel)
+## Démarrage rapide (état actuel)
 
 ```bash
-# Ouvrir directement dans un navigateur
-open app/Maintenant.html
-# ou servir un dossier statique
-npx serve app
+cd web
+npm install
+npm run dev
 ```
 
-Aucune dépendance à installer — React et Babel sont chargés via CDN.
+Le site affiche un **placeholder** (charte graphique chargée, pas
+encore de code applicatif). Voir `web/src/App.tsx`.
 
-## Documentation
+## Ce qui reste
 
-- **[HANDOFF.md](./HANDOFF.md)** — Dossier de passation complet (stack, archi, schéma DB, sprints, déploiement)
-- **[CLAUDE.md](./CLAUDE.md)** — Instructions pour Claude Code
-- **[.env.example](./.env.example)** — Variables d'environnement requises
-- **[db/schema.sql](./db/schema.sql)** — Schéma Supabase Postgres
-- **[web/package.json](./web/package.json)** — Projet Vite + React 19 + TS (production)
-- **[docs/package.template.json](./docs/package.template.json)** — Template historique des deps cibles (planification, plus utilisé par les outils)
+- `web/src/index.css` — tokens CSS (`--mn-*`).
+- `web/src/components/icons.tsx` — 33 icônes SVG.
+- `project/`, `Theme.jsx`, `Pages_*.jsx`, `*.css`, archives ZIP —
+  prototype d'origine, références visuelles.
+- `chats/` — exports des conversations initiales.
 
-## Structure
+## Stack visée (à reconstruire)
 
-```
-.
-├── web/                  ← Projet Vite + React 19 + TS (production) — `cd web && npm install`
-├── db/                   ← Schéma Postgres + migrations
-├── supabase/             ← Config locale Supabase (CLI)
-├── app/                  ← Prototype HTML/JSX legacy (entrée : Maintenant.html) — référence visuelle
-├── docs/                 ← Documents historiques (template package.json, etc.)
-├── .devcontainer/        ← Config conteneur dev (postCreateCommand → npm ci dans web/)
-├── HANDOFF.md            ← Passation tech
-├── HANDOFF-PROGRESS.md   ← Journal de migration sprint par sprint
-├── CLAUDE.md             ← Instructions agent
-├── README.md             ← Ce fichier
-└── .env.example          ← Variables d'env (à copier en .env.local)
-```
+- **Frontend** : Vite + React 19 + TypeScript strict.
+- **Backend** : à définir selon les besoins validés en session 1 (cf.
+  HANDOFF.md §Étape A).
+- **Hébergement** : Netlify (déjà configuré côté CI).
 
-## Stack cible (prod)
+## Protocole de redev
 
-- **Frontend** : Vite + React 18 + TypeScript
-- **Backend** : Supabase (Postgres + Auth + Storage + Realtime + RLS)
-- **Paiements** : Stripe (adhésions + financement participatif)
-- **Email** : Resend ou Postmark
-- **Hébergement** : Vercel/Netlify (front) + Supabase (back) + Cloudflare (DNS/WAF)
-- **Monitoring** : Sentry + Plausible
-
-## Marque
-
-- Couleurs : rose `#E11D74`, violet `#7C3AED`, fond `#FAFAF9`
-- Typographies : Sora (titres), Inter (corps)
-- Pas de pub, pas de tracking, RGPD-first, EU-hosted
+Voir [HANDOFF.md](./HANDOFF.md). Résumé : description en langage
+naturel → archi validée → maquettes validées → plan d'étapes → code,
+**une étape à la fois avec capture-avant-merge**.
 
 ## Licence
 
-À définir — recommandation AGPL v3 pour un projet à mission citoyenne (forks ouverts mais obligation d'ouverture).
-
----
-
-**Voir [HANDOFF.md](./HANDOFF.md) pour tout le reste.**
+À définir.
